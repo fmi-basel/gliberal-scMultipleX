@@ -6,7 +6,6 @@ from os.path import basename, exists, isdir, join, split, splitext
 
 import numpy as np
 import pandas as pd
-import scipy
 from faim_hcs.hcs.Experiment import Experiment
 from faim_hcs.records.OrganoidRecord import OrganoidRecord
 from faim_hcs.records.PlateRecord import PlateRecord
@@ -16,23 +15,12 @@ from skimage.measure import regionprops
 from skimage.morphology import binary_erosion
 from tqdm.notebook import tqdm
 
-
-def quartiles(regionmask, intensity):
-    return np.percentile(intensity[regionmask], q=(25, 50, 75, 90, 95, 99))
-
-
-def skewness(regionmask, intensity):
-    return scipy.stats.skew(intensity[regionmask])
-
-
-def kurtos(regionmask, intensity):
-    return scipy.stats.kurtosis(intensity[regionmask])
-
-
-def stdv(regionmask, intensity):
-    # ddof=1 for sample var
-    return np.std(intensity[regionmask], ddof=1)
-
+from scmultiplex.features.FeatureFunctions import (
+    fixed_percentiles,
+    kurtos,
+    skewness,
+    stdv,
+)
 
 pd.set_option("display.max_rows", 200)
 
@@ -246,7 +234,9 @@ for organoid in exp:
         # organoid feature extraction
         df_org = pd.DataFrame()
         org_features = regionprops(
-            org_seg, raw_mip, extra_properties=(quartiles, skewness, kurtos, stdv)
+            org_seg,
+            raw_mip,
+            extra_properties=(fixed_percentiles, skewness, kurtos, stdv),
         )
         abs_min_intensity = np.amin(raw_mip)
         # voxel_area = organoid.spacings[channel][1] * organoid.spacings[channel][2] #calculate voxel area in um2 (x*y)
@@ -329,7 +319,7 @@ for organoid in exp:
         nuc_features = regionprops(
             nuc_seg,
             raw,
-            extra_properties=(quartiles, skewness, kurtos, stdv),
+            extra_properties=(fixed_percentiles, skewness, kurtos, stdv),
             spacing=(3, 1, 1),
         )
         # voxel_volume = organoid.spacings[channel][0] * organoid.spacings[channel][1] * organoid.spacings[channel][2] #calculate voxel area in um2 (x*y)
@@ -402,7 +392,7 @@ for organoid in exp:
         mem_features = regionprops(
             mem_seg,
             raw,
-            extra_properties=(quartiles, skewness, kurtos, stdv),
+            extra_properties=(fixed_percentiles, skewness, kurtos, stdv),
             spacing=(3, 1, 1),
         )
 
