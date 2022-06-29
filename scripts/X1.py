@@ -2,140 +2,30 @@ import copy
 import math
 import re
 from glob import glob
-from os.path import basename, exists, isdir, join, split, splitext
+from os.path import basename, exists, join, splitext, isdir, split
 
 import numpy as np
 import pandas as pd
 from faim_hcs.hcs.Experiment import Experiment
-from faim_hcs.records.OrganoidRecord import OrganoidRecord
 from faim_hcs.records.PlateRecord import PlateRecord
-from faim_hcs.records.WellRecord import WellRecord
 from matching import matching
-from skimage.measure import regionprops
-from skimage.morphology import binary_erosion
-from tqdm.notebook import tqdm
-
 from scmultiplex.features.FeatureFunctions import (
     fixed_percentiles,
     kurtos,
     skewness,
     stdv,
 )
+from scmultiplex.utils.parse_utils import add_plates, add_organoid, add_well, \
+    get_well_overview_mips, get_well_overview_segs, prepare_and_add_well, \
+    prepare_and_add_organoids
+from skimage.measure import regionprops
+from skimage.morphology import binary_erosion
+from tqdm.notebook import tqdm
 
 pd.set_option("display.max_rows", 200)
 
+exp = Experiment()
 
-# Create a new HCS experiment
-# name: Name of the experiment
-# root_dir: Root directory of the image data
-# save_dir: Directory where the experiment is saved. Should be different from the root_dir. This
-#           is where the measurements are stored.
-
-exp = Experiment(
-    name="20220507GCPLEX_R3",
-    root_dir="/tungstenfs/scratch/gliberal/Users/repinico/Yokogawa/20220507GCPLEX_R3",
-    save_dir="/tungstenfs/scratch/gliberal/Users/repinico/Microscopy/Analysis/20220528_GCPLEX_redo",
-)
-
-# List directories in root_dir. In this dataset all directories correspond to a plate.
-# Add a new PlateRecord for each found directory.
-# experiment: The HCS Experiment we created above.
-# plate_id: The name of the plate e.g. the directory name.
-# save_dir: The directory in which this plate is saved to disk. The measurements will be in this direcotry.
-
-plates = glob(exp.root_dir + "/*")
-
-for p in plates:
-    if isdir(p):
-        plate = PlateRecord(
-            experiment=exp, plate_id=split(p)[1], save_dir=exp.get_experiment_dir()
-        )
-
-
-# Parsing the directory and find all wells, well-overviews, well-segmentations, objects, and object-segmentations.
-
-# NOTE: This parsing is specifically for the example dir from Nicole. If you want to parse another experiment you might
-# have to adapt this.
-
-well_regex = re.compile("_[A-Z]{1}[0-9]{2}_")
-
-raw_ch_regex = re.compile("C[0-9]{2}O.*_TIF-OVR.tif")
-# raw_ch_regex = re.compile("C[0-9]{2}O.*_TIF-OVR_bin.tif")
-mask_ending = "MASK"
-# mask_ending = "MASK_bin"
-nuc_ending = "NUC_SEG3D_220523"  # load segmentation images
-mem_ending = "MEM_SEG3D_220523"  # load segmentation images
-
-# nuc_seg_regex = re.compile("_NUC_SEG.*.tif") #add here the neural network name
-mask_regex = re.compile(mask_ending + ".tif")
-nuc_seg_regex = re.compile(nuc_ending + ".tif")
-cell_seg_regex = re.compile(mem_ending + ".tif")
-
-for plate in tqdm(exp.plates.values()):
-    ovr_mips = glob(join(exp.root_dir, plate.plate_id, "TIF_OVR_MIP", "*.tif"))
-
-    well_ids = [well_regex.findall(basename(om))[0][1:-1] for om in ovr_mips]
-
-    for well_id in well_ids:
-        # Add a well.
-        w = WellRecord(plate=plate, well_id=well_id, save_dir=plate.plate_dir)
-
-        # Add the raw files corresponding to this well. These are the MIP overview images.
-        raw_files = list(
-            filter(
-                lambda p: well_regex.findall(basename(p))[0][1:-1] == well_id, ovr_mips
-            )
-        )
-        for raw_file in raw_files:
-            raw_name = splitext(raw_file)[0][-3:]
-            w.add_raw_data(raw_name, raw_file, spacing=(0.216, 0.216))
-
-        # Add segmentation files of the MIP overview images (organoid seg).
-        seg_mips = glob(
-            join(exp.root_dir, plate.plate_id, "TIF_OVR_MIP_SEG", "obj_v0.3", "*.tif")
-        )
-        seg_files = list(
-            filter(lambda p: basename(p).split("_")[3] == well_id, seg_mips)
-        )  # corrected :)
-        # seg_files = list(filter(lambda p: basename(p).split('_')[2] == well_id, seg_mips)) #corrected :)
-        for seg_file in seg_files:
-            seg_name = splitext(seg_file)[0][-3:]
-            w.add_segmentation(seg_name, seg_file)
-
-        # Search for region-extracted organoids and add them.
-        # This adds all raw files and segmentation files.
-        organoid_parent_dir = join(exp.root_dir, plate.plate_id, "obj_v0.3_ROI")
-        if exists(organoid_parent_dir):
-            organoids = glob(join(organoid_parent_dir, well_id, "*"))
-            for organoid in tqdm(organoids, leave=False):
-                org = OrganoidRecord(w, basename(organoid), save_dir=w.well_dir)
-                organoid_files = glob(join(organoid, "*.tif"))
-                for f in organoid_files:
-                    raw_channel = raw_ch_regex.findall(f)
-                    mask = mask_regex.findall(f)
-                    nuc_seg = nuc_seg_regex.findall(f)
-                    cell_seg = cell_seg_regex.findall(f)
-                    # cell seg would go here
-                    if len(raw_channel) > 0:
-                        org.add_raw_data(
-                            raw_channel[0][:3], f, spacing=(0.6, 0.216, 0.216)
-                        )
-                    elif len(mask) > 0:
-                        org.add_segmentation(mask[0][:-4], f)
-                        # cell seg would go here
-                    elif len(nuc_seg) > 0:
-                        org.add_segmentation(nuc_seg[0][:-4], f)
-                    elif len(cell_seg) > 0:
-                        org.add_segmentation(cell_seg[0][:-4], f)
-                    else:
-                        print(f"Unknown file: {f}")
-
-# Save the whole datastructure to disk.
-exp.save()
-
-# Get an overview dataframe.
-# The columns correspond to the different names of added raw-data and segmentation data.
-exp.build_overview()
 
 # First iterate over wells and extract OVR-level features
 # Iterate over wells only
@@ -143,12 +33,23 @@ exp.only_iterate_over_wells(True)
 exp.reset_iterator()
 ovr_channel = "C01"  # almost always DAPI is C01 -- if not, change this!
 
-for well in exp:
-    # Load the segmentation file.
-    ovr_seg = well.get_segmentation(ovr_channel)  # this is the seg image
+def filter_wells(exp, excluded):
+    exp.only_iterate_over_wells(True)
+    exp.reset_iterator()
 
-    if well.plate.plate_id in ["day4p5"]:
-        continue  # skip these timepoints
+    wells = []
+    for well in exp:
+        if well.plate.plate_id not in excluded:
+            wells.append(well)
+
+    return wells
+
+wells = filter_wells(exp, ["day4p5"])
+
+for well in wells:
+    # Load the segmentation file.
+
+    ovr_seg = well.get_segmentation(ovr_channel)  # this is the seg image
 
     if ovr_seg is not None:
         # calculate global coordinates
@@ -182,7 +83,8 @@ for well in exp:
                 "organoid_id": organoid_id,
                 "segmentation_ovr": well.segmentations[ovr_channel],
                 "flag_tile_border": organoid_id
-                in lst,  # TRUE (1) means organoid is touching a tile border
+                                    in lst,
+                # TRUE (1) means organoid is touching a tile border
                 "x_pos_pix_global": obj["centroid"][1],
                 "y_pos_pix_global": obj["centroid"][0],
                 "area_pix_global": obj["area"],
@@ -243,9 +145,10 @@ for organoid in exp:
 
         for obj in org_features:
             box_area = obj["area"] / (
-                org_seg.shape[0] * org_seg.shape[1]
+                    org_seg.shape[0] * org_seg.shape[1]
             )  # for filtering of wrong segmentations
-            circularity = 4 * math.pi * (obj["area"] / (math.pow(obj["perimeter"], 2)))
+            circularity = 4 * math.pi * (
+                    obj["area"] / (math.pow(obj["perimeter"], 2)))
 
             row = {
                 "hcs_experiment": organoid.well.plate.experiment.name,
@@ -262,8 +165,10 @@ for organoid in exp:
                 "y_pos_pix": obj["centroid"][0],
                 "x_pos_weighted_pix": obj["weighted_centroid"][1],
                 "y_pos_weighted_pix": obj["weighted_centroid"][0],
-                "x_massDisp_pix": obj["weighted_centroid"][1] - obj["centroid"][1],
-                "y_massDisp_pix": obj["weighted_centroid"][0] - obj["centroid"][0],
+                "x_massDisp_pix": obj["weighted_centroid"][1] -
+                                  obj["centroid"][1],
+                "y_massDisp_pix": obj["weighted_centroid"][0] -
+                                  obj["centroid"][0],
                 "mean_intensityMIP": obj["mean_intensity"],
                 "max_intensity": obj["max_intensity"],
                 "min_intensity": obj["min_intensity"],
@@ -273,9 +178,12 @@ for organoid in exp:
                 "eccentricity": obj["eccentricity"],
                 "majorAxisLength": obj["major_axis_length"],
                 "minorAxisLength": obj["minor_axis_length"],
-                "axisRatio": obj["minor_axis_length"] / obj["major_axis_length"],
-                "eulerNumber": obj["euler_number"],  # for filtering wrong segmentations
-                "objectBoxRatio": box_area,  # for filtering wrong segmentations
+                "axisRatio": obj["minor_axis_length"] / obj[
+                    "major_axis_length"],
+                "eulerNumber": obj["euler_number"],
+                # for filtering wrong segmentations
+                "objectBoxRatio": box_area,
+                # for filtering wrong segmentations
                 "perimeter": obj["perimeter"],
                 "circularity": circularity,
                 "quartile25": obj["quartiles"][0],
@@ -445,7 +353,6 @@ for organoid in exp:
         organoid.add_measurement(name, path)
         organoid.save()  # updates json file
 
-
 # LINKING
 # Load an existing faim-hcs Experiment from disk.
 exp = Experiment()
@@ -480,14 +387,16 @@ for organoid in exp:
 
     # match each nuclear label to a cell label
     stat = matching(
-        mem_seg, nuc_seg, criterion="iop", thresh=iop_cutoff, report_matches=True
+        mem_seg, nuc_seg, criterion="iop", thresh=iop_cutoff,
+        report_matches=True
     )
 
     #     print(stat[2], 'out of', stat[10], 'nuclei are not surrounded by a cell')
     #     print(stat[4], 'out of', stat[9], 'cells do not contain a nucleus')
 
     match = pd.DataFrame(
-        list(zip([x[0] for x in stat[14]], [x[1] for x in stat[14]], stat[15])),
+        list(
+            zip([x[0] for x in stat[14]], [x[1] for x in stat[14]], stat[15])),
         columns=["mem_id", "nuc_id", "iop"],
     )
     match_filt = match.loc[(match["iop"] > iop_cutoff)].copy(
@@ -496,7 +405,8 @@ for organoid in exp:
 
     # update all organoid measurements with numbers of nuclei and membrane detected and linked
     for meas_name in [
-        k for k, v in organoid.measurements.items() if k.startswith("regionprops_org")
+        k for k, v in organoid.measurements.items() if
+        k.startswith("regionprops_org")
     ]:
         meas = organoid.get_measurement(meas_name)
 
