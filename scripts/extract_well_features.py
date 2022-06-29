@@ -3,9 +3,7 @@ import configparser
 
 
 def conf_to_dict(config):
-    return {
-        "p": config["DEFAULT"]["p"]
-    }
+    return {"p": config["DEFAULT"]["p"]}
 
 
 def main():

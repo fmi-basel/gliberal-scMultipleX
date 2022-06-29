@@ -1,26 +1,20 @@
 import copy
 import math
-import re
-from glob import glob
-from os.path import basename, exists, join, splitext, isdir, split
+from os.path import join
 
 import numpy as np
 import pandas as pd
 from faim_hcs.hcs.Experiment import Experiment
-from faim_hcs.records.PlateRecord import PlateRecord
 from matching import matching
+from skimage.measure import regionprops
+from skimage.morphology import binary_erosion
+
 from scmultiplex.features.FeatureFunctions import (
     fixed_percentiles,
     kurtos,
     skewness,
     stdv,
 )
-from scmultiplex.utils.parse_utils import add_plates, add_organoid, add_well, \
-    get_well_overview_mips, get_well_overview_segs, prepare_and_add_well, \
-    prepare_and_add_organoids
-from skimage.measure import regionprops
-from skimage.morphology import binary_erosion
-from tqdm.notebook import tqdm
 
 pd.set_option("display.max_rows", 200)
 
@@ -33,6 +27,7 @@ exp.only_iterate_over_wells(True)
 exp.reset_iterator()
 ovr_channel = "C01"  # almost always DAPI is C01 -- if not, change this!
 
+
 def filter_wells(exp, excluded):
     exp.only_iterate_over_wells(True)
     exp.reset_iterator()
@@ -43,6 +38,7 @@ def filter_wells(exp, excluded):
             wells.append(well)
 
     return wells
+
 
 wells = filter_wells(exp, ["day4p5"])
 
@@ -82,8 +78,7 @@ for well in wells:
                 "well_id": well.well_id,
                 "organoid_id": organoid_id,
                 "segmentation_ovr": well.segmentations[ovr_channel],
-                "flag_tile_border": organoid_id
-                                    in lst,
+                "flag_tile_border": organoid_id in lst,
                 # TRUE (1) means organoid is touching a tile border
                 "x_pos_pix_global": obj["centroid"][1],
                 "y_pos_pix_global": obj["centroid"][0],
@@ -145,10 +140,9 @@ for organoid in exp:
 
         for obj in org_features:
             box_area = obj["area"] / (
-                    org_seg.shape[0] * org_seg.shape[1]
+                org_seg.shape[0] * org_seg.shape[1]
             )  # for filtering of wrong segmentations
-            circularity = 4 * math.pi * (
-                    obj["area"] / (math.pow(obj["perimeter"], 2)))
+            circularity = 4 * math.pi * (obj["area"] / (math.pow(obj["perimeter"], 2)))
 
             row = {
                 "hcs_experiment": organoid.well.plate.experiment.name,
@@ -165,10 +159,8 @@ for organoid in exp:
                 "y_pos_pix": obj["centroid"][0],
                 "x_pos_weighted_pix": obj["weighted_centroid"][1],
                 "y_pos_weighted_pix": obj["weighted_centroid"][0],
-                "x_massDisp_pix": obj["weighted_centroid"][1] -
-                                  obj["centroid"][1],
-                "y_massDisp_pix": obj["weighted_centroid"][0] -
-                                  obj["centroid"][0],
+                "x_massDisp_pix": obj["weighted_centroid"][1] - obj["centroid"][1],
+                "y_massDisp_pix": obj["weighted_centroid"][0] - obj["centroid"][0],
                 "mean_intensityMIP": obj["mean_intensity"],
                 "max_intensity": obj["max_intensity"],
                 "min_intensity": obj["min_intensity"],
@@ -178,8 +170,7 @@ for organoid in exp:
                 "eccentricity": obj["eccentricity"],
                 "majorAxisLength": obj["major_axis_length"],
                 "minorAxisLength": obj["minor_axis_length"],
-                "axisRatio": obj["minor_axis_length"] / obj[
-                    "major_axis_length"],
+                "axisRatio": obj["minor_axis_length"] / obj["major_axis_length"],
                 "eulerNumber": obj["euler_number"],
                 # for filtering wrong segmentations
                 "objectBoxRatio": box_area,
@@ -387,16 +378,14 @@ for organoid in exp:
 
     # match each nuclear label to a cell label
     stat = matching(
-        mem_seg, nuc_seg, criterion="iop", thresh=iop_cutoff,
-        report_matches=True
+        mem_seg, nuc_seg, criterion="iop", thresh=iop_cutoff, report_matches=True
     )
 
     #     print(stat[2], 'out of', stat[10], 'nuclei are not surrounded by a cell')
     #     print(stat[4], 'out of', stat[9], 'cells do not contain a nucleus')
 
     match = pd.DataFrame(
-        list(
-            zip([x[0] for x in stat[14]], [x[1] for x in stat[14]], stat[15])),
+        list(zip([x[0] for x in stat[14]], [x[1] for x in stat[14]], stat[15])),
         columns=["mem_id", "nuc_id", "iop"],
     )
     match_filt = match.loc[(match["iop"] > iop_cutoff)].copy(
@@ -405,8 +394,7 @@ for organoid in exp:
 
     # update all organoid measurements with numbers of nuclei and membrane detected and linked
     for meas_name in [
-        k for k, v in organoid.measurements.items() if
-        k.startswith("regionprops_org")
+        k for k, v in organoid.measurements.items() if k.startswith("regionprops_org")
     ]:
         meas = organoid.get_measurement(meas_name)
 
