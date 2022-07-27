@@ -1,8 +1,9 @@
 import logging
 from glob import glob
-from os.path import basename, join, splitext
+from os.path import basename, exists, isdir, join, split, splitext
 from typing import List, Pattern, Tuple
 
+from faim_hcs.hcs.Experiment import Experiment
 from faim_hcs.records.OrganoidRecord import OrganoidRecord
 from faim_hcs.records.PlateRecord import PlateRecord
 from faim_hcs.records.WellRecord import WellRecord
@@ -17,7 +18,7 @@ def prepare_and_add_organoids(
     nuc_seg_regex: Pattern,
     cell_seg_regex: Pattern,
     spacing: Tuple[float],
-    logger=logging,
+    logger=logging.getLogger("HCS_Experiment"),
 ):
     organoids = glob(join(organoid_parent_dir, well.well_id, "*"))
     for organoid in tqdm(organoids, leave=False):
@@ -91,7 +92,7 @@ def add_organoid(
     nuc_seg_regex: Pattern,
     cell_seg_regex: Pattern,
     spacing: Tuple[float],
-    logger=logging,
+    logger=logging.getLogger("HCS_Experiment"),
 ):
     org = OrganoidRecord(well, basename(organoid_path), save_dir=well.well_dir)
     organoid_files = glob(join(organoid_path, "*.tif"))
@@ -135,3 +136,79 @@ def get_well_overview_segs(
         )
     )
     return list(filter(lambda p: well_path_to_well_id(p) == well_id, seg_mips))
+
+
+def create_experiment(
+    name,
+    root_dir,
+    save_dir,
+    overview_spacing,
+    spacing,
+    fname_barcode_index,
+    well_regex,
+    raw_ch_regex,
+    mask_regex,
+    nuc_seg_regex,
+    cell_seg_regex,
+    logger=logging.getLogger("HCS_Experiment"),
+):
+    def raw_file_to_raw_name(p):
+        return splitext(p)[0][-3:]
+
+    def seg_file_to_seg_name(p):
+        return splitext(p)[0][-3:]
+
+    def well_path_to_well_id(p):
+        return basename(p).split("_")[fname_barcode_index]
+
+    exp = Experiment(
+        name=name,
+        root_dir=root_dir,
+        save_dir=save_dir,
+    )
+
+    plates = glob(exp.root_dir + "/*")
+    for p in plates:
+        if isdir(p):
+            plate = PlateRecord(
+                experiment=exp, plate_id=split(p)[1], save_dir=exp.get_experiment_dir()
+            )
+
+            ovr_mips = glob(join(exp.root_dir, plate.plate_id, "TIF_OVR_MIP", "*.tif"))
+
+            well_ids = [well_regex.findall(basename(om))[0][1:-1] for om in ovr_mips]
+
+            wells = []
+            for well_id in well_ids:
+                logger.info(
+                    f"Add well {well_id} to plate {plate.plate_id} "
+                    f"of experiment {exp.name}."
+                )
+                wells.append(
+                    prepare_and_add_well(
+                        plate=plate,
+                        well_id=well_id,
+                        ovr_mips=ovr_mips,
+                        overview_spacing=overview_spacing,
+                        well_regex=well_regex,
+                        raw_file_to_raw_name=raw_file_to_raw_name,
+                        seg_file_to_seg_name=seg_file_to_seg_name,
+                        well_path_to_well_id=well_path_to_well_id,
+                    )
+                )
+
+            organoid_parent_dir = join(exp.root_dir, plate.plate_id, "obj_v0.3_ROI")
+            if exists(organoid_parent_dir):
+                for well in wells:
+                    prepare_and_add_organoids(
+                        organoid_parent_dir=organoid_parent_dir,
+                        well=well,
+                        raw_ch_regex=raw_ch_regex,
+                        mask_regex=mask_regex,
+                        nuc_seg_regex=nuc_seg_regex,
+                        cell_seg_regex=cell_seg_regex,
+                        spacing=spacing,
+                        logger=logger,
+                    )
+
+    exp.save()

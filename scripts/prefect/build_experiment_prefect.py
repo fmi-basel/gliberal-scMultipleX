@@ -1,18 +1,11 @@
 import argparse
 import configparser
 import re
-from glob import glob
-from os.path import basename, exists, isdir, join, split, splitext
 
 import prefect
-from faim_hcs.hcs.Experiment import Experiment
-from faim_hcs.records.PlateRecord import PlateRecord
 from prefect import Flow, Parameter, task
 
-from scmultiplex.utils.parse_utils import (
-    prepare_and_add_organoids,
-    prepare_and_add_well,
-)
+from scmultiplex.utils.parse_utils import create_experiment
 
 
 def conf_to_dict(config):
@@ -46,7 +39,7 @@ def create_regexes(well_pattern, raw_ch_pattern, mask_ending, nuc_ending, mem_en
 
 
 @task()
-def create_experiment(
+def create_experiment_task(
     name,
     root_dir,
     save_dir,
@@ -59,63 +52,20 @@ def create_experiment(
     nuc_seg_regex,
     cell_seg_regex,
 ):
-    logger = prefect.context.get("logger")
-
-    raw_file_to_raw_name = lambda p: splitext(p)[0][-3:]
-    seg_file_to_seg_name = lambda p: splitext(p)[0][-3:]
-    well_path_to_well_id = lambda p: basename(p).split("_")[fname_barcode_index]
-
-    exp = Experiment(
+    create_experiment(
         name=name,
         root_dir=root_dir,
         save_dir=save_dir,
+        overview_spacing=overview_spacing,
+        spacing=spacing,
+        fname_barcode_index=fname_barcode_index,
+        well_regex=well_regex,
+        raw_ch_regex=raw_ch_regex,
+        mask_regex=mask_regex,
+        nuc_seg_regex=nuc_seg_regex,
+        cell_seg_regex=cell_seg_regex,
+        logger=prefect.context.get("logger"),
     )
-
-    plates = glob(exp.root_dir + "/*")
-    for p in plates:
-        if isdir(p):
-            plate = PlateRecord(
-                experiment=exp, plate_id=split(p)[1], save_dir=exp.get_experiment_dir()
-            )
-
-            ovr_mips = glob(join(exp.root_dir, plate.plate_id, "TIF_OVR_MIP", "*.tif"))
-
-            well_ids = [well_regex.findall(basename(om))[0][1:-1] for om in ovr_mips]
-
-            wells = []
-            for well_id in well_ids:
-                logger.info(
-                    f"Add well {well_id} to plate {plate.plate_id} "
-                    f"of experiment {exp.name}."
-                )
-                wells.append(
-                    prepare_and_add_well(
-                        plate=plate,
-                        well_id=well_id,
-                        ovr_mips=ovr_mips,
-                        overview_spacing=overview_spacing,
-                        well_regex=well_regex,
-                        raw_file_to_raw_name=raw_file_to_raw_name,
-                        seg_file_to_seg_name=seg_file_to_seg_name,
-                        well_path_to_well_id=well_path_to_well_id,
-                    )
-                )
-
-            organoid_parent_dir = join(exp.root_dir, plate.plate_id, "obj_v0.3_ROI")
-            if exists(organoid_parent_dir):
-                for well in wells:
-                    prepare_and_add_organoids(
-                        organoid_parent_dir=organoid_parent_dir,
-                        well=well,
-                        raw_ch_regex=raw_ch_regex,
-                        mask_regex=mask_regex,
-                        nuc_seg_regex=nuc_seg_regex,
-                        cell_seg_regex=cell_seg_regex,
-                        spacing=spacing,
-                        logger=logger,
-                    )
-
-    exp.save()
 
 
 with Flow("Build-Experiment") as flow:
