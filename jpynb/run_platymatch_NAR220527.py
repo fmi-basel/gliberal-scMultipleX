@@ -17,6 +17,8 @@ from platymatch.utils.utils import (
 from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
 
+from scmultiplex.platymatch.utils.utils import calculate_nucleus_size
+
 warnings.filterwarnings("ignore")
 
 
@@ -73,20 +75,7 @@ def runPM(
     fixed_detections = np.flip(fixed_pc[:, 1:-1], 1).transpose()
 
     # Calculate nucleus size
-    moving_nuclei_size_mean = np.mean(moving_pc[:, -1].transpose())
-    moving_nuclei_size_std = np.std(moving_pc[:, -1].transpose())
-    moving_nuclei_size = (
-        moving_nuclei_size_mean - 3 * moving_nuclei_size_std
-        if (moving_nuclei_size_mean - 3 * moving_nuclei_size_std) > 0
-        else (moving_nuclei_size_mean - 2 * moving_nuclei_size_std)
-    )
-    fixed_nuclei_size_mean = np.mean(fixed_pc[:, -1].transpose())
-    fixed_nuclei_size_std = np.std(fixed_pc[:, -1].transpose())
-    fixed_nuclei_size = (
-        fixed_nuclei_size_mean - 3 * fixed_nuclei_size_std
-        if (fixed_nuclei_size_mean - 3 * fixed_nuclei_size_std) > 0
-        else (fixed_nuclei_size_mean - 2 * fixed_nuclei_size_std)
-    )
+    moving_nuclei_size, fixed_nuclei_size = calculate_nucleus_size(moving_pc, fixed_pc)
 
     ransac_error = 0.5 * (moving_nuclei_size ** (1 / 3) + fixed_nuclei_size ** (1 / 3))
     print("=" * 25)
@@ -99,14 +88,6 @@ def runPM(
     # Get Average Mean Distance
     moving_mean_distance = get_mean_distance(moving_detections, transposed=False)
     fixed_mean_distance = get_mean_distance(fixed_detections, transposed=False)
-
-    #     # Load Raw Images
-    #     moving_raw_image = tifffile.imread(moving_raw_image_name)
-    #     fixed_raw_image = tifffile.imread(fixed_raw_image_name)
-
-    #     # Load Labels
-    #     moving_label_image = tifffile.imread(moving_label_image_name)
-    #     fixed_label_image = tifffile.imread(fixed_label_image_name)
 
     # Generate Unaries
     print("=" * 25)
@@ -315,13 +296,20 @@ def runPM(
         tifffile.imsave(save_ffd_label_image_name, transformed_ffd_label_image)
 
     # obtain accuracy after performing FFD
-    ids = np.unique(transformed_ffd_label_image)
-    ids = ids[ids != 0]
+    # ids = np.unique(transformed_ffd_label_image)
+    # ids = ids[ids != 0]
+    ids = moving_ids
     moving_ffd_ids = []
     transformed_moving_ffd_detections = []
     for id in ids:
         z, y, x = np.where(transformed_ffd_label_image == id)
         zm, ym, xm = np.mean(z), np.mean(y), np.mean(x)
+        if len(z) == 0:
+            zm = (
+                ym
+            ) = (
+                xm
+            ) = 0.0  # TODO - in future, save `confidence` as a dictionary of id tuples)
         transformed_moving_ffd_detections.append(np.array([zm, ym, xm]))  # N x 3
         moving_ffd_ids.append(id)
     cost_matrix = cdist(transformed_moving_ffd_detections, fixed_detections.transpose())
