@@ -4,6 +4,9 @@ import re
 
 import prefect
 from prefect import Flow, Parameter, task
+from prefect.executors import LocalDaskExecutor
+from prefect.run_configs import LocalRun
+from prefect.storage import Local
 
 from scmultiplex.utils.parse_utils import create_experiment
 
@@ -68,7 +71,16 @@ def create_experiment_task(
     )
 
 
-with Flow("Build-Experiment") as flow:
+with Flow(
+    "Build-Experiment",
+    storage=Local(
+        directory="/home/tibuch/Prefect_Flows/scMultipleX_flows",
+        stored_as_script=True,
+        path="/home/tibuch/Gitrepos/gliberal-scMultipleX/scripts/prefect/build_experiment_prefect.py",
+    ),
+    executor=LocalDaskExecutor(),
+    run_config=LocalRun(),
+) as flow:
     well_pattern = Parameter("well_pattern", default="_[A-Z]{1}[0-9]{2}_")
     raw_ch_pattern = Parameter("raw_ch_pattern", default="C[0-9]{2}O.*_TIF-OVR.tif")
     mask_ending = Parameter("mask_ending", default="MASK")
@@ -96,7 +108,7 @@ with Flow("Build-Experiment") as flow:
     )
     well_regex, raw_ch_regex, mask_regex, nuc_seg_regex, cell_seg_regex = regexes
 
-    exp = create_experiment(
+    exp = create_experiment_task(
         name=name,
         root_dir=root_dir,
         save_dir=save_dir,
