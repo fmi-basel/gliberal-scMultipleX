@@ -1,13 +1,18 @@
+import argparse
+import configparser
 from typing import List
 
 import prefect
+from faim_hcs.hcs.Experiment import Experiment
 from faim_hcs.records.WellRecord import WellRecord
 from prefect import Flow, Parameter, task, unmapped
 from prefect.executors import LocalDaskExecutor
 from prefect.run_configs import LocalRun
-from prefect.storage import Local
 
-from scmultiplex.features.FeatureExtraction import extract_2d_ovr
+from scmultiplex.features.FeatureExtraction import (
+    extract_2d_ovr,
+    extract_organoid_features,
+)
 from scmultiplex.features.FeatureFunctions import flag_touching
 from scmultiplex.utils.exclude_utils import exclude_conditions
 
@@ -28,7 +33,7 @@ def load_task(exp_path: str, excluded_plates: List[str], excluded_wells: List[st
 
 
 @task()
-def feature_extraction_ovr_task(well: WellRecord, ovr_channel: str, name_ovr: str):
+def well_feature_extraction_ovr_task(well: WellRecord, ovr_channel: str, name_ovr: str):
     logger = prefect.context.get("logger")
     ovr_seg_img, ovr_seg_tiles = load_ovr(well, ovr_channel)
 
@@ -40,37 +45,88 @@ def feature_extraction_ovr_task(well: WellRecord, ovr_channel: str, name_ovr: st
         save_to_well(well, name_ovr + ovr_channel, df_ovr)
 
 
+@task()
+def get_organoids(exp: Experiment, mask_ending: str):
+    exp.only_iterate_over_wells(False)
+    exp.reset_iterator()
+    organoids = []
+    for organoid in exp:
+        if mask_ending in organoid.segmentations.keys() is None:
+            continue  # skip organoids that don't have a mask (this will never happen)
+
+        if organoid.well.plate.plate_id in ["day4p5"]:
+            continue  # skip these timepoints
+
+        organoids.append(organoid)
+    return organoids
+
+
+@task()
+def organoid_feature_extraction_task(
+    organoid, nuc_ending: str, mem_ending: str, mask_ending: str
+):
+    extract_organoid_features(
+        organoid=organoid,
+        nuc_ending=nuc_ending,
+        mem_ending=mem_ending,
+        mask_ending=mask_ending,
+    )
+
+
 # all feature extraction in one flow because writing to the same json file
 with Flow(
     "Feature-Extraction",
-    storage=Local(
-        directory="/home/tibuch/Prefect_Flows/scMultipleX_flows",
-        stored_as_script=True,
-        path="/home/tibuch/Gitrepos/gliberal-scMultipleX/scripts"
-        "/prefect/feature_extraction.py",
-    ),
     executor=LocalDaskExecutor(),
     run_config=LocalRun(),
 ) as flow:
-    # parameters
     exp_path = Parameter("exp_path", default="/path/to/exp")
     excluded_plates = Parameter("excluded_plates", default=[])
     excluded_wells = Parameter("excluded_wells", default=[])
     ovr_channel = Parameter("ovr_channel", default="C01")
+    mask_ending = Parameter("mask_ending", default="MASK")
+    nuc_ending = Parameter("nuc_ending", default="NUC_SEG3D_220523")
+    mem_ending = Parameter("mem_ending", default="MEM_SEG3D_220523")
     name_ovr = Parameter("name_ovr", default="regionprops_ovr_")
 
-    # flow
     exp, wells = load_task(exp_path, excluded_plates, excluded_wells)
-    # how to only iterate over wells?
-    feature_extraction_ovr_task.map(wells, unmapped(ovr_channel), unmapped(name_ovr))
 
-    #
+    well_feature_extraction_ovr_task.map(
+        wells, unmapped(ovr_channel), unmapped(name_ovr)
+    )
 
-    # loaded = load_ovr.map(wells, unmapped(ovr_channel))
+    organoids = get_organoids(exp, mask_ending)
 
-    # for well in wells:
-    # get overview image -- load images?
-    # binarize tile img and find touching labels
-    # feature extraction with regionprops
-    # add row for desired features to make df
-    # save into well directory
+    organoid_feature_extraction_task.map(
+        organoids, unmapped(nuc_ending), unmapped(mem_ending), unmapped(mask_ending)
+    )
+
+
+def conf_to_dict(config):
+    return {
+        "exp_path": config["DEFAULT"]["exp_path"],
+        "excluded_plates": config["DEFAULT"]["excluded_plates"].split(","),
+        "excluded_wells": config["DEFAULT"]["excluded_wells"].split(","),
+        "ovr_channel": config["DEFAULT"]["ovr_channel"],
+        "mask_ending": config["DEFAULT"]["mask_ending"],
+        "nuc_ending": config["DEFAULT"]["nuc_ending"],
+        "mem_ending": config["DEFAULT"]["mem_ending"],
+        "name_ovr": config["DEFAULT"]["name_ovr"],
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config")
+    args = parser.parse_args()
+
+    config = configparser.ConfigParser()
+    config.read(args.config)
+
+    kwargs = conf_to_dict(config)
+    print(kwargs)
+
+    flow.run(parameters=kwargs)
+
+
+if __name__ == "__main__":
+    main()

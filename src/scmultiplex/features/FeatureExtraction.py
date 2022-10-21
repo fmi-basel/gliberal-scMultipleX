@@ -1,8 +1,20 @@
+import copy
+import math
+from os.path import join
 from typing import List
 
+import numpy as np
 import pandas as pd
+from faim_hcs.records.OrganoidRecord import OrganoidRecord
 from faim_hcs.records.WellRecord import WellRecord
 from skimage.measure import regionprops
+
+from scmultiplex.features.FeatureFunctions import (
+    fixed_percentiles,
+    kurtos,
+    skewness,
+    stdv,
+)
 
 
 def extract_2d_ovr(
@@ -30,3 +42,239 @@ def extract_2d_ovr(
             [df_ovr, pd.DataFrame.from_records([row])], ignore_index=True
         )
     return df_ovr
+
+
+def extract_organoid_features(
+    organoid: OrganoidRecord, nuc_ending: str, mem_ending: str, mask_ending: str
+):
+    nuc_seg = organoid.get_segmentation(nuc_ending)  # load segmentation images
+    mem_seg = organoid.get_segmentation(mem_ending)  # load segmentation images
+    org_seg = organoid.get_segmentation(mask_ending)
+
+    # for each raw image, extract organoid-level features
+    for channel in organoid.raw_files:
+        # Load raw data.
+        raw = organoid.get_raw_data(channel)  # this is the raw image
+
+        # create organoid MIP
+        raw_mip = np.zeros(
+            org_seg.shape
+        )  # initialize array to dimensions of mask image
+        for plane in raw:
+            raw_mip = np.maximum(raw_mip, plane)
+
+        # organoid feature extraction
+        df_org = pd.DataFrame()
+        org_features = regionprops(
+            org_seg,
+            raw_mip,
+            extra_properties=(fixed_percentiles, skewness, kurtos, stdv),
+        )
+        abs_min_intensity = np.amin(raw_mip)
+        # voxel_area = organoid.spacings[channel][1] * organoid.spacings[channel][2] #calculate voxel area in um2 (x*y)
+
+        for obj in org_features:
+            box_area = obj["area"] / (
+                org_seg.shape[0] * org_seg.shape[1]
+            )  # for filtering of wrong segmentations
+            circularity = 4 * math.pi * (obj["area"] / (math.pow(obj["perimeter"], 2)))
+
+            row = {
+                "hcs_experiment": organoid.well.plate.experiment.name,
+                "root_dir": organoid.well.plate.experiment.root_dir,
+                "plate_id": organoid.well.plate.plate_id,
+                "well_id": organoid.well.well_id,
+                "channel_id": channel,
+                "object_type": "organoid",
+                "organoid_id": organoid.organoid_id,
+                "org_label": organoid.organoid_id.rpartition("_")[2],
+                "segmentation_org": organoid.segmentations[mask_ending],
+                "intensity_img": organoid.raw_files[channel],
+                "x_pos_pix": obj["centroid"][1],
+                "y_pos_pix": obj["centroid"][0],
+                "x_pos_weighted_pix": obj["weighted_centroid"][1],
+                "y_pos_weighted_pix": obj["weighted_centroid"][0],
+                "x_massDisp_pix": obj["weighted_centroid"][1] - obj["centroid"][1],
+                "y_massDisp_pix": obj["weighted_centroid"][0] - obj["centroid"][0],
+                "mean_intensityMIP": obj["mean_intensity"],
+                "max_intensity": obj["max_intensity"],
+                "min_intensity": obj["min_intensity"],
+                "abs_min": abs_min_intensity,
+                "area_pix": obj["area"],
+                #                 'area_um2':obj['area'] * voxel_area,
+                "eccentricity": obj["eccentricity"],
+                "majorAxisLength": obj["major_axis_length"],
+                "minorAxisLength": obj["minor_axis_length"],
+                "axisRatio": obj["minor_axis_length"] / obj["major_axis_length"],
+                "eulerNumber": obj["euler_number"],
+                # for filtering wrong segmentations
+                "objectBoxRatio": box_area,
+                # for filtering wrong segmentations
+                "perimeter": obj["perimeter"],
+                "circularity": circularity,
+                "quartile25": obj["fixed_percentiles"][0],
+                "quartile50": obj["fixed_percentiles"][1],
+                "quartile75": obj["fixed_percentiles"][2],
+                "quartile90": obj["fixed_percentiles"][3],
+                "quartile95": obj["fixed_percentiles"][4],
+                "quartile99": obj["fixed_percentiles"][5],
+                "stdev": obj["stdv"],
+                "skew": obj["skewness"],
+                "kurtosis": obj["kurtos"],
+            }
+
+            df_org = pd.concat(
+                [df_org, pd.DataFrame.from_records([row])], ignore_index=True
+            )
+            # df_org = df_org.append(row,ignore_index=True)
+
+        # Save measurement into the organoid directory.
+        name = "regionprops_org_" + str(channel)
+        path = join(organoid.organoid_dir, name + ".csv")
+        df_org.to_csv(path, index=False)  # saves csv
+
+        # Add the measurement to the faim-hcs datastructure and save.
+        organoid.add_measurement(name, path)
+        organoid.save()  # updates json file
+
+        # NUCLEAR feature extraction
+        if nuc_seg is None:
+            continue  # skip organoids that don't have a nuclear segmentation
+
+        # organoid feature extraction
+        df_nuc = pd.DataFrame()
+
+        # make binary organoid mask and crop nuclear labels to this mask
+        # extract nuclei features that only belong to organoid of interest and exclude pieces of neighboring organoids
+        org_seg_binary = copy.deepcopy(org_seg)
+        org_seg_binary[org_seg_binary > 0] = 1
+        nuc_seg = nuc_seg * org_seg_binary
+
+        nuc_features = regionprops(
+            nuc_seg,
+            raw,
+            extra_properties=(fixed_percentiles, skewness, kurtos, stdv),
+            spacing=(3, 1, 1),
+        )
+        # voxel_volume = organoid.spacings[channel][0] * organoid.spacings[channel][1] * organoid.spacings[channel][2] #calculate voxel area in um2 (x*y)
+        # https://www.analyticsvidhya.com/blog/2022/01/moments-a-must-known-statistical-concept-for-data-science/
+        # mean is first raw moment
+        # variance is the second central moment
+        # skewness is the third normalized moment
+        # kurtosis is the fourth standardize moment
+
+        for nuc in nuc_features:
+            row = {
+                "hcs_experiment": organoid.well.plate.experiment.name,
+                "root_dir": organoid.well.plate.experiment.root_dir,
+                "plate_id": organoid.well.plate.plate_id,
+                "well_id": organoid.well.well_id,
+                "channel_id": channel,
+                "object_type": "nucleus",
+                "organoid_id": organoid.organoid_id,
+                "org_label": organoid.organoid_id.rpartition("_")[2],
+                "nuc_id": int(nuc["label"]),
+                "segmentation_nuc": organoid.segmentations[nuc_ending],
+                "intensity_img": organoid.raw_files[channel],
+                "x_pos_vox": nuc["centroid"][2],
+                "y_pos_vox": nuc["centroid"][1],
+                "z_pos_vox": nuc["centroid"][0],
+                #                 'x_pos_um':nuc['centroid'][2]*organoid.spacings[channel][2],
+                #                 'y_pos_um':nuc['centroid'][1]*organoid.spacings[channel][1],
+                #                 'z_pos_um':nuc['centroid'][0]*organoid.spacings[channel][0],
+                "volume_pix": nuc["area"],
+                #                 'volume_um3':nuc['area'] * voxel_volume,
+                "mean_intensity": nuc["mean_intensity"],
+                "max_intensity": nuc["max_intensity"],
+                "min_intensity": nuc["min_intensity"],
+                "quartile25": nuc["fixed_percentiles"][0],
+                "quartile50": nuc["fixed_percentiles"][1],
+                "quartile75": nuc["fixed_percentiles"][2],
+                "quartile90": nuc["fixed_percentiles"][3],
+                "quartile95": nuc["fixed_percentiles"][4],
+                "quartile99": nuc["fixed_percentiles"][5],
+                "stdev": nuc["stdv"],
+                "skew": nuc["skewness"],
+                "kurtosis": nuc["kurtos"],
+            }
+
+            df_nuc = pd.concat(
+                [df_nuc, pd.DataFrame.from_records([row])], ignore_index=True
+            )
+            # df_nuc = df_nuc.append(row,ignore_index=True)
+
+        # Save measurement into the organoid directory.
+        name = "regionprops_nuc_" + str(channel)
+        path = join(organoid.organoid_dir, name + ".csv")
+        df_nuc.to_csv(path, index=False)  # saves csv
+
+        # Add the measurement to the faim-hcs datastructure and save.
+        organoid.add_measurement(name, path)
+        organoid.save()  # updates json file
+
+        # MEMBRANE feature extraction
+        if mem_seg is None:
+            continue  # skip organoids that don't have a cell segmentation
+
+        # organoid feature extraction
+        df_mem = pd.DataFrame()
+
+        # make binary organoid mask and crop cell labels to this mask
+        # MAYBE EXPAND BINARY MASK??
+        mem_seg = mem_seg * org_seg_binary
+
+        mem_features = regionprops(
+            mem_seg,
+            raw,
+            extra_properties=(fixed_percentiles, skewness, kurtos, stdv),
+            spacing=(3, 1, 1),
+        )
+
+        for mem in mem_features:
+            row = {
+                "hcs_experiment": organoid.well.plate.experiment.name,
+                "root_dir": organoid.well.plate.experiment.root_dir,
+                "plate_id": organoid.well.plate.plate_id,
+                "well_id": organoid.well.well_id,
+                "channel_id": channel,
+                "object_type": "membrane",
+                "organoid_id": organoid.organoid_id,
+                "org_label": organoid.organoid_id.rpartition("_")[2],
+                "mem_id": int(mem["label"]),
+                "segmentation_mem": organoid.segmentations[mem_ending],
+                "intensity_img": organoid.raw_files[channel],
+                "x_pos_vox": mem["centroid"][2],
+                "y_pos_vox": mem["centroid"][1],
+                "z_pos_vox": mem["centroid"][0],
+                #                 'x_pos_um':mem['centroid'][2]*organoid.spacings[channel][2],
+                #                 'y_pos_um':mem['centroid'][1]*organoid.spacings[channel][1],
+                #                 'z_pos_um':mem['centroid'][0]*organoid.spacings[channel][0],
+                "volume_pix": mem["area"],
+                #                 'volume_um3':mem['area'] * voxel_volume,
+                "mean_intensity": mem["mean_intensity"],
+                "max_intensity": mem["max_intensity"],
+                "min_intensity": mem["min_intensity"],
+                "quartile25": mem["fixed_percentiles"][0],
+                "quartile50": mem["fixed_percentiles"][1],
+                "quartile75": mem["fixed_percentiles"][2],
+                "quartile90": mem["fixed_percentiles"][3],
+                "quartile95": mem["fixed_percentiles"][4],
+                "quartile99": mem["fixed_percentiles"][5],
+                "stdev": mem["stdv"],
+                "skew": mem["skewness"],
+                "kurtosis": mem["kurtos"],
+            }
+
+            df_mem = pd.concat(
+                [df_mem, pd.DataFrame.from_records([row])], ignore_index=True
+            )
+            # df_mem = df_mem.append(row,ignore_index=True)
+
+        # Save measurement into the organoid directory.
+        name = "regionprops_mem_" + str(channel)
+        path = join(organoid.organoid_dir, name + ".csv")
+        df_mem.to_csv(path, index=False)  # saves csv
+
+        # Add the measurement to the faim-hcs datastructure and save.
+        organoid.add_measurement(name, path)
+        organoid.save()  # updates json file
