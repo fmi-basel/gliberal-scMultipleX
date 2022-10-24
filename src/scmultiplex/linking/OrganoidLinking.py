@@ -20,6 +20,7 @@ def link_organoids(
     well: WellRecord,
     ovr_channel: str,
     folder_name: str,
+    R0: Experiment,
     RX: Experiment,
     seg_name: str,
     RX_name: str,
@@ -33,15 +34,20 @@ def link_organoids(
 
     R0_fname = basename(well.segmentations[ovr_channel])
     R0_savedir = os.path.join(
-        well.plate.experiment.root_dir,
+        R0.get_experiment_dir(),
         well.plate.plate_id,
+        well.well_id,
         "TIF_OVR_MIP_SEG",
         folder_name,
     )
 
     RX_fname = basename(RX.plates[plate_id].wells[well_id].segmentations[ovr_channel])
     RX_savedir = os.path.join(
-        RX.root_dir, well.plate.plate_id, "TIF_OVR_MIP_SEG", folder_name
+        RX.get_experiment_dir(),
+        well.plate.plate_id,
+        well.well_id,
+        "TIF_OVR_MIP_SEG",
+        folder_name,
     )
 
     # load overviews
@@ -102,31 +108,33 @@ def link_organoids(
 
     # plot
     logger.info(f"{plate_id}, {well_id}, shifts: {4 * shifts[0]}")
-    plt.figure(figsize=(10, 10))
-    plt.imshow(R0_pad_binary_bin + RX_pad_binary_bin_shifted)
-    plt.title("R0 + RX corrected, binary and 4x binned")
-    plt.savefig(
-        join(RX_savedir, f"Plate_{plate_id}_{well_id}_R0_" f"{RX_name}_corrected.png")
+    plt.imsave(
+        join(
+            RX_savedir, f"Plate_{plate_id}_{well_id}_R0_" f"" f"{RX_name}_corrected.png"
+        ),
+        R0_pad_binary_bin + RX_pad_binary_bin_shifted,
     )
 
+    R0_seg_file = os.path.join(R0_savedir, R0_fname)
     imsave(
-        os.path.join(R0_savedir, R0_fname),
+        R0_seg_file,
         R0_pad.astype(np.int16),
         check_contrast=False,
     )
+    RX_seg_file = os.path.join(RX_savedir, RX_fname)
     imsave(
-        os.path.join(RX_savedir, RX_fname),
+        RX_seg_file,
         RX_pad_shifted.astype(np.int16),
         check_contrast=False,
     )
 
     # add to hcs experiments (R0 and RX)
-    R0_seg_file = os.path.join(
-        well.plate.plate_id, "TIF_OVR_MIP_SEG", folder_name, R0_fname
-    )
-    RX_seg_file = os.path.join(
-        well.plate.plate_id, "TIF_OVR_MIP_SEG", folder_name, RX_fname
-    )
+    # R0_seg_file = os.path.join(
+    #     well.plate.plate_id, "TIF_OVR_MIP_SEG", folder_name, R0_fname
+    # )
+    # RX_seg_file = os.path.join(
+    #     well.plate.plate_id, "TIF_OVR_MIP_SEG", folder_name, RX_fname
+    # )
 
     #     well.add_segmentation(seg_name, R0_seg_file) #add to R0
     #     RX.plates[plate_id].wells[well_id].add_segmentation(seg_name, RX_seg_file) #add to RX
@@ -174,6 +182,7 @@ def get_linking_stats(
     except Exception as e:
         logger.error(e)
 
+    print(RX_ovr_seg.min())
     stat = matching(
         R0_ovr_seg, RX_ovr_seg, criterion="iou", thresh=iou_cutoff, report_matches=True
     )

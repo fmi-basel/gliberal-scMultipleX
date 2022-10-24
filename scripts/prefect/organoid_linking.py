@@ -34,11 +34,12 @@ def get_wells(exp: Experiment):
 
 
 @task()
-def link_organoids_task(well, ovr_channel, folder_name, RX, seg_name, RX_name):
+def link_organoids_task(well, ovr_channel, folder_name, R0, RX, seg_name, RX_name):
     link_organoids(
         well=well,
         ovr_channel=ovr_channel,
         folder_name=folder_name,
+        R0=R0,
         RX=RX,
         seg_name=seg_name,
         RX_name=RX_name,
@@ -79,10 +80,11 @@ with Flow(
 
     wells = get_wells(R0)
 
-    link_organoids_task.map(
+    linked_wells = link_organoids_task.map(
         wells,
         unmapped(ovr_channel),
         unmapped(folder_name),
+        unmapped(R0),
         unmapped(RX),
         unmapped(seg_name),
         unmapped(RX_name),
@@ -95,7 +97,7 @@ with Flow(
         unmapped(iou_cutoff),
         unmapped(names),
         unmapped(ovr_channel),
-        upstream_tasks=[link_organoids_task],
+        upstream_tasks=[linked_wells],
     )
 
 
@@ -104,7 +106,7 @@ def conf_to_dict(config):
         "R0_dir": config["DEFAULT"]["R0_dir"],
         "RX_dir": config["DEFAULT"]["RX_dir"],
         "RX_name": config["DEFAULT"]["RX_name"],
-        "iou_cutoff": config["DEFAULT"]["iou_cutoff"],
+        "iou_cutoff": float(config["DEFAULT"]["iou_cutoff"]),
         "ovr_channel": config["DEFAULT"]["ovr_channel"],
     }
 
