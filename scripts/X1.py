@@ -9,12 +9,13 @@ from matching import matching
 from skimage.measure import regionprops
 from skimage.morphology import binary_erosion
 
-from scmultiplex.features.FeatureFunctions import (
+from src.scmultiplex.features.FeatureFunctions import (
     fixed_percentiles,
     kurtos,
     skewness,
     stdv,
 )
+from src.scmultiplex.utils.exclude_utils import select_plates, select_wells
 
 pd.set_option("display.max_rows", 200)
 
@@ -28,23 +29,12 @@ exp.reset_iterator()
 ovr_channel = "C01"  # almost always DAPI is C01 -- if not, change this!
 
 
-def filter_wells(exp, excluded):
-    exp.only_iterate_over_wells(True)
-    exp.reset_iterator()
-
-    wells = []
-    for well in exp:
-        if well.plate.plate_id not in excluded:
-            wells.append(well)
-
-    return wells
-
-
-wells = filter_wells(exp, ["day4p5"])
+wells = select_wells(exp, ["B07"])
+plates = select_plates(exp, ["P1"])
 
 for well in wells:
-    # Load the segmentation file.
 
+    # Load the segmentation file.
     ovr_seg = well.get_segmentation(ovr_channel)  # this is the seg image
 
     if ovr_seg is not None:
