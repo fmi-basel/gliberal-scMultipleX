@@ -6,7 +6,6 @@ import prefect
 from prefect import Flow, Parameter, task
 from prefect.executors import LocalDaskExecutor
 from prefect.run_configs import LocalRun
-from prefect.storage import Local
 
 from scmultiplex.utils.parse_utils import create_experiment
 
@@ -73,11 +72,6 @@ def create_experiment_task(
 
 with Flow(
     "Build-Experiment",
-    storage=Local(
-        directory="/home/tibuch/Prefect_Flows/scMultipleX_flows",
-        stored_as_script=True,
-        path="/home/tibuch/Gitrepos/gliberal-scMultipleX/scripts/prefect/build_experiment_prefect.py",
-    ),
     executor=LocalDaskExecutor(),
     run_config=LocalRun(),
 ) as flow:
