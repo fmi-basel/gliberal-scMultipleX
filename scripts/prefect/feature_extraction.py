@@ -46,7 +46,12 @@ def well_feature_extraction_ovr_task(well: WellRecord, ovr_channel: str, name_ov
 
 
 @task()
-def get_organoids(exp: Experiment, mask_ending: str):
+def get_organoids(
+    exp: Experiment,
+    mask_ending: str,
+    excluded_plates: List[str],
+    excluded_wells: List[str],
+):
     exp.only_iterate_over_wells(False)
     exp.reset_iterator()
     organoids = []
@@ -54,8 +59,11 @@ def get_organoids(exp: Experiment, mask_ending: str):
         if mask_ending in organoid.segmentations.keys() is None:
             continue  # skip organoids that don't have a mask (this will never happen)
 
-        if organoid.well.plate.plate_id in ["day4p5"]:
+        if organoid.well.plate.plate_id in excluded_plates:
             continue  # skip these timepoints
+
+        if organoid.well.well_id in excluded_wells:
+            continue  # skip these wells
 
         organoids.append(organoid)
     return organoids
@@ -94,7 +102,7 @@ with Flow(
         wells, unmapped(ovr_channel), unmapped(name_ovr)
     )
 
-    organoids = get_organoids(exp, mask_ending)
+    organoids = get_organoids(exp, mask_ending, excluded_plates, excluded_wells)
 
     organoid_feature_extraction_task.map(
         organoids, unmapped(nuc_ending), unmapped(mem_ending), unmapped(mask_ending)

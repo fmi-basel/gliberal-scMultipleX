@@ -1,5 +1,6 @@
 import argparse
 import configparser
+from typing import List
 
 import prefect
 from faim_hcs.hcs.Experiment import Experiment
@@ -27,10 +28,16 @@ def get_seg_and_folder_name(RX_name):
 
 
 @task()
-def get_wells(exp: Experiment):
+def get_wells(exp: Experiment, excluded_plates: List[str]):
     exp.only_iterate_over_wells(True)
     exp.reset_iterator()
-    return [w for w in exp]
+    wells = []
+    for w in exp:
+        if w.plate.plate_id in excluded_plates:
+            continue  # skip plate
+
+        wells.append(w)
+    return wells
 
 
 @task()
@@ -70,6 +77,7 @@ with Flow(
     R0_dir = Parameter("R0_dir", default="/path/to/R0/summary.csv")
     RX_dir = Parameter("RX_dir", default="/path/to/RX/summary.csv")
     RX_name = Parameter("RX_name", default="R1")
+    excluded_plates = Parameter("excluded_plates", default=[])
     iou_cutoff = Parameter("iou_cutoff", default=0.2)
     ovr_channel = Parameter("ovr_channel", default="C01")
 
@@ -78,7 +86,7 @@ with Flow(
 
     seg_name, folder_name = get_seg_and_folder_name(RX_name)
 
-    wells = get_wells(R0)
+    wells = get_wells(R0, excluded_plates=excluded_plates)
 
     linked_wells = link_organoids_task.map(
         wells,
@@ -106,6 +114,7 @@ def conf_to_dict(config):
         "R0_dir": config["DEFAULT"]["R0_dir"],
         "RX_dir": config["DEFAULT"]["RX_dir"],
         "RX_name": config["DEFAULT"]["RX_name"],
+        "excluded_plates": config["DEFAULT"]["excluded_plates"].split(","),
         "iou_cutoff": float(config["DEFAULT"]["iou_cutoff"]),
         "ovr_channel": config["DEFAULT"]["ovr_channel"],
     }

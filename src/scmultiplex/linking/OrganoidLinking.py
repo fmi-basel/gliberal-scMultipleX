@@ -182,7 +182,6 @@ def get_linking_stats(
     except Exception as e:
         logger.error(e)
 
-    print(RX_ovr_seg.min())
     stat = matching(
         R0_ovr_seg, RX_ovr_seg, criterion="iou", thresh=iou_cutoff, report_matches=True
     )
