@@ -9,6 +9,7 @@ from prefect.executors import LocalDaskExecutor
 from prefect.run_configs import LocalRun
 
 from scmultiplex.linking.OrganoidLinking import get_linking_stats, link_organoids
+from scmultiplex.utils.exclude_utils import exclude_conditions
 from scmultiplex.utils.load_utils import load_experiment
 
 
@@ -28,16 +29,8 @@ def get_seg_and_folder_name(RX_name):
 
 
 @task()
-def get_wells(exp: Experiment, excluded_plates: List[str]):
-    exp.only_iterate_over_wells(True)
-    exp.reset_iterator()
-    wells = []
-    for w in exp:
-        if w.plate.plate_id in excluded_plates:
-            continue  # skip plate
-
-        wells.append(w)
-    return wells
+def get_wells(exp: Experiment, excluded_plates: List[str], excluded_wells: List[str]):
+    return exclude_conditions(exp, excluded_plates, excluded_wells)
 
 
 @task()
@@ -78,6 +71,7 @@ with Flow(
     RX_dir = Parameter("RX_dir", default="/path/to/RX/summary.csv")
     RX_name = Parameter("RX_name", default="R1")
     excluded_plates = Parameter("excluded_plates", default=[])
+    excluded_wells = Parameter("excluded_wells", default=[])
     iou_cutoff = Parameter("iou_cutoff", default=0.2)
     ovr_channel = Parameter("ovr_channel", default="C01")
 
@@ -86,7 +80,9 @@ with Flow(
 
     seg_name, folder_name = get_seg_and_folder_name(RX_name)
 
-    wells = get_wells(R0, excluded_plates=excluded_plates)
+    wells = get_wells(
+        R0, excluded_plates=excluded_plates, excluded_wells=excluded_wells
+    )
 
     linked_wells = link_organoids_task.map(
         wells,
@@ -115,6 +111,7 @@ def conf_to_dict(config):
         "RX_dir": config["DEFAULT"]["RX_dir"],
         "RX_name": config["DEFAULT"]["RX_name"],
         "excluded_plates": config["DEFAULT"]["excluded_plates"].split(","),
+        "excluded_wells": config["DEFAULT"]["excluded_wells"].split(","),
         "iou_cutoff": float(config["DEFAULT"]["iou_cutoff"]),
         "ovr_channel": config["DEFAULT"]["ovr_channel"],
     }
