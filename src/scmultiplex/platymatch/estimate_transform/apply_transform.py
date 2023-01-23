@@ -1,4 +1,5 @@
 import numpy as np
+from numpy import inf
 from scipy.spatial import distance_matrix
 
 
@@ -9,7 +10,7 @@ def get_U(k):
 
     log_k = np.log(k)
 
-    log_k[log_k == -np.inf] = 0
+    log_k[log_k == -inf] = 0
     return k * log_k
 
 
@@ -35,3 +36,35 @@ def apply_tps_transform(moving_all, moving_cp, w_a_x, w_a_y, w_a_z):
     return np.hstack(
         (transformed_moving_x, transformed_moving_y, transformed_moving_z)
     )  # N x 3 (x1 x2 x3 ...; y1 y2 y3 ...; z1 z2 z3)
+
+
+def apply_affine_transform(moving, affine_transform_matrix):
+    """
+    :param moving: 3 x N
+    :param affine_transform_matrix: 4 x 4
+    :param with_ones: if False, then source is 3 x N, else 4 x N
+    :return: target point cloud 3 x N
+    """
+    if moving.shape[0] == 4:  # 4 x N
+        moving = moving[:3, :]  # 3 x N
+
+    extra_one_row = np.ones((1, moving.shape[1]))
+    moving = np.vstack((moving, extra_one_row))
+    fixed_predicted = np.matmul(affine_transform_matrix, moving)  # 4 x N
+    return fixed_predicted[:3, :]
+
+
+def apply_similar_transform(source, scale, rotation, translation, with_ones=False):
+    """
+    :param source:
+    :param scale: scalar
+    :param rotation: 3 x 3
+    :param translation: 3 x 1
+    :param with_ones: False
+    :return: target 3 x N
+    """
+    if with_ones:
+        source = source[:3, :]
+    else:
+        pass
+    return scale * np.matmul(rotation, source) + translation
