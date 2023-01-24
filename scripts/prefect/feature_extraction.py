@@ -12,6 +12,7 @@ from prefect.run_configs import LocalRun
 from scmultiplex.features.FeatureExtraction import (
     extract_2d_ovr,
     extract_organoid_features,
+    link_nuc_to_membrane,
 )
 from scmultiplex.features.FeatureFunctions import flag_touching
 from scmultiplex.utils.exclude_utils import exclude_conditions
@@ -81,6 +82,20 @@ def organoid_feature_extraction_task(
     )
 
 
+@task()
+def link_nuc_to_membrane_task(
+    exp, ovr_channel, nuc_ending, mask_ending, mem_ending, iop_cutoff
+):
+    link_nuc_to_membrane(
+        exp=exp,
+        ovr_channel=ovr_channel,
+        nuc_ending=nuc_ending,
+        mask_ending=mask_ending,
+        mem_ending=mem_ending,
+        iop_cutoff=iop_cutoff,
+    )
+
+
 # all feature extraction in one flow because writing to the same json file
 with Flow(
     "Feature-Extraction",
@@ -95,6 +110,7 @@ with Flow(
     nuc_ending = Parameter("nuc_ending", default="NUC_SEG3D_220523")
     mem_ending = Parameter("mem_ending", default="MEM_SEG3D_220523")
     name_ovr = Parameter("name_ovr", default="regionprops_ovr_")
+    iop_cutoff = Parameter("iop_cutoff", default=0.6)
 
     exp, wells = load_task(exp_path, excluded_plates, excluded_wells)
 
@@ -104,8 +120,18 @@ with Flow(
 
     organoids = get_organoids(exp, mask_ending, excluded_plates, excluded_wells)
 
-    organoid_feature_extraction_task.map(
+    feat_ext = organoid_feature_extraction_task.map(
         organoids, unmapped(nuc_ending), unmapped(mem_ending), unmapped(mask_ending)
+    )
+
+    link_nuc_to_membrane_task(
+        exp,
+        ovr_channel,
+        nuc_ending,
+        mask_ending,
+        mem_ending,
+        iop_cutoff,
+        upstream_tasks=[feat_ext],
     )
 
 
@@ -119,6 +145,7 @@ def conf_to_dict(config):
         "nuc_ending": config["DEFAULT"]["nuc_ending"],
         "mem_ending": config["DEFAULT"]["mem_ending"],
         "name_ovr": config["DEFAULT"]["name_ovr"],
+        "iop_cutoff": float(config["DEFAULT"]["iop_cutoff"]),
     }
 
 
