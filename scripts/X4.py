@@ -165,8 +165,6 @@ else:
 ## Merge nuclear features into single df: run for each FAIM-HCS experiment or multiplexing round
 #########################################################################
 
-
-
 # pool together regionprops_nuc files
 exp.only_iterate_over_wells(False)
 exp.reset_iterator()
@@ -205,97 +203,95 @@ if not len(nuc_feat_df_list) == 0:
         by=["hcs_experiment", "root_dir", "plate_id", "well_id", "org_id", "nuc_id", "channel_id"])
     # nuc_df.to_csv(join(exp.get_experiment_dir(),"nuc_df.csv"), index=False) #saves csv
 
-if tidy == True:
-    # convert to tidyverse format
+    if tidy == True:
+        # convert to tidyverse format
 
-    # make tidy id
-    tidy_id = 'plate_well_org_nuc'
-    nuc_df[tidy_id] = nuc_df["plate_id"] + "_" + nuc_df["well_id"] + "_" + nuc_df["org_id"].astype(str) + "_" + nuc_df[
-        "nuc_id"].astype(str)
+        # make tidy id
+        tidy_id = 'plate_well_org_nuc'
+        nuc_df[tidy_id] = nuc_df["plate_id"] + "_" + nuc_df["well_id"] + "_" + nuc_df["org_id"].astype(str) + "_" + \
+                          nuc_df["nuc_id"].astype(str)
 
-    # set channel used for segmentation e.g. nuc seg run on C01
-    seg_channel = "C01"
+        # set channel used for segmentation e.g. nuc seg run on C01
+        seg_channel = "C01"
 
-    # take 100 random nuclei and determine feature classifications from them ; otherwise very slow
-    npoints = 100
+        # take 100 random nuclei and determine feature classifications from them ; otherwise very slow
+        npoints = 100
 
-    tidy_ids = np.unique(nuc_df[tidy_id])
+        tidy_ids = np.unique(nuc_df[tidy_id])
 
-    # select random set of nuclei
-    if len(nuc_df) > npoints:
-        subset = np.random.choice(tidy_ids, size=npoints, replace=False)
+        # select random set of nuclei
+        if len(nuc_df) > npoints:
+            subset = np.random.choice(tidy_ids, size=npoints, replace=False)
 
-    # select data for this random set of nuclei
-    nuc_df_subset = nuc_df.loc[(nuc_df[tidy_id].isin(subset))]
+        # select data for this random set of nuclei
+        nuc_df_subset = nuc_df.loc[(nuc_df[tidy_id].isin(subset))]
 
-    # split by tidy id; each group is a nucleus
-    splits = nuc_df_subset.groupby(tidy_id)
+        # split by tidy id; each group is a nucleus
+        splits = nuc_df_subset.groupby(tidy_id)
 
-    # for each nuc, calculate how many unique values of each measurement there are
-    # take the max over all nuclei
-    # col_classes = splits.aggregate(lambda x: len(np.unique(x))).max()
-    col_classes = splits.aggregate(lambda x: len(x.unique())).max()
+        # for each nuc, calculate how many unique values of each measurement there are
+        # take the max over all nuclei
+        # col_classes = splits.aggregate(lambda x: len(np.unique(x))).max()
+        col_classes = splits.aggregate(lambda x: len(x.unique())).max()
 
-    # if this value is equal to the number of channels in this round, then the value is repeated
-    # else value can have unique value per channel
-    n = len(np.unique(nuc_df_subset['channel_id']))
+        # if this value is equal to the number of channels in this round, then the value is repeated
+        # else value can have unique value per channel
+        n = len(np.unique(nuc_df_subset['channel_id']))
 
-    # classify colnames as object or channel features
-    # False if different measurements over channels (e.g. intensity feats), channel properties;
-    # True if all measurements have the same measurement (e.g.shape feats), object properties
-    col_classes = col_classes.apply(lambda x: False if x == n else True)
-    col_classes = col_classes.to_dict()
+        # classify colnames as object or channel features
+        # False if different measurements over channels (e.g. intensity feats), channel properties;
+        # True if all measurements have the same measurement (e.g.shape feats), object properties
+        col_classes = col_classes.apply(lambda x: False if x == n else True)
+        col_classes = col_classes.to_dict()
 
-    all_feats = np.array(nuc_df_subset.columns)
-    all_feats = all_feats[all_feats != tidy_id]  # list of all col names of df except tidy_id
+        all_feats = np.array(nuc_df_subset.columns)
+        all_feats = all_feats[all_feats != tidy_id]  # list of all col names of df except tidy_id
 
-    col_booleans = np.array([col_classes[k] for k in all_feats])  # list of booleans according to dict
+        col_booleans = np.array([col_classes[k] for k in all_feats])  # list of booleans according to dict
 
-    object_feats = all_feats[col_booleans]  # col names of object features (True)
-    channel_feats = all_feats[~col_booleans]  # col names of channel features (False)
+        object_feats = all_feats[col_booleans]  # col names of object features (True)
+        channel_feats = all_feats[~col_booleans]  # col names of channel features (False)
 
-    # make dataframe where each row is single organoid
-    # if column is the same for all channels (True), its first value is taken and placed into dataframe
-    # if column is different across channels (False), make column with that feature name plus channel ID
+        # make dataframe where each row is single organoid
+        # if column is the same for all channels (True), its first value is taken and placed into dataframe
+        # if column is different across channels (False), make column with that feature name plus channel ID
 
-    splits = nuc_df.groupby("channel_id")
+        splits = nuc_df.groupby("channel_id")
 
-    # take C01 group and only select columns that are object_feats (does not matter which channel is used for this)
-    nuc_df_tidy = splits.get_group(seg_channel).copy().reset_index(drop=True)
-    nuc_df_tidy = nuc_df_tidy.set_index(tidy_id)
-    nuc_df_tidy = nuc_df_tidy[object_feats]  # select only object features
-    nuc_df_tidy = nuc_df_tidy.add_prefix("C00.nuc.")
+        # take C01 group and only select columns that are object_feats (does not matter which channel is used for this)
+        nuc_df_tidy = splits.get_group(seg_channel).copy().reset_index(drop=True)
+        nuc_df_tidy = nuc_df_tidy.set_index(tidy_id)
+        nuc_df_tidy = nuc_df_tidy[object_feats]  # select only object features
+        nuc_df_tidy = nuc_df_tidy.add_prefix("C00.nuc.")
 
-    # then add on columns for channel-specific features
+        # then add on columns for channel-specific features
 
-    for ch in np.unique(nuc_df['channel_id']):
-        nuc_df_ch = splits.get_group(ch).reset_index(drop=True)
-        nuc_df_ch = nuc_df_ch.set_index(tidy_id)
-        # select channel columns
-        nuc_df_ch = nuc_df_ch[channel_feats]
-        nuc_df_ch = nuc_df_ch.drop(columns='channel_id')
-        # remove channel_id column
+        for ch in np.unique(nuc_df['channel_id']):
+            nuc_df_ch = splits.get_group(ch).reset_index(drop=True)
+            nuc_df_ch = nuc_df_ch.set_index(tidy_id)
+            # select channel columns
+            nuc_df_ch = nuc_df_ch[channel_feats]
+            nuc_df_ch = nuc_df_ch.drop(columns='channel_id')
+            # remove channel_id column
 
-        nuc_df_ch = nuc_df_ch.add_prefix(ch + ".nuc.")
+            nuc_df_ch = nuc_df_ch.add_prefix(ch + ".nuc.")
 
-        nuc_df_tidy = nuc_df_tidy.join(nuc_df_ch)
+            nuc_df_tidy = nuc_df_tidy.join(nuc_df_ch)
 
-    display(nuc_df_tidy)
-    nuc_df_tidy.to_csv(join(exp.get_experiment_dir(), "nuc_df_tidy.csv"), index=False)  # saves csv
+        display(nuc_df_tidy)
+        nuc_df_tidy.to_csv(join(exp.get_experiment_dir(), "nuc_df_tidy.csv"), index=False)  # saves csv
 
 
+
+    else:
+        nuc_df.to_csv(join(exp.get_experiment_dir(), "nuc_df.csv"), index=False)  # saves csv
 
 else:
-    nuc_df.to_csv(join(exp.get_experiment_dir(), "nuc_df.csv"), index=False)  # saves csv
-
-
-
-
+    print('no nuclear feature extraction found')
 
 #########################################################################
 ## Merge membrane features into single df: run for each FAIM-HCS experiment or multiplexing round
 #########################################################################
-
 
 # note: this is identical to the nuclear aggregate above, only for membrane seg
 # only difference is aggregation is run with mem_df that has mem_id column, and the 'mem' prefix is added to output (mem_df_tidy) column names
@@ -324,98 +320,107 @@ for organoid in exp:
 
         mem_feat_df_list.append(m)
 
-# if there are any nuclear features, concatenate and save csv
+
+# if there are any membrane features, concatenate
 if not len(mem_feat_df_list) == 0:
     mem_df = pd.concat(mem_feat_df_list, ignore_index=True, sort=False)
-    mem_df = mem_df.sort_values(
-        by=["hcs_experiment", "root_dir", "plate_id", "well_id", "org_id", "mem_id", "channel_id"])
+    mem_df = mem_df.sort_values(by=["hcs_experiment", "root_dir", "plate_id", "well_id", "org_id", "mem_id", "channel_id"])
 
-if tidy == True:
-    # convert to tidyverse format
 
-    # make tidy id
-    tidy_id = 'plate_well_org_mem'
-    mem_df[tidy_id] = mem_df["plate_id"] + "_" + mem_df["well_id"] + "_" + mem_df["org_id"].astype(str) + "_" + mem_df[
-        "mem_id"].astype(str)
+    if tidy == True:
 
-    # set channel used for segmentation e.g. mem seg run on C04
-    seg_channel = "C04"
 
-    # take 100 random membranes and determine feature classifications from them ; otherwise very slow
-    npoints = 100
+        # convert to tidyverse format
 
-    tidy_ids = np.unique(mem_df[tidy_id])
+        # make tidy id
+        tidy_id = 'plate_well_org_mem'
+        mem_df[tidy_id] = mem_df["plate_id"] + "_" + mem_df["well_id"] + "_" + mem_df["org_id"].astype(str) + "_" + mem_df["mem_id"].astype(str)
 
-    # select random set of nuclei
-    if len(mem_df) > npoints:
-        subset = np.random.choice(tidy_ids, size=npoints, replace=False)
+        #set channel used for segmentation e.g. mem seg run on C04
+        seg_channel = "C04"
 
-    # select data for this random set of nuclei
-    mem_df_subset = mem_df.loc[(mem_df[tidy_id].isin(subset))]
+        # take 100 random membranes and determine feature classifications from them ; otherwise very slow
+        npoints = 100
 
-    # split by tidy id; each group is a membrane
-    splits = mem_df_subset.groupby(tidy_id)
+        tidy_ids = np.unique(mem_df[tidy_id])
 
-    # for each mem, calculate how many unique values of each measurement there are
-    # take the max over all nuclei
-    # col_classes = splits.aggregate(lambda x: len(np.unique(x))).max()
-    col_classes = splits.aggregate(lambda x: len(x.unique())).max()
+        # select random set of nuclei
+        if len(mem_df) > npoints:
+            subset = np.random.choice(tidy_ids, size=npoints, replace=False)
 
-    # if this value is equal to the number of channels in this round, then the value is repeated
-    # else value can have unique value per channel
-    n = len(np.unique(mem_df_subset['channel_id']))
+        # select data for this random set of nuclei
+        mem_df_subset = mem_df.loc[(mem_df[tidy_id].isin(subset))]
 
-    # classify colnames as object or channel features
-    # False if different measurements over channels (e.g. intensity feats), channel properties;
-    # True if all measurements have the same measurement (e.g.shape feats), object properties
-    col_classes = col_classes.apply(lambda x: False if x == n else True)
-    col_classes = col_classes.to_dict()
+        # split by tidy id; each group is a membrane
+        splits = mem_df_subset.groupby(tidy_id)
 
-    all_feats = np.array(mem_df_subset.columns)
-    all_feats = all_feats[all_feats != tidy_id]  # list of all col names of df except tidy_id
+        # for each mem, calculate how many unique values of each measurement there are
+        # take the max over all nuclei
+        #col_classes = splits.aggregate(lambda x: len(np.unique(x))).max()
+        col_classes = splits.aggregate(lambda x: len(x.unique())).max()
 
-    col_booleans = np.array([col_classes[k] for k in all_feats])  # list of booleans according to dict
 
-    object_feats = all_feats[col_booleans]  # col names of object features (True)
-    channel_feats = all_feats[~col_booleans]  # col names of channel features (False)
+        # if this value is equal to the number of channels in this round, then the value is repeated
+        # else value can have unique value per channel
+        n = len(np.unique(mem_df_subset['channel_id']))
 
-    # make dataframe where each row is single organoid
-    # if column is the same for all channels (True), its first value is taken and placed into dataframe
-    # if column is different across channels (False), make column with that feature name plus channel ID
+        # classify colnames as object or channel features
+        # False if different measurements over channels (e.g. intensity feats), channel properties;
+        # True if all measurements have the same measurement (e.g.shape feats), object properties
+        col_classes = col_classes.apply(lambda x: False if x == n else True)
+        col_classes = col_classes.to_dict()
 
-    splits = mem_df.groupby("channel_id")
+        all_feats = np.array(mem_df_subset.columns)
+        all_feats = all_feats[all_feats != tidy_id] # list of all col names of df except tidy_id
 
-    # take C01 group and only select columns that are object_feats (does not matter which channel is used for this)
-    mem_df_tidy = splits.get_group(seg_channel).copy().reset_index(drop=True)
-    mem_df_tidy = mem_df_tidy.set_index(tidy_id)
-    mem_df_tidy = mem_df_tidy[object_feats]  # select only object features
-    mem_df_tidy = mem_df_tidy.add_prefix("C00.mem.")
+        col_booleans = np.array([col_classes[k] for k in all_feats]) # list of booleans according to dict
 
-    # then add on columns for channel-specific features
+        object_feats = all_feats[col_booleans] # col names of object features (True)
+        channel_feats = all_feats[~col_booleans] # col names of channel features (False)
 
-    for ch in np.unique(mem_df['channel_id']):
-        mem_df_ch = splits.get_group(ch).reset_index(drop=True)
-        mem_df_ch = mem_df_ch.set_index(tidy_id)
-        # select channel columns
-        mem_df_ch = mem_df_ch[channel_feats]
-        mem_df_ch = mem_df_ch.drop(columns='channel_id')
-        # remove channel_id column
 
-        mem_df_ch = mem_df_ch.add_prefix(ch + ".mem.")
+        # make dataframe where each row is single organoid
+        # if column is the same for all channels (True), its first value is taken and placed into dataframe
+        # if column is different across channels (False), make column with that feature name plus channel ID
 
-        mem_df_tidy = mem_df_tidy.join(mem_df_ch)
+        splits = mem_df.groupby("channel_id")
 
-    display(mem_df_tidy)
-    mem_df_tidy.to_csv(join(exp.get_experiment_dir(), "mem_df_tidy.csv"), index=False)  # saves csv
+        # take C01 group and only select columns that are object_feats (does not matter which channel is used for this)
+        mem_df_tidy = splits.get_group(seg_channel).copy().reset_index(drop=True)
+        mem_df_tidy = mem_df_tidy.set_index(tidy_id)
+        mem_df_tidy = mem_df_tidy[object_feats] # select only object features
+        mem_df_tidy = mem_df_tidy.add_prefix("C00.mem.")
+
+        # then add on columns for channel-specific features
+
+        for ch in np.unique(mem_df['channel_id']):
+            mem_df_ch = splits.get_group(ch).reset_index(drop=True)
+            mem_df_ch = mem_df_ch.set_index(tidy_id)
+            # select channel columns
+            mem_df_ch = mem_df_ch[channel_feats]
+            mem_df_ch = mem_df_ch.drop(columns='channel_id')
+            # remove channel_id column
+
+            mem_df_ch = mem_df_ch.add_prefix(ch + ".mem.")
+
+            mem_df_tidy = mem_df_tidy.join(mem_df_ch)
+
+
+
+        display(mem_df_tidy)
+        mem_df_tidy.to_csv(join(exp.get_experiment_dir(),"mem_df_tidy.csv"), index=False) #saves csv
+
+
+
+    else:
+        mem_df.to_csv(join(exp.get_experiment_dir(),"mem_df.csv"), index=False) #saves csv
 
 else:
-    mem_df.to_csv(join(exp.get_experiment_dir(), "mem_df.csv"), index=False)  # saves csv
-
+    print('no membrane feature extraction found')
 
 #########################################################################
 ## Merge nuclear+membrane features into linked cell df: run for each FAIM-HCS experiment or multiplexing round
 #########################################################################
-
 
 # link membranes to nuclear df to create cell df
 # cell df only contains cells that have a nucleus which is successfully linked to a membrane.
@@ -441,53 +446,77 @@ for organoid in exp:
     linking_list.append(linking)
 
 # aggregate linking files and save
-link_df = pd.concat(linking_list, ignore_index=True, sort=False)
-link_df.to_csv(join(exp.get_experiment_dir(), "linking_nuc_to_mem.csv"), index=False)  # saves csv
+if not len(linking_list) == 0:
+    link_df = pd.concat(linking_list, ignore_index=True, sort=False)
+    link_df.to_csv(join(exp.get_experiment_dir(), "linking_nuc_to_mem.csv"), index=False)  # saves csv
+else:
+    print('no nuclear-membrane linking files found')
+
+#once aggregate nuc-mem linking , load in the linking file again + mem and nuc feature df's
+
+base = exp.get_experiment_dir()
+
+#check if data exists and load dataframes: mem feat, nuc feat, and linking
+
+nucExist = os.path.exists(os.path.join(base, 'nuc_df_tidy.csv'))
+memExist = os.path.exists(os.path.join(base, 'mem_df_tidy.csv'))
+linkExist = os.path.exists(os.path.join(base, 'linking_nuc_to_mem.csv'))
+
+if not nucExist & memExist & linkExist == True:
+    print('missing files - cannot perform nuc-mem aggregation')
+
+if not nucExist:
+    print('no aggregated nuclear feature extraction in tidy format found')
+
+if not memExist:
+    print('no aggregated membrane feature extraction in tidy format found')
+
+if not linkExist:
+    print('no aggregated linking nuc to mem file found')
 
 # merge nuc and mem df's into single cell df
 # only works on tidy format files! probably will only use tidy files in the future so not an issue
 
-#load data
-base = exp.get_experiment_dir()
+if nucExist & memExist & linkExist == True:
+    # load dataframes: mem feat, nuc feat, and linking
+    nuc_df_tidy = pd.read_csv(os.path.join(base, 'nuc_df_tidy.csv'))
+    mem_df_tidy = pd.read_csv(os.path.join(base, 'mem_df_tidy.csv'))
+    link_df = pd.read_csv(os.path.join(base, 'linking_nuc_to_mem.csv'))
 
-# load organoid dataframe
-nuc_df_tidy = pd.read_csv(os.path.join(base, 'nuc_df_tidy.csv'))
-mem_df_tidy = pd.read_csv(os.path.join(base, 'mem_df_tidy.csv'))
-link_df = pd.read_csv(os.path.join(base, 'linking_nuc_to_mem.csv'))
+    # make linking id's
 
-# make linking id's
+    nuc_df_tidy['nID'] = nuc_df_tidy["C00.nuc.plate_id"] + "_" + nuc_df_tidy["C00.nuc.well_id"] + "_" + nuc_df_tidy[
+        "C00.nuc.org_id"].astype(str) + "_" + nuc_df_tidy["C00.nuc.nuc_id"].astype(str)
+    mem_df_tidy['mID'] = mem_df_tidy["C00.mem.plate_id"] + "_" + mem_df_tidy["C00.mem.well_id"] + "_" + mem_df_tidy[
+        "C00.mem.org_id"].astype(str) + "_" + mem_df_tidy["C00.mem.mem_id"].astype(str)
 
-nuc_df_tidy['nID'] = nuc_df_tidy["C00.nuc.plate_id"] + "_" + nuc_df_tidy["C00.nuc.well_id"] + "_" + nuc_df_tidy[
-    "C00.nuc.org_id"].astype(str) + "_" + nuc_df_tidy["C00.nuc.nuc_id"].astype(str)
-mem_df_tidy['mID'] = mem_df_tidy["C00.mem.plate_id"] + "_" + mem_df_tidy["C00.mem.well_id"] + "_" + mem_df_tidy[
-    "C00.mem.org_id"].astype(str) + "_" + mem_df_tidy["C00.mem.mem_id"].astype(str)
+    link_df['nID'] = link_df["plate_id"] + "_" + link_df["well_id"] + "_" + link_df["org_id"].astype(str) + "_" + \
+                     link_df["nuc_id"].astype(str)
+    link_df['mID'] = link_df["plate_id"] + "_" + link_df["well_id"] + "_" + link_df["org_id"].astype(str) + "_" + \
+                     link_df["mem_id"].astype(str)
 
-link_df['nID'] = link_df["plate_id"] + "_" + link_df["well_id"] + "_" + link_df["org_id"].astype(str) + "_" + link_df[
-    "nuc_id"].astype(str)
-link_df['mID'] = link_df["plate_id"] + "_" + link_df["well_id"] + "_" + link_df["org_id"].astype(str) + "_" + link_df[
-    "mem_id"].astype(str)
+    # create dictionary
+    # membrane id is key; linked nucleus is value
+    link_dict = link_df.set_index("mID").T.to_dict('index')["nID"]
 
-# create dictionary
-# membrane id is key; linked nucleus is value
-link_dict = link_df.set_index("mID").T.to_dict('index')["nID"]
+    mem_df_tidy["LINKED-nID"] = mem_df_tidy["mID"].map(link_dict)  # Link!
 
-mem_df_tidy["LINKED-nID"] = mem_df_tidy["mID"].map(link_dict)  # Link!
+    # join the nuc and mem df's
+    nuc_df_tidy = nuc_df_tidy.set_index('nID')
+    mem_df_tidy = mem_df_tidy.set_index(
+        'LINKED-nID')  # NaN can be a row name if no nucleus is linked to this membrane; however NaN row names are ignored during join so are discarded
+    mem_df_tidy = mem_df_tidy.drop(columns=['mID'])
 
-# join the nuc and mem df's
-nuc_df_tidy = nuc_df_tidy.set_index('nID')
-mem_df_tidy = mem_df_tidy.set_index(
-    'LINKED-nID')  # NaN can be a row name if no nucleus is linked to this membrane; however NaN row names are ignored during join so are discarded
-mem_df_tidy = mem_df_tidy.drop(columns=['mID'])
+    cell_df_tidy = nuc_df_tidy.join(mem_df_tidy, how='inner')  # join!
 
-cell_df_tidy = nuc_df_tidy.join(mem_df_tidy, how='inner')  # join!
+    # update indexing
+    cell_df_tidy = cell_df_tidy.reset_index(drop=True)
 
-# update indexing
-cell_df_tidy = cell_df_tidy.reset_index(drop=True)
+    # save
+    cell_df_tidy.to_csv(join(exp.get_experiment_dir(), "cell_df_tidy.csv"), index=False)  # saves csv
 
-# save
-cell_df_tidy.to_csv(join(exp.get_experiment_dir(), "cell_df_tidy.csv"), index=False)  # saves csv
-
-
+else:
+    print('missing nuclear, membrane, or nuc-mem linking files')
 
 #########################################################################
 ## Merge org linking files into single df: run for each FAIM-HCS experiment or multiplexing round
