@@ -1,5 +1,6 @@
 import os
 from os.path import join
+from typing import List
 
 import numpy as np
 import pandas as pd
@@ -450,7 +451,11 @@ def save_tidy_plate_well_org_mem(exp: Experiment):
     )  # saves csv
 
 
-def write_nuc_to_mem_linking(exp: Experiment):
+def write_nuc_to_mem_linking(
+    exp: Experiment,
+    excluded_plates: List[str],
+    excluded_wells: List[str],
+):
     exp.only_iterate_over_wells(False)
     exp.reset_iterator()
 
@@ -459,6 +464,12 @@ def write_nuc_to_mem_linking(exp: Experiment):
 
     # load linking files
     for organoid in exp:
+        if organoid.well.plate.plate_id in excluded_plates:
+            continue  # skip these timepoints
+
+        if organoid.well.well_id in excluded_wells:
+            continue  # skip these wells
+
         linkMeasurement = [
             k
             for k, v in organoid.measurements.items()
@@ -474,16 +485,17 @@ def write_nuc_to_mem_linking(exp: Experiment):
         linking = organoid.get_measurement("linking_nuc_to_mem")
         linking_list.append(linking)
 
-    # aggregate linking files and save
-    link_df = pd.concat(linking_list, ignore_index=True, sort=False)
-    link_df.to_csv(
-        join(exp.get_experiment_dir(), "linking_nuc_to_mem.csv"), index=False
-    )  # saves csv
+    if len(linking_list) > 0:
+        # aggregate linking files and save
+        link_df = pd.concat(linking_list, ignore_index=True, sort=False)
+        link_df.to_csv(
+            join(exp.get_experiment_dir(), "linking_nuc_to_mem.csv"), index=False
+        )  # saves csv
+    else:
+        raise Warning("Nothing to link.")
 
 
 def write_merged_nuc_membrane_features(exp: Experiment):
-    write_nuc_to_mem_linking(exp)
-
     # load data
     base = exp.get_experiment_dir()
 
