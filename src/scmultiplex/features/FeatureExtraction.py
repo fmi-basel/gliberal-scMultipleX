@@ -5,7 +5,6 @@ from typing import List
 
 import numpy as np
 import pandas as pd
-from faim_hcs.hcs.Experiment import Experiment
 from faim_hcs.records.OrganoidRecord import OrganoidRecord
 from faim_hcs.records.WellRecord import WellRecord
 from skimage.measure import regionprops
@@ -283,27 +282,20 @@ def extract_organoid_features(
 
 
 def link_nuc_to_membrane(
-    exp: Experiment,
+    organoid: OrganoidRecord,
     ovr_channel: str,
     nuc_ending: str,
     mask_ending: str,
     mem_ending: str,
     iop_cutoff: float,
 ):
-    exp.only_iterate_over_wells(False)
-    exp.reset_iterator()
+    # nuclear feature extraction
+    nuc_seg = organoid.get_segmentation(nuc_ending)  # load segmentation images
+    mem_seg = organoid.get_segmentation(mem_ending)  # load segmentation images
+    # org_seg = organoid.get_segmentation("MASK")
+    org_seg = organoid.get_segmentation(mask_ending)
 
-    for organoid in exp:
-        # nuclear feature extraction
-        nuc_seg = organoid.get_segmentation(nuc_ending)  # load segmentation images
-        mem_seg = organoid.get_segmentation(mem_ending)  # load segmentation images
-        # org_seg = organoid.get_segmentation("MASK")
-        org_seg = organoid.get_segmentation(mask_ending)
-
-        if nuc_seg is None:
-            continue  # skip organoids that don't have a nuclear segmentation
-        if mem_seg is None:
-            continue  # skip organoids that don't have a membrane segmentation
+    if (nuc_seg is not None) and (mem_seg is not None):
 
         org_seg_binary = copy.deepcopy(org_seg)
         org_seg_binary[org_seg_binary > 0] = 1

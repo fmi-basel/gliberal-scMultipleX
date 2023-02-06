@@ -84,10 +84,10 @@ def organoid_feature_extraction_task(
 
 @task()
 def link_nuc_to_membrane_task(
-    exp, ovr_channel, nuc_ending, mask_ending, mem_ending, iop_cutoff
+    organoid, ovr_channel, nuc_ending, mask_ending, mem_ending, iop_cutoff
 ):
     link_nuc_to_membrane(
-        exp=exp,
+        organoid=organoid,
         ovr_channel=ovr_channel,
         nuc_ending=nuc_ending,
         mask_ending=mask_ending,
@@ -124,13 +124,13 @@ with Flow(
         organoids, unmapped(nuc_ending), unmapped(mem_ending), unmapped(mask_ending)
     )
 
-    link_nuc_to_membrane_task(
-        exp,
-        ovr_channel,
-        nuc_ending,
-        mask_ending,
-        mem_ending,
-        iop_cutoff,
+    link_nuc_to_membrane_task.map(
+        organoids,
+        unmapped(ovr_channel),
+        unmapped(nuc_ending),
+        unmapped(mask_ending),
+        unmapped(mem_ending),
+        unmapped(iop_cutoff),
         upstream_tasks=[feat_ext],
     )
 
