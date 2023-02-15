@@ -18,14 +18,17 @@ def load_experiment(exp_csv):
 
 
 @task()
-def get_organoids(exp: Experiment, exlude_plates: List[str]):
+def get_organoids(
+    exp: Experiment, exluded_plates: List[str], excluded_wells: List[str]
+):
     exp.only_iterate_over_wells(False)
     exp.reset_iterator()
 
     organoids = []
     for organoid in exp:
-        if organoid.well.plate.plate_id not in exlude_plates:
-            organoids.append(organoid)
+        if organoid.well.plate.plate_id not in exluded_plates:
+            if organoid.well.well_id not in excluded_wells:
+                organoids.append(organoid)
 
     return organoids
 
@@ -53,13 +56,14 @@ with Flow(
     r0_csv = Parameter("R0_csv", default="/path/to/r0/summary.csv")
     rx_csv = Parameter("RX_csv", default="/path/to/r1/summary.csv")
     excluded_plates = Parameter("excluded_plates", default=[])
+    excluded_wells = Parameter("excluded_wells", default=[])
     seg_name = Parameter("seg_name", default="NUC_SEG3D_220523")
     ovr_channel = Parameter("ovr_channel", "C01")
 
     R0 = load_experiment(r0_csv)
     RX = load_experiment(rx_csv)
 
-    r0_organoids = get_organoids(R0, excluded_plates)
+    r0_organoids = get_organoids(R0, excluded_plates, excluded_wells)
 
     link_nuclei_task.map(
         r0_organoids,
@@ -76,6 +80,7 @@ def conf_to_dict(config):
         "RX_csv": config["DEFAULT"]["RX_csv"],
         "RX_name": config["DEFAULT"]["RX_name"],
         "excluded_plates": config["DEFAULT"]["excluded_plates"].split(","),
+        "excluded_wells": config["DEFAULT"]["excluded_wells"].split(","),
         "seg_name": config["DEFAULT"]["seg_name"],
         "ovr_channel": config["DEFAULT"]["ovr_channel"],
     }
