@@ -2,7 +2,7 @@
 scMultipleX provides workflows for feature extraction of imaging data. It supports 2D and 3D imaging data, and single-round or multiplexed experiments.
 
 The workflow consists of:
-- Organization into FAIM-HCS folder structure
+- Organization into FAIM-HCS (v0.1.1) folder structure
 - Feature extraction 
 - Nuclear to membrane linking
 - Organoid linking across multiplexing rounds 
