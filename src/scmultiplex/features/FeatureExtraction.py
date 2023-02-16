@@ -1,7 +1,7 @@
 import copy
 import math
 from os.path import join
-from typing import List
+from typing import List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -46,7 +46,11 @@ def extract_2d_ovr(
 
 
 def extract_organoid_features(
-    organoid: OrganoidRecord, nuc_ending: str, mem_ending: str, mask_ending: str
+    organoid: OrganoidRecord,
+    nuc_ending: str,
+    mem_ending: str,
+    mask_ending: str,
+    spacing: Tuple[float],
 ):
     nuc_seg = organoid.get_segmentation(nuc_ending)  # load segmentation images
     mem_seg = organoid.get_segmentation(mem_ending)  # load segmentation images
@@ -154,7 +158,7 @@ def extract_organoid_features(
             nuc_seg,
             raw,
             extra_properties=(fixed_percentiles, skewness, kurtos, stdv),
-            spacing=(3, 1, 1),
+            spacing=spacing,
         )
         # voxel_volume = organoid.spacings[channel][0] * organoid.spacings[channel][1] * organoid.spacings[channel][2] #calculate voxel area in um2 (x*y)
         # https://www.analyticsvidhya.com/blog/2022/01/moments-a-must-known-statistical-concept-for-data-science/
@@ -226,7 +230,7 @@ def extract_organoid_features(
             mem_seg,
             raw,
             extra_properties=(fixed_percentiles, skewness, kurtos, stdv),
-            spacing=(3, 1, 1),
+            spacing=spacing,
         )
 
         for mem in mem_features:

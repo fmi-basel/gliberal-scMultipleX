@@ -19,7 +19,7 @@ def load_linking_data(organoid: OrganoidRecord, rx_name: str):
     return link_org, link_org_dict
 
 
-def link_nuclei(organoid, ovr_channel, segname, rx_name, RX):
+def link_nuclei(organoid, ovr_channel, segname, rx_name, RX, z_anisotropy):
     R0_obj = organoid.organoid_id
     R0_id = int(R0_obj.rpartition("_")[2])
     well_id = organoid.well.well_id
@@ -71,10 +71,10 @@ def link_nuclei(organoid, ovr_channel, segname, rx_name, RX):
                     ["nuc_id", "x_pos_vox", "y_pos_vox", "z_pos_vox", "volume_pix"]
                 ].to_numpy()
                 # Divid by z voxel anisotropy so that coordinates match label image!
-                R0_numpy[:, 3] *= 1 / 3
-                R0_numpy[:, 4] *= 1 / 3
-                RX_numpy[:, 3] *= 1 / 3
-                RX_numpy[:, 4] *= 1 / 3
+                R0_numpy[:, 3] *= z_anisotropy
+                R0_numpy[:, 4] *= z_anisotropy
+                RX_numpy[:, 3] *= z_anisotropy
+                RX_numpy[:, 4] *= z_anisotropy
 
                 if (R0_numpy.shape[0] > 4) and (RX_numpy.shape[0] > 4):
                     ransac_iterations = 4000

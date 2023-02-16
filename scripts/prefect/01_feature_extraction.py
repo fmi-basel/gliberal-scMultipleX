@@ -72,13 +72,14 @@ def get_organoids(
 
 @task()
 def organoid_feature_extraction_task(
-    organoid, nuc_ending: str, mem_ending: str, mask_ending: str
+    organoid, nuc_ending: str, mem_ending: str, mask_ending: str, spacing: List[float]
 ):
     extract_organoid_features(
         organoid=organoid,
         nuc_ending=nuc_ending,
         mem_ending=mem_ending,
         mask_ending=mask_ending,
+        spacing=tuple(spacing),
     )
 
 
@@ -111,6 +112,7 @@ with Flow(
     mem_ending = Parameter("mem_ending", default="MEM_SEG3D_220523")
     name_ovr = Parameter("name_ovr", default="regionprops_ovr_")
     iop_cutoff = Parameter("iop_cutoff", default=0.6)
+    spacing = Parameter("spacing", default=[3.0, 1.0, 1.0])
 
     exp, wells = load_task(exp_path, excluded_plates, excluded_wells)
 
@@ -121,7 +123,11 @@ with Flow(
     organoids = get_organoids(exp, mask_ending, excluded_plates, excluded_wells)
 
     feat_ext = organoid_feature_extraction_task.map(
-        organoids, unmapped(nuc_ending), unmapped(mem_ending), unmapped(mask_ending)
+        organoids,
+        unmapped(nuc_ending),
+        unmapped(mem_ending),
+        unmapped(mask_ending),
+        unmapped(spacing),
     )
 
     link_nuc_to_membrane_task.map(
@@ -146,6 +152,7 @@ def conf_to_dict(config):
         "mem_ending": config["DEFAULT"]["mem_ending"],
         "name_ovr": config["DEFAULT"]["name_ovr"],
         "iop_cutoff": float(config["DEFAULT"]["iop_cutoff"]),
+        "spacing": [float(s) for s in config["DEFAULT"]["spacing"].split(",")],
     }
 
 

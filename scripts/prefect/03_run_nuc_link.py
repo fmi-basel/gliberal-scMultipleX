@@ -39,13 +39,14 @@ def get_organoids_task(exp: Experiment, exlude_plates: List[str]):
 
 
 @task()
-def link_nuclei_task(organoid, ovr_channel, segname, rx_name, RX):
+def link_nuclei_task(organoid, ovr_channel, segname, rx_name, RX, z_anisotropy):
     link_nuclei(
         organoid=organoid,
         ovr_channel=ovr_channel,
         segname=segname,
         rx_name=rx_name,
         RX=RX,
+        z_anisotropy=z_anisotropy,
     )
 
 
@@ -59,6 +60,7 @@ with Flow(
     excluded_wells = Parameter("excluded_wells", default=[])
     seg_name = Parameter("seg_name", default="NUC_SEG3D_220523")
     ovr_channel = Parameter("ovr_channel", "C01")
+    spacing = Parameter("spacing", default=[3.0, 1.0, 1.0])
 
     R0 = load_experiment(r0_csv)
     RX = load_experiment(rx_csv)
@@ -71,6 +73,7 @@ with Flow(
         unmapped(seg_name),
         unmapped(rx_name),
         unmapped(RX),
+        unmapped(spacing[-1] / spacing[0]),
     )
 
 
@@ -83,6 +86,7 @@ def conf_to_dict(config):
         "excluded_wells": config["DEFAULT"]["excluded_wells"].split(","),
         "seg_name": config["DEFAULT"]["seg_name"],
         "ovr_channel": config["DEFAULT"]["ovr_channel"],
+        "spacing": [float(s) for s in config["DEFAULT"]["spacing"].split(",")],
     }
 
 

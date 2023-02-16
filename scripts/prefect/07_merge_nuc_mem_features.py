@@ -20,10 +20,8 @@ def load_experiment(exp_csv):
 
 
 @task()
-def write_nuc_to_mem_linking_task(exp, excluded_plates, excluded_wells):
-    write_nuc_to_mem_linking(
-        exp, excluded_plates=excluded_plates, excluded_wells=excluded_wells
-    )
+def write_nuc_to_mem_linking_task(exp):
+    write_nuc_to_mem_linking(exp)
 
 
 @task()
@@ -37,21 +35,19 @@ with Flow(
     run_config=LocalRun(),
 ) as flow:
     exp_csv = Parameter("exp_csv", default="/path/to/exp/summary.csv")
-    excluded_plates = Parameter("excluded_plates", default=[])
-    excluded_wells = Parameter("excluded_wells", default=[])
 
     exp = load_experiment(exp_csv)
 
-    save_linking = write_nuc_to_mem_linking_task(exp, excluded_plates, excluded_wells)
+    save_linking = write_nuc_to_mem_linking_task(exp)
 
-    save_nuc_mem_linking = write_merged_nuc_membrane_features_task(exp)
+    save_nuc_mem_linking = write_merged_nuc_membrane_features_task(
+        exp, upstream_tasks=[save_linking]
+    )
 
 
 def conf_to_dict(config):
     return {
         "exp_csv": config["DEFAULT"]["exp_csv"],
-        "excluded_plates": config["DEFAULT"]["excluded_plates"].split(","),
-        "excluded_wells": config["DEFAULT"]["excluded_wells"].split(","),
     }
 
 
