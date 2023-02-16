@@ -153,3 +153,4 @@ venv/
 
 # written by setuptools_scm
 src/scmultiplex/_version.py
+resources/scMultipleX_testdata/hcs-experiments
