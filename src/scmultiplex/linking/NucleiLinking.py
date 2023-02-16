@@ -8,7 +8,7 @@ from scmultiplex.platymatch.run_platymatch import runAffine, runFFD
 
 def load_organoid_measurement(organoid: OrganoidRecord):
     df_ovr = organoid.well.get_measurement("regionprops_ovr_C01")
-    df_ovr = df_ovr.set_index("organoid_id")
+    df_ovr = df_ovr.set_index("org_id")
     df_org = organoid.get_measurement("regionprops_org_C01")
     return df_ovr, df_org
 
@@ -31,7 +31,7 @@ def link_nuclei(organoid, ovr_channel, segname, rx_name, RX):
     link_org, link_org_dict = load_linking_data(organoid, rx_name)
 
     if R0_id in link_org_dict:
-        if not R0_df_ovr.loc[R0_obj, "flag_tile_border"]:
+        if not R0_df_ovr.loc[R0_id, "flag_tile_border"]:
             if R0_df_org["abs_min"][0] != 0:
                 try:
                     R0_df = organoid.get_measurement("regionprops_nuc_C01")

@@ -61,7 +61,7 @@ def accumulate_tables(exp: Experiment):
         org_feat_df,
         org_ovr_df,
         how="left",
-        on=["hcs_experiment", "plate_id", "well_id", "organoid_id"],
+        on=["hcs_experiment", "plate_id", "well_id", "org_id"],
     )
     org_df = org_df.sort_values(
         by=[
@@ -69,7 +69,7 @@ def accumulate_tables(exp: Experiment):
             "root_dir",
             "plate_id",
             "well_id",
-            "organoid_id",
+            "org_id",
             "channel_id",
         ]
     )
@@ -86,7 +86,7 @@ def save_tidy_plate_well_org(exp: Experiment):
         + "_"
         + org_df["well_id"]
         + "_"
-        + org_df["organoid_id"].astype(str)
+        + org_df["org_id"].astype(str)
     )
 
     # split by tidy id
@@ -200,7 +200,7 @@ def load_nuclei_features(exp: Experiment):
                 "root_dir",
                 "plate_id",
                 "well_id",
-                "organoid_id",
+                "org_id",
                 "nuc_id",
                 "channel_id",
             ]
@@ -219,7 +219,7 @@ def save_tidy_plate_well_org_nuc(exp: Experiment):
         + "_"
         + nuc_df["well_id"]
         + "_"
-        + nuc_df["organoid_id"].astype(str)
+        + nuc_df["org_id"].astype(str)
         + "_"
         + nuc_df["nuc_id"].astype(str)
     )
@@ -349,7 +349,7 @@ def load_membrane_features(exp: Experiment):
                 "root_dir",
                 "plate_id",
                 "well_id",
-                "organoid_id",
+                "org_id",
                 "mem_id",
                 "channel_id",
             ]
@@ -368,7 +368,7 @@ def save_tidy_plate_well_org_mem(exp: Experiment):
         + "_"
         + mem_df["well_id"]
         + "_"
-        + mem_df["organoid_id"].astype(str)
+        + mem_df["org_id"].astype(str)
         + "_"
         + mem_df["mem_id"].astype(str)
     )
@@ -511,7 +511,7 @@ def write_merged_nuc_membrane_features(exp: Experiment):
         + "_"
         + nuc_df_tidy["C00.nuc.well_id"]
         + "_"
-        + nuc_df_tidy["C00.nuc.organoid_id"].astype(str)
+        + nuc_df_tidy["C00.nuc.org_id"].astype(str)
         + "_"
         + nuc_df_tidy["C00.nuc.nuc_id"].astype(str)
     )
@@ -520,7 +520,7 @@ def write_merged_nuc_membrane_features(exp: Experiment):
         + "_"
         + mem_df_tidy["C00.mem.well_id"]
         + "_"
-        + mem_df_tidy["C00.mem.organoid_id"].astype(str)
+        + mem_df_tidy["C00.mem.org_id"].astype(str)
         + "_"
         + mem_df_tidy["C00.mem.mem_id"].astype(str)
     )
@@ -530,7 +530,7 @@ def write_merged_nuc_membrane_features(exp: Experiment):
         + "_"
         + link_df["well_id"]
         + "_"
-        + link_df["organoid_id"].astype(str)
+        + link_df["org_id"].astype(str)
         + "_"
         + link_df["nuc_id"].astype(str)
     )
@@ -539,7 +539,7 @@ def write_merged_nuc_membrane_features(exp: Experiment):
         + "_"
         + link_df["well_id"]
         + "_"
-        + link_df["organoid_id"].astype(str)
+        + link_df["org_id"].astype(str)
         + "_"
         + link_df["mem_id"].astype(str)
     )
@@ -743,7 +743,7 @@ def write_organoid_linking_over_multiplexing_rounds(round_names, round_summary_c
             + "_"
             + right["C00.org.well_id"]
             + "_"
-            + right["C00.org.organoid_id"].astype(str)
+            + right["C00.org.org_id"].astype(str)
         )
         link = links[round_names[i + 1]]  # load linking
         link_dict = link.set_index("id_RX").T.to_dict("index")[
@@ -792,7 +792,7 @@ def write_organoid_linking_over_multiplexing_rounds(round_names, round_summary_c
                 + "_"
                 + left["C00.org.well_id"]
                 + "_"
-                + left["C00.org.organoid_id"].astype(str)
+                + left["C00.org.org_id"].astype(str)
             )
             left = left.set_index(tidy_id)
             # remove redudant columns
@@ -805,7 +805,7 @@ def write_organoid_linking_over_multiplexing_rounds(round_names, round_summary_c
                 columns={
                     round_names[0] + "." + "C00.org.plate_id": "plate_id",
                     round_names[0] + "." + "C00.org.well_id": "well_id",
-                    round_names[0] + "." + "C00.org.organoid_id": "org_id",
+                    round_names[0] + "." + "C00.org.org_id": "org_id",
                 }
             )
 
@@ -917,7 +917,7 @@ def write_nuclear_linking_over_multiplexing_rounds(round_names, round_summary_cs
             + "_"
             + right["C00.nuc.well_id"]
             + "_"
-            + right["C00.nuc.organoid_id"].astype(str)
+            + right["C00.nuc.org_id"].astype(str)
             + "_"
             + right["C00.nuc.nuc_id"].astype(str)
         )
@@ -993,7 +993,7 @@ def write_nuclear_linking_over_multiplexing_rounds(round_names, round_summary_cs
                 + "_"
                 + left["C00.nuc.well_id"]
                 + "_"
-                + left["C00.nuc.organoid_id"].astype(str)
+                + left["C00.nuc.org_id"].astype(str)
                 + "_"
                 + left["C00.nuc.nuc_id"].astype(str)
             )
@@ -1021,7 +1021,7 @@ def write_nuclear_linking_over_multiplexing_rounds(round_names, round_summary_cs
 
     # update sorting
     nuc_df_tidy = nuc_df_tidy.reset_index(drop=True)
-    cols_to_move = ["plate_id", "well_id", "nuc_id"]
+    cols_to_move = ["plate_id", "well_id", "org_id", "nuc_id"]
     nuc_df_tidy = nuc_df_tidy[
         cols_to_move + [col for col in nuc_df_tidy.columns if col not in cols_to_move]
     ]
