@@ -1,4 +1,13 @@
 # gliberal-scMultipleX
+scMultipleX provides workflows for feature extraction of imaging data. It supports 2D and 3D imaging data, and single-round or multiplexed experiments.
+
+The workflow consists of:
+- Organization into FAIM-HCS folder structure
+- Feature extraction 
+- Nuclear to membrane linking
+- Organoid linking across multiplexing rounds 
+- Single-cell linking across multiplexing rounds 
+- Aggregation of experiment data into output csv files
 
 ## Cite
 The nuclei linking is built on [PlatyMatch](https://github.com/juglab/PlatyMatch) by Manan Lalit.
