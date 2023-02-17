@@ -1,0 +1,9 @@
+[DEFAULT]
+RX_name = R1
+R0_csv = /tungstenfs/scratch/gliberal/User/mysavepath/testing_multi_R0/summary.csv
+RX_csv = /tungstenfs/scratch/gliberal/User/mysavepath/testing_multi_R1/summary.csv
+excluded_plates = day2
+excluded_wells = C02
+seg_name = NUC_SEG3D_220523
+ovr_channel = C01
+spacing = 3,1,1

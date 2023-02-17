@@ -6,9 +6,9 @@ nuc_ending = NUC_SEG3D_220523
 mem_ending = MEM_SEG3D_220523
 
 [EXP]
-name = testing_R0
-root_dir = /home/tibuch/Gitrepos/gliberal-scMultipleX/resources/scMultipleX_testdata/testing_R0_multi
-save_dir = /home/tibuch/Gitrepos/gliberal-scMultipleX/resources/scMultipleX_testdata/hcs-experiments
+name = testing_multi_R0
+root_dir = /tungstenfs/scratch/gliberal/Code/Common/gliberal-scMultipleX/resources/scMultipleX_testdata/testing_R1_multi
+save_dir = /tungstenfs/scratch/gliberal/User/mysavepath
 spacing = 0.6,0.216,0.216
 overview_spacing = 0.216,0.216
 fname_barcode_index = 2
