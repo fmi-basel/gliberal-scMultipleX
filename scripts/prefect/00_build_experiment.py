@@ -110,7 +110,6 @@ def get_config_params(config_file_path):
         'well_pattern':     ('00BuildExperiment', 'well_pattern'),
         'raw_ch_pattern':   ('00BuildExperiment', 'raw_ch_pattern'),
         'mask_ending':      ('00BuildExperiment', 'mask_ending'),
-        # 'base_dir_raw':   ('00BuildExperiment', 'base_dir_raw'),
         'save_dir':         ('00BuildExperiment', 'base_dir_save'),
         }
     common_params = get_workflow_params(config_file_path, config_params)
@@ -136,7 +135,6 @@ def get_config_params(config_file_path):
             'nuc_ending':           ('00BuildExperiment.round_%s' % ro, 'nuc_ending'),
             'mem_ending':           ('00BuildExperiment.round_%s' % ro, 'mem_ending'),
             'root_dir':             ('00BuildExperiment.round_%s' % ro, 'root_dir'),
-            # 'fname_barcode_index':  ('00BuildExperiment.round_%s' % ro, 'fname_barcode_index'),
             }
         rp = common_params.copy()
         rp.update(get_workflow_params(config_file_path, config_params))
