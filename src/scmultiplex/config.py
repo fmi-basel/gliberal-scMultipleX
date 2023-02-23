@@ -1,4 +1,5 @@
 import configparser
+import os
 
 from collections import OrderedDict
 
@@ -39,5 +40,5 @@ def compute_workflow_params(config_file_path, compute_param):
         ret[param_key] = func(*args)
     return ret
 
-def summary_csv_path(folder_path):
-    return os.path.join(folder_path, 'summary.csv')
+def summary_csv_path(save_path, round_folder):
+    return os.path.join(save_path, round_folder, 'summary.csv')
