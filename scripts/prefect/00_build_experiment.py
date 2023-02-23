@@ -7,7 +7,12 @@ from prefect import Flow, Parameter, task
 from prefect.executors import LocalDaskExecutor
 from prefect.run_configs import LocalRun
 
-from scmultiplex.config import get_workflow_params, compute_workflow_params, get_round_names
+from scmultiplex.config import (
+    compute_workflow_params,
+    get_round_names,
+    get_workflow_params,
+    parse_spacing,
+)
 from scmultiplex.utils.parse_utils import create_experiment
 
 
@@ -100,10 +105,6 @@ with Flow(
     )
 
 def get_config_params(config_file_path):
-    
-    def parse_spacing(spacing):
-        return tuple(float(v) for v in spacing.split(","))
-    
     round_names = get_round_names(config_file_path)
     config_params = {
         'well_pattern':     ('00BuildExperiment', 'well_pattern'),
