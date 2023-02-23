@@ -42,3 +42,9 @@ def compute_workflow_params(config_file_path, compute_param):
 
 def summary_csv_path(save_path, round_folder):
     return os.path.join(save_path, round_folder, 'summary.csv')
+
+def commasplit(cstring):
+    return cstring.split(',')
+
+def parse_spacing(spacing):
+    return tuple(float(v) for v in commasplit(spacing))
