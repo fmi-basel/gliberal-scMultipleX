@@ -74,15 +74,15 @@ with Flow(
     executor=LocalDaskExecutor(),
     run_config=LocalRun(),
 ) as flow:
-    R0_dir = Parameter("R0_dir", default="/path/to/R0/summary.csv")
-    RX_dir = Parameter("RX_dir", default="/path/to/RX/summary.csv")
+    R0_path = Parameter("R0_path", default="/path/to/R0/summary.csv")
+    RX_path = Parameter("RX_path", default="/path/to/RX/summary.csv")
     RX_name = Parameter("RX_name", default="R1")
     excluded_plates = Parameter("excluded_plates", default=[])
     excluded_wells = Parameter("excluded_wells", default=[])
     iou_cutoff = Parameter("iou_cutoff", default=0.2)
     ovr_channel = Parameter("ovr_channel", default="C01")
 
-    R0, RX = load_exps(R0_dir, RX_dir)
+    R0, RX = load_exps(R0_path, RX_path)
     names = get_names(RX_name)
 
     seg_name, folder_name = get_seg_and_folder_name(RX_name)
@@ -138,7 +138,7 @@ def get_config_params(config_file_path):
                 ('02OrganoidLinking', 'iou_cutoff')
                 ]
             ),
-        'R0_dir': (
+        'R0_path': (
                 summary_csv_path,[
                     ('00BuildExperiment', 'base_dir_save'),
                     ('00BuildExperiment.round_%s' % round_names[0], 'name')
@@ -152,7 +152,7 @@ def get_config_params(config_file_path):
         rp = common_params.copy()
         rp['RX_name'] = ro
         compute_param = {
-            'RX_dir': (
+            'RX_path': (
                 summary_csv_path,[
                     ('00BuildExperiment', 'base_dir_save'),
                     ('00BuildExperiment.round_%s' % ro, 'name')
