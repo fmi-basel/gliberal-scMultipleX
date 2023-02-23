@@ -8,6 +8,13 @@ from prefect import Flow, Parameter, task, unmapped
 from prefect.executors import LocalDaskExecutor
 from prefect.run_configs import LocalRun
 
+from scmultiplex.config import (
+    commasplit,
+    compute_workflow_params,
+    get_round_names,
+    get_workflow_params,
+    summary_csv_path,
+)
 from scmultiplex.linking.OrganoidLinking import get_linking_stats, link_organoids
 from scmultiplex.utils.exclude_utils import exclude_conditions
 from scmultiplex.utils.load_utils import load_experiment
@@ -104,31 +111,67 @@ with Flow(
         upstream_tasks=[linked_wells],
     )
 
-
-def conf_to_dict(config):
-    return {
-        "R0_dir": config["DEFAULT"]["R0_dir"],
-        "RX_dir": config["DEFAULT"]["RX_dir"],
-        "RX_name": config["DEFAULT"]["RX_name"],
-        "excluded_plates": config["DEFAULT"]["excluded_plates"].split(","),
-        "excluded_wells": config["DEFAULT"]["excluded_wells"].split(","),
-        "iou_cutoff": float(config["DEFAULT"]["iou_cutoff"]),
-        "ovr_channel": config["DEFAULT"]["ovr_channel"],
-    }
+def get_config_params(config_file_path):
+    
+    round_names = get_round_names(config_file_path)
+    if len(round_names) < 2:
+        raise RuntimeError('At least two rounds are required to perform organoid linking')
+    rounds_tobelinked = round_names[1:]
+    config_params = {
+        'ovr_channel':     ('01FeatureExtraction', 'ovr_channel'),
+        }
+    common_params = get_workflow_params(config_file_path, config_params)
+    
+    compute_param = {
+        'excluded_plates': (
+            commasplit,[
+                ('01FeatureExtraction', 'excluded_plates')
+                ]
+            ),
+        'excluded_wells': (
+            commasplit,[
+                ('01FeatureExtraction', 'excluded_wells')
+                ]
+            ),
+        'iou_cutoff': (
+            float,[
+                ('02OrganoidLinking', 'iou_cutoff')
+                ]
+            ),
+        'R0_dir': (
+                summary_csv_path,[
+                    ('00BuildExperiment', 'base_dir_save'),
+                    ('00BuildExperiment.round_%s' % round_names[0], 'name')
+                    ]
+                ),
+        }
+    common_params.update(compute_workflow_params(config_file_path, compute_param))
+    
+    round_tobelinked_params = {}
+    for ro in rounds_tobelinked:
+        rp = common_params.copy()
+        rp['RX_name'] = ro
+        compute_param = {
+            'RX_dir': (
+                summary_csv_path,[
+                    ('00BuildExperiment', 'base_dir_save'),
+                    ('00BuildExperiment.round_%s' % ro, 'name')
+                    ]
+                ),
+        }
+        rp.update(compute_workflow_params(config_file_path, compute_param))
+        round_tobelinked_params[ro] = rp
+    return round_tobelinked_params
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config")
     args = parser.parse_args()
-
-    config = configparser.ConfigParser()
-    config.read(args.config)
-
-    kwargs = conf_to_dict(config)
-    print(kwargs)
-
-    flow.run(parameters=kwargs)
+    
+    r_params = get_config_params(args.config)
+    for ro, kwargs in r_params.items():
+        flow.run(parameters = kwargs)
 
 
 if __name__ == "__main__":
