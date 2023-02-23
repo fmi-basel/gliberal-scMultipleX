@@ -11,6 +11,15 @@ def init_config(config_file_path):
         config.read(config_file_path)
     return config
 
+def get_round_names(config_file_path):
+    config = init_config(config_file_path)
+    config_params = {
+        'round_names':      ('00BuildExperiment', 'round_names'),
+        }
+    params = get_workflow_params(config_file_path, config_params)
+    round_names = params['round_names'].split(',')
+    return round_names
+
 def get_workflow_params(config_file_path, config_params):
     config = init_config(config_file_path)
     ret = OrderedDict()
