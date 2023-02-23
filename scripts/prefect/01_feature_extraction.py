@@ -9,6 +9,14 @@ from prefect import Flow, Parameter, task, unmapped
 from prefect.executors import LocalDaskExecutor
 from prefect.run_configs import LocalRun
 
+from scmultiplex.config import (
+    commasplit,
+    compute_workflow_params,
+    get_round_names,
+    get_workflow_params,
+    parse_spacing,
+    summary_csv_path,
+)
 from scmultiplex.features.FeatureExtraction import (
     extract_2d_ovr,
     extract_organoid_features,
@@ -140,34 +148,68 @@ with Flow(
         upstream_tasks=[feat_ext],
     )
 
-
-def conf_to_dict(config):
-    return {
-        "exp_path": config["DEFAULT"]["exp_path"],
-        "excluded_plates": config["DEFAULT"]["excluded_plates"].split(","),
-        "excluded_wells": config["DEFAULT"]["excluded_wells"].split(","),
-        "ovr_channel": config["DEFAULT"]["ovr_channel"],
-        "mask_ending": config["DEFAULT"]["mask_ending"],
-        "nuc_ending": config["DEFAULT"]["nuc_ending"],
-        "mem_ending": config["DEFAULT"]["mem_ending"],
-        "name_ovr": config["DEFAULT"]["name_ovr"],
-        "iop_cutoff": float(config["DEFAULT"]["iop_cutoff"]),
-        "spacing": [float(s) for s in config["DEFAULT"]["spacing"].split(",")],
-    }
-
+def get_config_params(config_file_path):
+    
+    round_names = get_round_names(config_file_path)
+    config_params = {
+        'ovr_channel':     ('01FeatureExtraction', 'ovr_channel'),
+        'name_ovr':     ('01FeatureExtraction', 'name_ovr'),
+        'mask_ending':     ('00BuildExperiment', 'mask_ending'),
+        }
+    common_params = get_workflow_params(config_file_path, config_params)
+    
+    compute_param = {
+        'excluded_plates': (
+            commasplit,[
+                ('01FeatureExtraction', 'excluded_plates')
+                ]
+            ),
+        'excluded_wells': (
+            commasplit,[
+                ('01FeatureExtraction', 'excluded_wells')
+                ]
+            ),
+        'iop_cutoff': (
+            float,[
+                ('01FeatureExtraction', 'iop_cutoff')
+                ]
+            ),
+        'spacing': (
+            parse_spacing,[
+                ('01FeatureExtraction', 'spacing')
+                ]
+            ),
+        }
+    common_params.update(compute_workflow_params(config_file_path, compute_param))
+    
+    round_params = {}
+    for ro in round_names:
+        config_params = {
+            'nuc_ending':           ('00BuildExperiment.round_%s' % ro, 'nuc_ending'),
+            'mem_ending':           ('00BuildExperiment.round_%s' % ro, 'mem_ending'),
+            }
+        rp = common_params.copy()
+        rp.update(get_workflow_params(config_file_path, config_params))
+        compute_param = {
+            'exp_path': (
+                summary_csv_path,[
+                    ('00BuildExperiment', 'base_dir_save'),
+                    ('00BuildExperiment.round_%s' % ro, 'name')
+                    ]
+                ),
+        }
+        rp.update(compute_workflow_params(config_file_path, compute_param))
+        round_params[ro] = rp
+    return round_params
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config")
     args = parser.parse_args()
-
-    config = configparser.ConfigParser()
-    config.read(args.config)
-
-    kwargs = conf_to_dict(config)
-    print(kwargs)
-
-    flow.run(parameters=kwargs)
+    
+    r_params = get_config_params(args.config)
+    for ro, kwargs in r_params.items():
+        flow.run(parameters = kwargs)
 
 
 if __name__ == "__main__":
