@@ -6,6 +6,11 @@ from prefect import Flow, Parameter, task
 from prefect.executors import LocalDaskExecutor
 from prefect.run_configs import LocalRun
 
+from scmultiplex.config import (
+    compute_workflow_params,
+    get_round_names,
+    summary_csv_path,
+)
 from scmultiplex.utils.accumulate_utils import (
     write_merged_nuc_membrane_features,
     write_nuc_to_mem_linking,
@@ -13,9 +18,9 @@ from scmultiplex.utils.accumulate_utils import (
 
 
 @task()
-def load_experiment(exp_csv):
+def load_experiment(exp_path):
     exp = Experiment()
-    exp.load(exp_csv)
+    exp.load(exp_path)
     return exp
 
 
@@ -34,9 +39,9 @@ with Flow(
     executor=LocalDaskExecutor(),
     run_config=LocalRun(),
 ) as flow:
-    exp_csv = Parameter("exp_csv", default="/path/to/exp/summary.csv")
+    exp_path = Parameter("exp_path", default="/path/to/exp/summary.csv")
 
-    exp = load_experiment(exp_csv)
+    exp = load_experiment(exp_path)
 
     save_linking = write_nuc_to_mem_linking_task(exp)
 
@@ -45,10 +50,22 @@ with Flow(
     )
 
 
-def conf_to_dict(config):
-    return {
-        "exp_csv": config["DEFAULT"]["exp_csv"],
-    }
+def get_config_params(config_file_path):
+    
+    round_names = get_round_names(config_file_path)
+    round_params = {}
+    for ro in round_names:
+        compute_param = {
+            'exp_path': (
+                summary_csv_path,[
+                    ('00BuildExperiment', 'base_dir_save'),
+                    ('00BuildExperiment.round_%s' % ro, 'name')
+                    ]
+                ),
+        }
+        rp = compute_workflow_params(config_file_path, compute_param)
+        round_params[ro] = rp
+    return round_params
 
 
 def main():
@@ -56,13 +73,9 @@ def main():
     parser.add_argument("--config")
     args = parser.parse_args()
 
-    config = configparser.ConfigParser()
-    config.read(args.config)
-
-    kwargs = conf_to_dict(config)
-    print(kwargs)
-
-    flow.run(parameters=kwargs)
+    r_params = get_config_params(args.config)
+    for ro, kwargs in r_params.items():
+        flow.run(parameters = kwargs)
 
 
 if __name__ == "__main__":
