@@ -1,10 +1,12 @@
 import argparse
 import configparser
+import prefect
 
 from faim_hcs.hcs.Experiment import Experiment
 from prefect import Flow, Parameter, task
 from prefect.executors import LocalDaskExecutor
 from prefect.run_configs import LocalRun
+from traceback import format_exc
 
 from scmultiplex.config import (
     compute_workflow_params,
@@ -26,12 +28,14 @@ def load_experiment(exp_path):
 
 @task()
 def write_nuc_to_mem_linking_task(exp):
-    write_nuc_to_mem_linking(exp)
-
-
-@task()
-def write_merged_nuc_membrane_features_task(exp):
-    write_merged_nuc_membrane_features(exp)
+    try:
+        write_nuc_to_mem_linking(exp)
+    except Exception as e:
+        logger = prefect.context.get("logger")
+        logger.info('Missing nuclear to membrane linking / generic error while aggregating linking')
+        logger.info('%s' % format_exc())
+    else:
+        write_merged_nuc_membrane_features(exp)
 
 
 with Flow(
@@ -44,10 +48,6 @@ with Flow(
     exp = load_experiment(exp_path)
 
     save_linking = write_nuc_to_mem_linking_task(exp)
-
-    save_nuc_mem_linking = write_merged_nuc_membrane_features_task(
-        exp, upstream_tasks=[save_linking]
-    )
 
 
 def get_config_params(config_file_path):
