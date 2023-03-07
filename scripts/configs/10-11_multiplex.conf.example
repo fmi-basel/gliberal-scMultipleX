@@ -1,3 +1,0 @@
-[DEFAULT]
-round_names = R0,R1
-round_summary_csv = /tungstenfs/scratch/gliberal/User/mysavepath/testing_multi_R0/summary.csv,/tungstenfs/scratch/gliberal/User/mysavepath/testing_multi_R1/summary.csv

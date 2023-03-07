@@ -339,7 +339,7 @@ def load_membrane_features(exp: Experiment):
 
             mem_feat_df_list.append(m)
 
-    # if there are any nuclear features, concatenate and save csv
+    # if there are any membrane features, concatenate and save csv
     if not len(mem_feat_df_list) == 0:
         mem_df = pd.concat(mem_feat_df_list, ignore_index=True, sort=False)
         mem_df = mem_df.sort_values(
@@ -355,10 +355,15 @@ def load_membrane_features(exp: Experiment):
         )
 
         return mem_df
+    
+    # there are no membrane feature, return None
+    return None
 
 
 def save_tidy_plate_well_org_mem(exp: Experiment):
     mem_df = load_membrane_features(exp)
+    if mem_df is None:
+        return
 
     # make tidy id
     tidy_id = "plate_well_org_mem"
@@ -482,7 +487,7 @@ def write_nuc_to_mem_linking(exp: Experiment):
             join(exp.get_experiment_dir(), "linking_nuc_to_mem.csv"), index=False
         )  # saves csv
     else:
-        raise Warning("Nothing to link.")
+        raise RuntimeError("No nuclear to membrane linking found for experiment %s" % exp.name)
 
 
 def write_merged_nuc_membrane_features(exp: Experiment):

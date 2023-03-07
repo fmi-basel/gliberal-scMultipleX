@@ -7,25 +7,13 @@ from prefect import Flow, Parameter, task
 from prefect.executors import LocalDaskExecutor
 from prefect.run_configs import LocalRun
 
+from scmultiplex.config import (
+    compute_workflow_params,
+    get_round_names,
+    get_workflow_params,
+    parse_spacing,
+)
 from scmultiplex.utils.parse_utils import create_experiment
-
-
-def conf_to_dict(config):
-    return {
-        "well_pattern": config["DEFAULT"]["well_pattern"],
-        "raw_ch_pattern": config["DEFAULT"]["raw_ch_pattern"],
-        "mask_ending": config["DEFAULT"]["mask_ending"],
-        "nuc_ending": config["DEFAULT"]["nuc_ending"],
-        "mem_ending": config["DEFAULT"]["mem_ending"],
-        "name": config["EXP"]["name"],
-        "root_dir": config["EXP"]["root_dir"],
-        "save_dir": config["EXP"]["save_dir"],
-        "spacing": tuple(float(v) for v in config["EXP"]["spacing"].split(",")),
-        "overview_spacing": tuple(
-            float(v) for v in config["EXP"]["spacing"].split(",")
-        ),
-        "fname_barcode_index": int(config["EXP"]["fname_barcode_index"]),
-    }
 
 
 @task(nout=5)
@@ -116,18 +104,59 @@ with Flow(
         cell_seg_regex=cell_seg_regex,
     )
 
+def get_config_params(config_file_path):
+    round_names = get_round_names(config_file_path)
+    config_params = {
+        'well_pattern':     ('00BuildExperiment', 'well_pattern'),
+        'raw_ch_pattern':   ('00BuildExperiment', 'raw_ch_pattern'),
+        'mask_ending':      ('00BuildExperiment', 'mask_ending'),
+        'save_dir':         ('00BuildExperiment', 'base_dir_save'),
+        }
+    common_params = get_workflow_params(config_file_path, config_params)
+    
+    compute_param = {
+        'spacing': (
+            parse_spacing,[
+                ('00BuildExperiment', 'spacing')
+                ]
+            ),
+        'overview_spacing': (
+            parse_spacing,[
+                ('00BuildExperiment', 'overview_spacing')
+                ]
+            ),
+        }
+    common_params.update(compute_workflow_params(config_file_path, compute_param))
+    
+    round_params = {}
+    for ro in round_names:
+        config_params = {
+            'name':                 ('00BuildExperiment.round_%s' % ro, 'name'),
+            'nuc_ending':           ('00BuildExperiment.round_%s' % ro, 'nuc_ending'),
+            'mem_ending':           ('00BuildExperiment.round_%s' % ro, 'mem_ending'),
+            'root_dir':             ('00BuildExperiment.round_%s' % ro, 'root_dir'),
+            }
+        rp = common_params.copy()
+        rp.update(get_workflow_params(config_file_path, config_params))
+        compute_param = {
+            'fname_barcode_index': (
+                int,[
+                    ('00BuildExperiment.round_%s' % ro, 'fname_barcode_index')
+                    ]
+                ),
+        }
+        rp.update(compute_workflow_params(config_file_path, compute_param))
+        round_params[ro] = rp
+    return round_params
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config")
     args = parser.parse_args()
 
-    config = configparser.ConfigParser()
-    config.read(args.config)
-
-    kwargs = conf_to_dict(config)
-
-    flow.run(parameters=kwargs)
+    r_params = get_config_params(args.config)
+    for ro, kwargs in r_params.items():
+        flow.run(parameters = kwargs)
 
 
 if __name__ == "__main__":
