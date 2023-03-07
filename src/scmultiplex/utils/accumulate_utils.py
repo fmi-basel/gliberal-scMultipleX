@@ -487,7 +487,7 @@ def write_nuc_to_mem_linking(exp: Experiment):
             join(exp.get_experiment_dir(), "linking_nuc_to_mem.csv"), index=False
         )  # saves csv
     else:
-        raise Warning("Nothing to link.")
+        raise RuntimeError("No nuclear to membrane linking found")
 
 
 def write_merged_nuc_membrane_features(exp: Experiment):

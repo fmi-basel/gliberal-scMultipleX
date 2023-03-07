@@ -30,9 +30,9 @@ def load_experiment(exp_path):
 def write_nuc_to_mem_linking_task(exp):
     try:
         write_nuc_to_mem_linking(exp)
-    except Exception as e:
+    except RuntimeError as e:
         logger = prefect.context.get("logger")
-        logger.info('Missing nuclear to membrane linking / generic error while aggregating linking')
+        logger.info('%s' % str(e))
         logger.info('%s' % format_exc())
     else:
         write_merged_nuc_membrane_features(exp)
