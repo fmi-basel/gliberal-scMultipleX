@@ -1,8 +1,0 @@
-[DEFAULT]
-R0_dir = /tungstenfs/scratch/gliberal/User/mysavepath/testing_multi_R0/summary.csv
-RX_dir = /tungstenfs/scratch/gliberal/User/mysavepath/testing_multi_R1/summary.csv
-RX_name = R1
-excluded_plates = day2
-excluded_wells = C02
-iou_cutoff = 0.2
-ovr_channel = C01
