@@ -176,11 +176,14 @@ def get_config_params(config_file_path):
             ),
         'spacing': (
             parse_spacing,[
-                ('01FeatureExtraction', 'spacing')
+                ('00BuildExperiment', 'spacing')
                 ]
             ),
         }
     common_params.update(compute_workflow_params(config_file_path, compute_param))
+
+    spacing_for_featx = common_params['spacing']
+    common_params['spacing'] = tuple(i / spacing_for_featx[-1] for i in spacing_for_featx)
     
     round_params = {}
     for ro in round_names:
