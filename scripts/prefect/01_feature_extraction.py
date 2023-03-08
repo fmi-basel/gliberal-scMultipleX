@@ -16,6 +16,7 @@ from scmultiplex.config import (
     get_workflow_params,
     parse_spacing,
     summary_csv_path,
+    spacing_anisotropy_tuple,
 )
 from scmultiplex.features.FeatureExtraction import (
     extract_2d_ovr,
@@ -182,8 +183,9 @@ def get_config_params(config_file_path):
         }
     common_params.update(compute_workflow_params(config_file_path, compute_param))
 
-    spacing_for_featx = common_params['spacing']
-    common_params['spacing'] = tuple(i / spacing_for_featx[-1] for i in spacing_for_featx)
+    # for feature extraction, use spacing normalized to x-dim spacing
+    parsed_spacing = common_params['spacing']
+    common_params['spacing'] = spacing_anisotropy_tuple(parsed_spacing)
     
     round_params = {}
     for ro in round_names:
@@ -204,6 +206,7 @@ def get_config_params(config_file_path):
         rp.update(compute_workflow_params(config_file_path, compute_param))
         round_params[ro] = rp
     return round_params
+
 
 def main():
     parser = argparse.ArgumentParser()

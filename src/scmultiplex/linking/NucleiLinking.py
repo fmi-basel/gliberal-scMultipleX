@@ -70,7 +70,11 @@ def link_nuclei(organoid, ovr_channel, segname, rx_name, RX, z_anisotropy):
                 RX_numpy = RX_df[
                     ["nuc_id", "x_pos_vox", "y_pos_vox", "z_pos_vox", "volume_pix"]
                 ].to_numpy()
-                # Divid by z voxel anisotropy so that coordinates match label image!
+
+                # output of feature extraction z-centroid is scaled by z-anisotropy
+                # output of feature extraction volume is scaled by z-anisotropy
+                # however since platymatch uses label images for linking, must remove this scaling here
+                # so, divide by same z-anisotropy used during feature extr so centroids and volumes match label image!
                 R0_numpy[:, 3] *= z_anisotropy
                 R0_numpy[:, 4] *= z_anisotropy
                 RX_numpy[:, 3] *= z_anisotropy

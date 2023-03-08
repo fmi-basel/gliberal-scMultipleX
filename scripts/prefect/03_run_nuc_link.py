@@ -14,6 +14,7 @@ from scmultiplex.config import (
     get_workflow_params,
     parse_spacing,
     summary_csv_path,
+    spacing_anisotropy_scalar,
 )
 from scmultiplex.linking.NucleiLinking import link_nuclei
 
@@ -68,7 +69,7 @@ with Flow(
     excluded_wells = Parameter("excluded_wells", default=[])
     nuc_ending = Parameter("nuc_ending", default="NUC_SEG3D_220523")
     ovr_channel = Parameter("ovr_channel", "C01")
-    spacing = Parameter("spacing", default=[3.0, 1.0, 1.0])
+    spacing = Parameter("spacing")
 
     R0 = load_experiment(r0_csv)
     RX = load_experiment(rx_csv)
@@ -81,7 +82,7 @@ with Flow(
         unmapped(nuc_ending),
         unmapped(rx_name),
         unmapped(RX),
-        unmapped(spacing[-1] / spacing[0]),
+        unmapped(spacing),
     )
 
 def get_config_params(config_file_path):
@@ -119,6 +120,10 @@ def get_config_params(config_file_path):
                 ),
         }
     common_params.update(compute_workflow_params(config_file_path, compute_param))
+
+    # use same z-anisotropy as used during feature extraction
+    parsed_spacing = common_params['spacing']
+    common_params['spacing'] = spacing_anisotropy_scalar(parsed_spacing)
     
     round_tobelinked_params = {}
     for ro in rounds_tobelinked:
