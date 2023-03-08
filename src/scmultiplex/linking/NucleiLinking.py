@@ -75,10 +75,10 @@ def link_nuclei(organoid, ovr_channel, segname, rx_name, RX, z_anisotropy):
                 # output of feature extraction volume is scaled by z-anisotropy
                 # however since platymatch uses label images for linking, must remove this scaling here
                 # so, divide by same z-anisotropy used during feature extr so centroids and volumes match label image!
-                R0_numpy[:, 3] *= z_anisotropy
-                R0_numpy[:, 4] *= z_anisotropy
-                RX_numpy[:, 3] *= z_anisotropy
-                RX_numpy[:, 4] *= z_anisotropy
+                R0_numpy[:, 3] /= z_anisotropy
+                R0_numpy[:, 4] /= z_anisotropy
+                RX_numpy[:, 3] /= z_anisotropy
+                RX_numpy[:, 4] /= z_anisotropy
 
                 if (R0_numpy.shape[0] > 4) and (RX_numpy.shape[0] > 4):
                     ransac_iterations = 4000
