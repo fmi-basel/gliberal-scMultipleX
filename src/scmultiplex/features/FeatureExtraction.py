@@ -12,7 +12,7 @@ from scmultiplex.features.FeatureFunctions import (
     fixed_percentiles,
     kurtos,
     skewness,
-    stdv,
+    stdv, disconnected_component,
 )
 from scmultiplex.features.FeatureProps import (
     regionprops_to_row_organoid,
@@ -81,6 +81,7 @@ def extract_organoid_features(
 
         abs_min_intensity = np.amin(raw_mip)
         img_dim = org_seg.shape
+        disconnected = disconnected_component(org_seg)
 
         df_org = regionprops_to_row_organoid(regionproperties=org_features,
                                          nuc_channel='C01',
@@ -91,7 +92,8 @@ def extract_organoid_features(
                                          nuc_ending=nuc_ending,
                                          mem_ending=mem_ending,
                                          abs_min_intensity=abs_min_intensity,
-                                         img_dim=img_dim)
+                                         img_dim=img_dim,
+                                         disconnected=disconnected)
 
 
         # Save measurement into the organoid directory.
@@ -128,7 +130,8 @@ def extract_organoid_features(
                                          nuc_ending=nuc_ending,
                                          mem_ending=mem_ending,
                                          abs_min_intensity=None,
-                                         img_dim=None)
+                                         img_dim=None,
+                                         disconnected=None)
 
 
         # Save measurement into the organoid directory.
@@ -162,7 +165,8 @@ def extract_organoid_features(
                                          nuc_ending=nuc_ending,
                                          mem_ending=mem_ending,
                                          abs_min_intensity=None,
-                                         img_dim=None)
+                                         img_dim=None,
+                                         disconnected=None)
 
         # Save measurement into the organoid directory.
         name = "regionprops_mem_" + str(channel)

@@ -1,6 +1,15 @@
 import pandas as pd
 from traceback import print_exc
 
+from scmultiplex.features.FeatureFunctions import (
+    minor_major_axis_ratio,
+    convex_hull_area_resid,
+    convex_hull_centroid_dif,
+    circularity,
+    aspect_ratio,
+    concavity_count
+)
+
 # TODO
 # CHECK FOR NONE-VALUE OF abs_min_intensity=None, img_dim=None; throw an exception if they're None for the organoid
 
@@ -8,7 +17,7 @@ object_types = ['organoid', 'nucleus', 'membrane']
 
 
 def regionprops_to_row(ot, regionproperties, nuc_channel, mem_channel, organoid, channel, mask_ending, nuc_ending,
-                       mem_ending, abs_min_intensity=None, img_dim=None):
+                       mem_ending, abs_min_intensity=None, img_dim=None, disconnected=None):
     if ot not in object_types:
         raise ValueError('object type must be one of: %s' % ', '.join(object_types))
 
@@ -39,14 +48,12 @@ def regionprops_to_row(ot, regionproperties, nuc_channel, mem_channel, organoid,
             'kurtosis': labeled_obj['kurtos']
         }
 
-        # area_convex
-        # area_bbox
-        # equivalent_diameter_area
-
         try:
             if ot == 'organoid':
                 row = {
                     'segmentation_org': organoid.segmentations[mask_ending],
+                    'imgdim_x': img_dim[1],
+                    'imgdim_y': img_dim[0],
                     'x_pos_pix': labeled_obj['centroid'][1],
                     'y_pos_pix': labeled_obj['centroid'][0],
                     'x_pos_weighted_pix': labeled_obj['weighted_centroid'][1],
@@ -55,13 +62,22 @@ def regionprops_to_row(ot, regionproperties, nuc_channel, mem_channel, organoid,
                     'y_massDisp_pix': labeled_obj['weighted_centroid'][0] - labeled_obj['centroid'][0],
                     'abs_min': abs_min_intensity,
                     'area_pix': labeled_obj['area'],
+                    'area_convhull': labeled_obj['area_convex'],
+                    'area_bbox': labeled_obj['area_bbox'],
+                    'perimeter': labeled_obj['perimeter'],
+                    'equivDiam': labeled_obj['equivalent_diameter_area'],
                     'eccentricity': labeled_obj['eccentricity'],
+                    'circularity': circularity(labeled_obj),
+                    'solidity': labeled_obj['solidity'],
+                    'extent': labeled_obj['extent'],
                     'majorAxisLength': labeled_obj['major_axis_length'],
                     'minorAxisLength': labeled_obj['minor_axis_length'],
-                    'imgdim_x': img_dim[1],
-                    'imgdim_y': img_dim[0],
-                    'perimeter': labeled_obj['perimeter'],
-
+                    'minmajAxisRatio': minor_major_axis_ratio(labeled_obj),
+                    'aspectRatio': aspect_ratio(labeled_obj),
+                    'concavity': convex_hull_area_resid(labeled_obj),
+                    'concavity_count': concavity_count(labeled_obj, min_area_fraction=0.005),
+                    'asymmetry': convex_hull_centroid_dif(labeled_obj),
+                    'disconnected': disconnected,
                 }
 
             elif ot == 'nucleus' and channel == nuc_channel:
