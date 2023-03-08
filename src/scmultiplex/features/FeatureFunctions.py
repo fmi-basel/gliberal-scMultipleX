@@ -1,7 +1,8 @@
 import numpy as np
 import scipy
-from scipy.ndimage import distance_transform_edt
-from skimage.measure import marching_cubes, mesh_surface_area
+import scipy.stats
+import math
+from skimage.measure import marching_cubes, mesh_surface_area, label, moments, regionprops
 from skimage.morphology import binary_erosion
 
 
@@ -17,92 +18,133 @@ def fixed_percentiles(region_mask, intensity):
 
 
 def skewness(region_mask, intensity):
+    """Return skewness of pixel intensity distribution of raw image masked by segmentation
+    """
     return scipy.stats.skew(intensity[region_mask])
 
 
 def kurtos(region_mask, intensity):
+    """Return kurtosis of pixel intensity distribution of raw image masked by segmentation
+    """
     return scipy.stats.kurtosis(intensity[region_mask])
 
 
 def stdv(region_mask, intensity):
+    """Return standard deviation of pixel intensity distribution of raw image masked by segmentation
+    """
     # ddof=1 for sample var
     return np.std(intensity[region_mask], ddof=1)
 
 
-def surface_area_marchingcube(regionmask, intensity, spacing=(3, 1, 1)):
-    regionmask_int = regionmask.astype(int)
-    verts, faces, normals, values = marching_cubes(
-        regionmask_int, level=0, spacing=spacing
-    )
-    return mesh_surface_area(verts, faces)
+def bounding_box_ratio(prop_2D):
+    """Return the ratio between the area and the bounding box area of the object
+    Note this is the same as regionprops 'extent'
+    """
+    return prop_2D.area / prop_2D.area_bbox
 
 
-def expand_labels(label_image, distance=1):  # from scikit
-    distances, nearest_label_coords = distance_transform_edt(
-        label_image == 0, return_indices=True
-    )
-    labels_out = np.zeros_like(label_image)
-    dilate_mask = distances <= distance
-    masked_nearest_label_coords = [
-        dimension_indices[dilate_mask] for dimension_indices in nearest_label_coords
-    ]
-    nearest_labels = label_image[tuple(masked_nearest_label_coords)]
-    labels_out[dilate_mask] = nearest_labels
-    return labels_out
+def convex_hull_ratio(prop_2D):
+    """Return the ratio between the area and the convex hull area of the object
+    Note this is the same as regionprops 'solidity'
+    """
+    return prop_2D.area / prop_2D.area_convex
 
 
-def graphical_neighbor_count(nuc_seg, nuc_id, expandby_pix=21, spacing=(3, 1, 1)):
-    # isolate given nucleus and make binary
-    seg_id = np.zeros_like(nuc_seg)
-    seg_id[nuc_seg == nuc_id] = 1
-    expandby_z = round(expandby_pix / spacing[0])  # this is how many slices in z to add
-    # make binary mask of given label expanded in 3d
-    expanded = np.zeros_like(seg_id)
-    slices_with_label = []
+def convex_hull_area_resid(prop_2D):
+    """Return the normalized difference in area between the convex hull and area of the object
+    Normalize to the area of the convex hull
+    """
+    return (prop_2D.convex_area - prop_2D.area) / prop_2D.convex_area
 
-    for i, zslice in enumerate(seg_id):
-        if zslice[zslice > 0].size > 0:  # if a z-slice contains the nuc_id label...
-            slices_with_label.append(i)  # record it
 
-        expanded[i, :, :] = expand_labels(
-            zslice, expandby_pix
-        )  # expand labels in each zslice in xy
+# from Ark
+# https://github.com/angelolab/ark-analysis/blob/main/src/ark/segmentation/regionprops_extraction.py
+def convex_hull_centroid_dif(prop_2D):
+    """Return the normalized euclidian distance between the centroid of the object label
+        and the centroid of the convex hull
+        Normalize to the object area; becomes fraction of object composed of divots & indentations
+    """
+    # Use image that has same size as bounding box (not original seg)
+    object_image = prop_2D.image
+    object_moments = moments(object_image)
+    object_centroid = np.array([object_moments[1, 0] / object_moments[0, 0], object_moments[0, 1] / object_moments[0, 0]])
 
-    # expand top zslice in z
-    top_id = np.amax(slices_with_label)
-    for t in range(
-        top_id + 1, top_id + expandby_z + 1, 1
-    ):  # for zslices above the top slice, expand by given distance
-        if (
-            t <= expanded.shape[0] - 1
-        ):  # as long as index does not extend beyond image boundary
-            expanded[t, :, :] = expanded[
-                top_id, :, :
-            ]  # replace empty z-slice with that of expanded top mask
+    # Convex hull image has same size as bounding box
+    convex_image = prop_2D.convex_image
+    convex_moments = moments(convex_image)
+    convex_centroid = np.array([convex_moments[1, 0] / convex_moments[0, 0], convex_moments[0, 1] / convex_moments[0, 0]])
 
-    # expand bottom zslice in z
-    bottom_id = np.amin(slices_with_label)
-    for b in range(
-        bottom_id - 1, (bottom_id - expandby_z) - 1, -1
-    ):  # for zslices below the bottom slice, expand by given distance
-        if b >= 0:  # as long as index does not extend beyond image boundary
-            expanded[b, :, :] = expanded[
-                bottom_id, :, :
-            ]  # replace empty z-slice with that of expanded bottom mask
+    # calculate 2-norm (Euclidean distance) and normalize
+    centroid_dist = np.linalg.norm(object_centroid - convex_centroid) / np.sqrt(prop_2D.area)
 
-    # mask full nuc labelmap by this 3D expanded nucleus
-    seg_masked = nuc_seg * expanded
+    return centroid_dist
 
-    # count number of unique labels remaining in the labelmap
-    # filter out 0 background and self
-    filters = (lambda x: (x != 0), lambda x: (x != nuc_id))
-    neighbor_list = list(
-        filter(lambda x: all(f(x) for f in filters), np.unique(seg_masked))
-    )  # this is the list nuc_ids of neighbors
-    unique_neighbor_count = len(
-        neighbor_list
-    )  # this is the number of identified neighbors
-    return unique_neighbor_count, neighbor_list
+
+def circularity(prop_2D):
+    """Return the circularity of object
+    """
+    return 4 * math.pi * (prop_2D.area / np.square(prop_2D.perimeter))
+
+
+def aspect_ratio(prop_2D):
+    """Return the ratio of major axis length to equivalent diameter
+    """
+    return prop_2D.major_axis_length / prop_2D.equivalent_diameter
+
+
+def minor_major_axis_ratio(prop):
+    """Return the ratio of major to minor axis
+    """
+    if prop.minor_axis_length == 0:
+        return np.float('NaN')
+    else:
+        return prop.minor_axis_length / prop.major_axis_length
+
+
+def concavity_count(prop_2D, min_area_fraction=0.005):
+    """Return the number of concavities for an object
+    min_area_fraction is the concavity area divided by total object area. concavities above this cutoff are counted as
+    a concavity
+    """
+    object_image = prop_2D.image
+    convex_image = prop_2D.convex_image
+    object_area = prop_2D.area
+
+    diff_img = convex_image ^ object_image  # bitwise XOR
+
+    if np.sum(diff_img) > 0:
+        labeled_diff_img = label(diff_img, connectivity=1)
+        concavity_feat = regionprops(labeled_diff_img)
+        concavity_cnt = 0
+        for concavity_2D in concavity_feat:
+            if (concavity_2D.area / object_area) > min_area_fraction:
+                concavity_cnt += 1
+    else:
+        concavity_cnt = 0
+    return concavity_cnt
+
+
+def disconnected_component(mask_2D):
+    """Return boolean True if disconnected components detected in input labelmap
+    """
+    if len(np.unique(mask_2D)) > 2:
+        raise ValueError('mask must be binary')
+    disconnected = False
+    labeled_mask_img = label(mask_2D, connectivity=2)
+    if len(np.unique(labeled_mask_img)) > 2:
+        disconnected = True
+    return disconnected
+
+
+def surface_area_marchingcube(mask_3D, feature_spacing = (2.7778, 1, 1)):
+    """Return surface area of 3D label image
+    """
+    regionmask_int = mask_3D.astype(np.uint16)
+    # add zero-pad on all sides, otherwise mesh is smaller than it should be
+    regionmask_int = np.pad(regionmask_int, 1, 'constant')
+    verts, faces, normals, values = marching_cubes(regionmask_int, spacing=feature_spacing)
+    surface_area = mesh_surface_area(verts, faces)
+    return surface_area
 
 
 def flag_touching(ovr_seg_img, ovr_seg_tiles):
