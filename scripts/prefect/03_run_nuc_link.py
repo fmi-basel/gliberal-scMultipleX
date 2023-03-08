@@ -108,7 +108,7 @@ def get_config_params(config_file_path):
             ),
         'spacing': (
             parse_spacing,[
-                ('01FeatureExtraction', 'spacing')
+                ('00BuildExperiment', 'spacing')
                 ]
             ),
         'R0_path': (
