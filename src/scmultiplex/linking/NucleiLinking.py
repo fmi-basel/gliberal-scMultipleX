@@ -14,7 +14,7 @@ def load_organoid_measurement(organoid: OrganoidRecord, org_seg_ch):
 
 
 def load_linking_data(organoid: OrganoidRecord, rx_name: str, org_seg_ch):
-    link_org = organoid.well.get_measurement("linking_ovr_NEW_{}_{}toR0".format(org_seg_ch, rx_name))
+    link_org = organoid.well.get_measurement("linking_ovr_{}_{}toR0".format(org_seg_ch, rx_name))
     link_org_dict = link_org.set_index("R0_label").T.to_dict("index")["RX_label"]
     return link_org, link_org_dict
 
