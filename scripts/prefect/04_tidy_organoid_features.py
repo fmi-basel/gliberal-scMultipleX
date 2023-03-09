@@ -1,5 +1,5 @@
 import argparse
-import configparser
+import prefect
 
 from faim_hcs.hcs.Experiment import Experiment
 from prefect import Flow, Parameter, task
@@ -27,9 +27,13 @@ def load_experiment(exp_path):
 
 @task()
 def save_tidy_task(exp):
-    save_tidy_plate_well_org(exp)
-    save_tidy_plate_well_org_nuc(exp)
-    save_tidy_plate_well_org_mem(exp)
+
+    for tidy_task in [save_tidy_plate_well_org, save_tidy_plate_well_org_nuc, save_tidy_plate_well_org_mem]:
+        try:
+            tidy_task(exp)
+        except RuntimeWarning as e:
+            logger = prefect.context.get("logger")
+            logger.info('%s' % str(e))
 
 
 with Flow(

@@ -73,6 +73,9 @@ def accumulate_tables(exp: Experiment):
         ]
     )
 
+    if org_df is None:
+        raise RuntimeWarning("No organoid feature extraction found in %s" % exp.name)
+
     return org_df
 
 
@@ -195,11 +198,6 @@ def load_nuclei_features(exp: Experiment):
     if not len(nuc_feat_df_list) == 0:
         nuc_df = pd.concat(nuc_feat_df_list, ignore_index=True, sort=False)
 
-        # can remove later!
-        # nuc_df = nuc_df.rename(columns={"org_label": "org_id"})
-        # nuc_df = nuc_df.drop(columns="organoid_id")
-        # can remove later!
-
         nuc_df = nuc_df.sort_values(
             by=[
                 "hcs_experiment",
@@ -213,6 +211,7 @@ def load_nuclei_features(exp: Experiment):
         )
 
         return nuc_df
+    raise RuntimeWarning("No nuclear feature extraction found in %s" % exp.name)
 
 
 def save_tidy_plate_well_org_nuc(exp: Experiment, seg_channel="C01"):
@@ -329,17 +328,12 @@ def load_membrane_features(exp: Experiment):
                 "channel_id",
             ]
         )
-
         return mem_df
-
-    # there are no membrane feature, return None
-    return None
+    raise RuntimeWarning("No membrane feature extraction found in %s" % exp.name)
 
 
 def save_tidy_plate_well_org_mem(exp: Experiment, seg_channel="C04"):
     mem_df = load_membrane_features(exp)
-    if mem_df is None:
-        return
 
     # make tidy id
     tidy_id = "plate_well_org_mem"
@@ -432,7 +426,7 @@ def write_nuc_to_mem_linking(exp: Experiment):
             join(exp.get_experiment_dir(), "linking_nuc_to_mem.csv"), index=False
         )  # saves csv
     else:
-        raise RuntimeError(
+        raise RuntimeWarning(
             "No nuclear to membrane linking found for experiment %s" % exp.name
         )
 
