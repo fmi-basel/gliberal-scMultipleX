@@ -35,7 +35,6 @@ excluded_wells = C02
 ovr_channel = C01
 name_ovr = regionprops_ovr_
 iop_cutoff = 0.6
-spacing = 3,1,1
 
 [02OrganoidLinking]
 iou_cutoff = 0.2
