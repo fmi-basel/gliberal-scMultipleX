@@ -74,13 +74,13 @@ with Flow(
     executor=LocalDaskExecutor(),
     run_config=LocalRun(),
 ) as flow:
-    R0_path = Parameter("R0_path", default="/path/to/R0/summary.csv")
-    RX_path = Parameter("RX_path", default="/path/to/RX/summary.csv")
-    RX_name = Parameter("RX_name", default="R1")
-    excluded_plates = Parameter("excluded_plates", default=[])
-    excluded_wells = Parameter("excluded_wells", default=[])
-    iou_cutoff = Parameter("iou_cutoff", default=0.2)
-    ovr_channel = Parameter("ovr_channel", default="C01")
+    R0_path = Parameter("R0_path")
+    RX_path = Parameter("RX_path")
+    RX_name = Parameter("RX_name")
+    excluded_plates = Parameter("excluded_plates")
+    excluded_wells = Parameter("excluded_wells")
+    iou_cutoff = Parameter("iou_cutoff")
+    ovr_channel = Parameter("ovr_channel")
 
     R0, RX = load_exps(R0_path, RX_path)
     names = get_names(RX_name)

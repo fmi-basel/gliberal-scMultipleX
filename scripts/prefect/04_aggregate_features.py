@@ -42,7 +42,7 @@ with Flow(
     executor=LocalDaskExecutor(),
     run_config=LocalRun(),
 ) as flow:
-    exp_path = Parameter("exp_path", default="/path/to/exp/summary.csv")
+    exp_path = Parameter("exp_path")
     org_seg_ch = Parameter("org_seg_ch")
     nuc_seg_ch = Parameter("nuc_seg_ch")
     mem_seg_ch = Parameter("mem_seg_ch")

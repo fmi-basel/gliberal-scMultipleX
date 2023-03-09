@@ -41,8 +41,8 @@ with Flow(
     executor=LocalDaskExecutor(),
     run_config=LocalRun(),
 ) as flow:
-    exp_path = Parameter("exp_path", default="/path/to/exp/summary.csv")
-    round_names = Parameter("round_names", default=["R0", "R1", "R2"])
+    exp_path = Parameter("exp_path")
+    round_names = Parameter("round_names")
     round_summary_csv = Parameter("round_summary_csv")
 
     exp = load_experiment(exp_path)

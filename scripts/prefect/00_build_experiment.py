@@ -63,23 +63,18 @@ with Flow(
     executor=LocalDaskExecutor(),
     run_config=LocalRun(),
 ) as flow:
-    well_pattern = Parameter("well_pattern", default="_[A-Z]{1}[0-9]{2}_")
-    raw_ch_pattern = Parameter("raw_ch_pattern", default="C[0-9]{2}O.*_TIF-OVR.tif")
-    mask_ending = Parameter("mask_ending", default="MASK")
-    nuc_ending = Parameter("nuc_ending", default="NUC_SEG3D_220523")
-    mem_ending = Parameter("mem_ending", default="MEM_SEG3D_220523")
+    well_pattern = Parameter("well_pattern")
+    raw_ch_pattern = Parameter("raw_ch_pattern")
+    mask_ending = Parameter("mask_ending")
+    nuc_ending = Parameter("nuc_ending")
+    mem_ending = Parameter("mem_ending")
 
-    name = Parameter("name", default="20220507GCPLEX_R3")
-    root_dir = Parameter(
-        "root_dir",
-        default="/tungstenfs/scratch/gliberal/Users/repinico/Yokogawa/20220507GCPLEX_R3",
-    )
-    save_dir = Parameter(
-        "save_dir", default="/home/tibuch/Gitrepos/gliberal-scMultipleX/jpynb"
-    )
-    spacing = Parameter("spacing", default=[0.6, 0.216, 0.216])
-    overview_spacing = Parameter("overview_spacing", default=[0.216, 0.216])
-    fname_barcode_index = Parameter("fname_barcode_index", default=3)
+    name = Parameter("name")
+    root_dir = Parameter("root_dir")
+    save_dir = Parameter("save_dir")
+    spacing = Parameter("spacing")
+    overview_spacing = Parameter("overview_spacing")
+    fname_barcode_index = Parameter("fname_barcode_index")
 
     regexes = create_regexes(
         well_pattern=well_pattern,
