@@ -11,7 +11,11 @@ from scmultiplex.config import (
     get_round_names,
     summary_csv_path,
 )
-from scmultiplex.utils.accumulate_utils import save_tidy_plate_well_org
+from scmultiplex.utils.accumulate_utils import (
+    save_tidy_plate_well_org,
+    save_tidy_plate_well_org_nuc,
+    save_tidy_plate_well_org_mem
+)
 
 
 @task()
@@ -22,12 +26,14 @@ def load_experiment(exp_path):
 
 
 @task()
-def save_tidy_plate_well_org_task(exp):
+def save_tidy_task(exp):
     save_tidy_plate_well_org(exp)
+    save_tidy_plate_well_org_nuc(exp)
+    save_tidy_plate_well_org_mem(exp)
 
 
 with Flow(
-    "Tidy Organoid Features",
+    "Tidy Organoid, Nuclear, and Membrane Features",
     executor=LocalDaskExecutor(),
     run_config=LocalRun(),
 ) as flow:
@@ -35,7 +41,7 @@ with Flow(
 
     exps = load_experiment(exp_path)
 
-    save_org = save_tidy_plate_well_org_task(exps)
+    save_org = save_tidy_task(exps)
 
 
 def get_config_params(config_file_path):
@@ -54,6 +60,7 @@ def get_config_params(config_file_path):
         rp = compute_workflow_params(config_file_path, compute_param)
         round_params[ro] = rp
     return round_params
+
 
 def main():
     parser = argparse.ArgumentParser()
