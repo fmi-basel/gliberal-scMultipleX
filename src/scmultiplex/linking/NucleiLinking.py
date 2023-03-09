@@ -6,35 +6,35 @@ from faim_hcs.records.OrganoidRecord import OrganoidRecord
 from scmultiplex.platymatch.run_platymatch import runAffine, runFFD
 
 
-def load_organoid_measurement(organoid: OrganoidRecord):
-    df_ovr = organoid.well.get_measurement("regionprops_ovr_C01")
+def load_organoid_measurement(organoid: OrganoidRecord, org_seg_ch):
+    df_ovr = organoid.well.get_measurement("regionprops_ovr_{}".format(org_seg_ch))
     df_ovr = df_ovr.set_index("org_id")
-    df_org = organoid.get_measurement("regionprops_org_C01")
+    df_org = organoid.get_measurement("regionprops_org_{}".format(org_seg_ch))
     return df_ovr, df_org
 
 
-def load_linking_data(organoid: OrganoidRecord, rx_name: str):
-    link_org = organoid.well.get_measurement("linking_ovr_NEW_C01_" + rx_name + "toR0")
+def load_linking_data(organoid: OrganoidRecord, rx_name: str, org_seg_ch):
+    link_org = organoid.well.get_measurement("linking_ovr_NEW_{}_{}toR0".format(org_seg_ch, rx_name))
     link_org_dict = link_org.set_index("R0_label").T.to_dict("index")["RX_label"]
     return link_org, link_org_dict
 
 
-def link_nuclei(organoid, ovr_channel, segname, rx_name, RX, z_anisotropy):
+def link_nuclei(organoid, ovr_channel, segname, rx_name, RX, z_anisotropy, org_seg_ch, nuc_seg_ch):
     R0_obj = organoid.organoid_id
     R0_id = int(R0_obj.rpartition("_")[2])
     well_id = organoid.well.well_id
     plate_id = organoid.well.plate.plate_id
     names = ["R0", rx_name]
 
-    R0_df_ovr, R0_df_org = load_organoid_measurement(organoid)
+    R0_df_ovr, R0_df_org = load_organoid_measurement(organoid, org_seg_ch)
 
-    link_org, link_org_dict = load_linking_data(organoid, rx_name)
+    link_org, link_org_dict = load_linking_data(organoid, rx_name, org_seg_ch)
 
     if R0_id in link_org_dict:
         if not R0_df_ovr.loc[R0_id, "flag_tile_border"]:
             if R0_df_org["abs_min"][0] != 0:
                 try:
-                    R0_df = organoid.get_measurement("regionprops_nuc_C01")
+                    R0_df = organoid.get_measurement("regionprops_nuc_{}".format(nuc_seg_ch))
                     R0_raw = organoid.get_raw_data(ovr_channel)
                     R0_seg = organoid.get_segmentation(segname)
                 except Exception as e:
@@ -48,7 +48,7 @@ def link_nuclei(organoid, ovr_channel, segname, rx_name, RX, z_anisotropy):
                     RX.plates[plate_id]
                     .wells[well_id]
                     .organoids[RX_obj]
-                    .get_measurement("regionprops_nuc_C01")
+                    .get_measurement("regionprops_nuc_{}".format(nuc_seg_ch))
                 )
                 RX_raw = (
                     RX.plates[plate_id]

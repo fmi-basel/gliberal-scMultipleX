@@ -48,7 +48,7 @@ def get_organoids_task(exp: Experiment, exlude_plates: List[str]):
 
 
 @task()
-def link_nuclei_task(organoid, ovr_channel, segname, rx_name, RX, z_anisotropy):
+def link_nuclei_task(organoid, ovr_channel, segname, rx_name, RX, z_anisotropy, org_seg_ch, nuc_seg_ch):
     link_nuclei(
         organoid=organoid,
         ovr_channel=ovr_channel,
@@ -56,6 +56,8 @@ def link_nuclei_task(organoid, ovr_channel, segname, rx_name, RX, z_anisotropy):
         rx_name=rx_name,
         RX=RX,
         z_anisotropy=z_anisotropy,
+        org_seg_ch=org_seg_ch,
+        nuc_seg_ch=nuc_seg_ch,
     )
 
 
@@ -70,6 +72,8 @@ with Flow(
     nuc_ending = Parameter("nuc_ending", default="NUC_SEG3D_220523")
     ovr_channel = Parameter("ovr_channel", "C01")
     spacing = Parameter("spacing")
+    org_seg_ch = Parameter("org_seg_ch")
+    nuc_seg_ch = Parameter("nuc_seg_ch")
 
     R0 = load_experiment(r0_csv)
     RX = load_experiment(rx_csv)
@@ -83,6 +87,8 @@ with Flow(
         unmapped(rx_name),
         unmapped(RX),
         unmapped(spacing),
+        unmapped(org_seg_ch),
+        unmapped(nuc_seg_ch),
     )
 
 def get_config_params(config_file_path):
@@ -126,11 +132,13 @@ def get_config_params(config_file_path):
     common_params['spacing'] = spacing_anisotropy_scalar(parsed_spacing)
     
     round_tobelinked_params = {}
-    for ro in rounds_tobelinked:
+    for ro in round_names:
         rp = common_params.copy()
         rp['RX_name'] = ro
         config_params = {
             'nuc_ending':           ('00BuildExperiment.round_%s' % ro, 'nuc_ending'),
+            'nuc_seg_ch':           ('00BuildExperiment.round_%s' % ro, 'nuclear_seg_channel'),
+            'org_seg_ch':           ('00BuildExperiment.round_%s' % ro, 'organoid_seg_channel'),
             }
         rp.update(get_workflow_params(config_file_path, config_params))
         compute_param = {
@@ -142,7 +150,15 @@ def get_config_params(config_file_path):
                 ),
         }
         rp.update(compute_workflow_params(config_file_path, compute_param))
-        round_tobelinked_params[ro] = rp
+
+        if ro == round_names[0]:
+            R0_nuc_seg_ch = rp['nuc_seg_ch']
+        else:
+            round_tobelinked_params[ro] = rp
+
+    if len(set([R0_nuc_seg_ch] + [x['nuc_seg_ch'] for x in round_tobelinked_params.values()])) > 1:
+        raise NotImplementedError('Multiplexed nuclear linking between different channels is not supported.')
+
     return round_tobelinked_params
 
 def main():
