@@ -114,7 +114,8 @@ def split_shape_vs_channel_feats(df,tidy_id):
     return object_feats, channel_feats
 
 
-def save_tidy_plate_well_org(exp: Experiment, seg_channel="C01"):
+def save_tidy_plate_well_org(exp: Experiment, seg_channels):
+    org_seg_ch = seg_channels[0]
     org_df = accumulate_tables(exp)
 
     tidy_id = "plate_well_org"
@@ -135,7 +136,7 @@ def save_tidy_plate_well_org(exp: Experiment, seg_channel="C01"):
 
     splits = org_df.groupby("channel_id")
 
-    org_df_tidy = splits.get_group(seg_channel).copy().reset_index(drop=True)
+    org_df_tidy = splits.get_group(org_seg_ch).copy().reset_index(drop=True)
     org_df_tidy = org_df_tidy.set_index(tidy_id)
     org_df_tidy = org_df_tidy[object_feats]  # select only object features
     org_df_tidy = org_df_tidy.add_prefix("C00.org.")
@@ -214,7 +215,8 @@ def load_nuclei_features(exp: Experiment):
     raise RuntimeWarning("No nuclear feature extraction found in %s" % exp.name)
 
 
-def save_tidy_plate_well_org_nuc(exp: Experiment, seg_channel="C01"):
+def save_tidy_plate_well_org_nuc(exp: Experiment, seg_channels):
+    nuc_seg_ch = seg_channels[1]
     nuc_df = load_nuclei_features(exp)
 
     # make tidy id
@@ -252,7 +254,7 @@ def save_tidy_plate_well_org_nuc(exp: Experiment, seg_channel="C01"):
 
     splits = nuc_df.groupby("channel_id")
 
-    nuc_df_tidy = splits.get_group(seg_channel).copy().reset_index(drop=True)
+    nuc_df_tidy = splits.get_group(nuc_seg_ch).copy().reset_index(drop=True)
     nuc_df_tidy = nuc_df_tidy.set_index(tidy_id)
     nuc_df_tidy = nuc_df_tidy[object_feats]  # select only object features
     nuc_df_tidy = nuc_df_tidy.add_prefix("C00.nuc.")
@@ -332,7 +334,8 @@ def load_membrane_features(exp: Experiment):
     raise RuntimeWarning("No membrane feature extraction found in %s" % exp.name)
 
 
-def save_tidy_plate_well_org_mem(exp: Experiment, seg_channel="C04"):
+def save_tidy_plate_well_org_mem(exp: Experiment, seg_channels):
+    mem_seg_ch = seg_channels[2]
     mem_df = load_membrane_features(exp)
 
     # make tidy id
@@ -370,7 +373,7 @@ def save_tidy_plate_well_org_mem(exp: Experiment, seg_channel="C04"):
 
     splits = mem_df.groupby("channel_id")
 
-    mem_df_tidy = splits.get_group(seg_channel).copy().reset_index(drop=True)
+    mem_df_tidy = splits.get_group(mem_seg_ch).copy().reset_index(drop=True)
     mem_df_tidy = mem_df_tidy.set_index(tidy_id)
     mem_df_tidy = mem_df_tidy[object_feats]  # select only object features
     mem_df_tidy = mem_df_tidy.add_prefix("C00.mem.")
