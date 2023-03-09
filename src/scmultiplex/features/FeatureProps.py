@@ -16,7 +16,7 @@ from scmultiplex.features.FeatureFunctions import (
 object_types = ['organoid', 'nucleus', 'membrane']
 
 
-def regionprops_to_row(ot, regionproperties, nuc_channel, mem_channel, organoid, channel, mask_ending, nuc_ending,
+def regionprops_to_row(ot, regionproperties, org_channel, nuc_channel, mem_channel, organoid, channel, mask_ending, nuc_ending,
                        mem_ending, abs_min_intensity=None, img_dim=None, disconnected=None):
     if ot not in object_types:
         raise ValueError('object type must be one of: %s' % ', '.join(object_types))
@@ -49,7 +49,8 @@ def regionprops_to_row(ot, regionproperties, nuc_channel, mem_channel, organoid,
         }
 
         try:
-            if ot == 'organoid':
+            if ot == 'organoid' and channel == org_channel:
+                # include both channel and shape features
                 row = {
                     'segmentation_org': organoid.segmentations[mask_ending],
                     'imgdim_x': img_dim[1],
@@ -78,6 +79,16 @@ def regionprops_to_row(ot, regionproperties, nuc_channel, mem_channel, organoid,
                     'concavity_count': concavity_count(labeled_obj, min_area_fraction=0.005),
                     'asymmetry': convex_hull_centroid_dif(labeled_obj),
                     'disconnected': disconnected,
+                }
+
+            elif ot == 'organoid':
+                # include only channel features
+                row = {
+                    'x_pos_weighted_pix': labeled_obj['weighted_centroid'][1],
+                    'y_pos_weighted_pix': labeled_obj['weighted_centroid'][0],
+                    'x_massDisp_pix': labeled_obj['weighted_centroid'][1] - labeled_obj['centroid'][1],
+                    'y_massDisp_pix': labeled_obj['weighted_centroid'][0] - labeled_obj['centroid'][0],
+                    'abs_min': abs_min_intensity,
                 }
 
             elif ot == 'nucleus' and channel == nuc_channel:

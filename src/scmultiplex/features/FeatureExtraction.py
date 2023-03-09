@@ -84,6 +84,7 @@ def extract_organoid_features(
         disconnected = disconnected_component(org_seg)
 
         df_org = regionprops_to_row_organoid(regionproperties=org_features,
+                                         org_channel='C01',
                                          nuc_channel='C01',
                                          mem_channel='C04',
                                          organoid=organoid,
@@ -94,7 +95,6 @@ def extract_organoid_features(
                                          abs_min_intensity=abs_min_intensity,
                                          img_dim=img_dim,
                                          disconnected=disconnected)
-
 
         # Save measurement into the organoid directory.
         name = "regionprops_org_" + str(channel)
@@ -122,6 +122,7 @@ def extract_organoid_features(
         )
 
         df_nuc = regionprops_to_row_nucleus(regionproperties=nuc_features,
+                                         org_channel='C01',
                                          nuc_channel='C01',
                                          mem_channel='C04',
                                          organoid=organoid,
@@ -132,7 +133,6 @@ def extract_organoid_features(
                                          abs_min_intensity=None,
                                          img_dim=None,
                                          disconnected=None)
-
 
         # Save measurement into the organoid directory.
         name = "regionprops_nuc_" + str(channel)
@@ -157,6 +157,7 @@ def extract_organoid_features(
         )
 
         df_mem = regionprops_to_row_membrane(regionproperties=mem_features,
+                                         org_channel='C01',
                                          nuc_channel='C01',
                                          mem_channel='C04',
                                          organoid=organoid,
