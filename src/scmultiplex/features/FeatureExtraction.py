@@ -55,6 +55,9 @@ def extract_organoid_features(
     mem_ending: str,
     mask_ending: str,
     spacing: Tuple[float],
+    org_seg_ch,
+    nuc_seg_ch,
+    mem_seg_ch,
 ):
     nuc_seg = organoid.get_segmentation(nuc_ending)  # load segmentation images
     mem_seg = organoid.get_segmentation(mem_ending)  # load segmentation images
@@ -84,9 +87,9 @@ def extract_organoid_features(
         disconnected = disconnected_component(org_seg)
 
         df_org = regionprops_to_row_organoid(regionproperties=org_features,
-                                         org_channel='C01',
-                                         nuc_channel='C01',
-                                         mem_channel='C04',
+                                         org_channel=org_seg_ch,
+                                         nuc_channel=nuc_seg_ch,
+                                         mem_channel=mem_seg_ch,
                                          organoid=organoid,
                                          channel=channel,
                                          mask_ending=mask_ending,
@@ -122,9 +125,9 @@ def extract_organoid_features(
         )
 
         df_nuc = regionprops_to_row_nucleus(regionproperties=nuc_features,
-                                         org_channel='C01',
-                                         nuc_channel='C01',
-                                         mem_channel='C04',
+                                         org_channel=org_seg_ch,
+                                         nuc_channel=nuc_seg_ch,
+                                         mem_channel=mem_seg_ch,
                                          organoid=organoid,
                                          channel=channel,
                                          mask_ending=mask_ending,
@@ -157,9 +160,9 @@ def extract_organoid_features(
         )
 
         df_mem = regionprops_to_row_membrane(regionproperties=mem_features,
-                                         org_channel='C01',
-                                         nuc_channel='C01',
-                                         mem_channel='C04',
+                                         org_channel=org_seg_ch,
+                                         nuc_channel=nuc_seg_ch,
+                                         mem_channel=mem_seg_ch,
                                          organoid=organoid,
                                          channel=channel,
                                          mask_ending=mask_ending,

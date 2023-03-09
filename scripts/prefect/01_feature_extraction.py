@@ -81,7 +81,7 @@ def get_organoids(
 
 @task()
 def organoid_feature_extraction_task(
-    organoid, nuc_ending: str, mem_ending: str, mask_ending: str, spacing: List[float]
+    organoid, nuc_ending: str, mem_ending: str, mask_ending: str, spacing: List[float], org_seg_ch, nuc_seg_ch, mem_seg_ch
 ):
     extract_organoid_features(
         organoid=organoid,
@@ -89,6 +89,9 @@ def organoid_feature_extraction_task(
         mem_ending=mem_ending,
         mask_ending=mask_ending,
         spacing=tuple(spacing),
+        org_seg_ch=org_seg_ch,
+        nuc_seg_ch=nuc_seg_ch,
+        mem_seg_ch=mem_seg_ch,
     )
 
 
@@ -122,6 +125,9 @@ with Flow(
     name_ovr = Parameter("name_ovr", default="regionprops_ovr_")
     iop_cutoff = Parameter("iop_cutoff", default=0.6)
     spacing = Parameter("spacing", default=[3.0, 1.0, 1.0])
+    org_seg_ch = Parameter("org_seg_ch")
+    nuc_seg_ch = Parameter("nuc_seg_ch")
+    mem_seg_ch = Parameter("mem_seg_ch")
 
     exp, wells = load_task(exp_path, excluded_plates, excluded_wells)
 
@@ -137,6 +143,9 @@ with Flow(
         unmapped(mem_ending),
         unmapped(mask_ending),
         unmapped(spacing),
+        unmapped(org_seg_ch),
+        unmapped(nuc_seg_ch),
+        unmapped(mem_seg_ch),
     )
 
     link_nuc_to_membrane_task.map(
@@ -192,6 +201,9 @@ def get_config_params(config_file_path):
         config_params = {
             'nuc_ending':           ('00BuildExperiment.round_%s' % ro, 'nuc_ending'),
             'mem_ending':           ('00BuildExperiment.round_%s' % ro, 'mem_ending'),
+            'org_seg_ch':           ('00BuildExperiment.round_%s' % ro, 'organoid_seg_channel'),
+            'nuc_seg_ch':           ('00BuildExperiment.round_%s' % ro, 'nuclear_seg_channel'),
+            'mem_seg_ch':           ('00BuildExperiment.round_%s' % ro, 'membrane_seg_channel'),
             }
         rp = common_params.copy()
         rp.update(get_workflow_params(config_file_path, config_params))
