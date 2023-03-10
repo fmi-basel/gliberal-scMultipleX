@@ -1,3 +1,13 @@
+# Copyright (C) 2023 Friedrich Miescher Institute for Biomedical Research
+
+##############################################################################
+#                                                                            #
+# Author: Nicole Repina              <nicole.repina@fmi.ch>                  #
+# Author: Tim-Oliver Buchholz        <tim-oliver.buchholz@fmi.ch>            #
+# Author: Enrico Tagliavini          <enrico.tagliavini@fmi.ch>              #
+#                                                                            #
+##############################################################################
+
 import os
 from os.path import join
 
@@ -73,10 +83,49 @@ def accumulate_tables(exp: Experiment):
         ]
     )
 
+    if org_df is None:
+        raise RuntimeWarning("No organoid feature extraction found in %s" % exp.name)
+
     return org_df
 
 
-def save_tidy_plate_well_org(exp: Experiment):
+def split_shape_vs_channel_feats(df,tidy_id):
+    """identify object (shape) features vs. channel features in columns of df
+    """
+    # split by tidy id; each group is a nucleus
+    splits =df.groupby(tidy_id)
+
+    # for each nuc, calculate how many unique values of each measurement there are
+    # take the max over all nuclei
+    # col_classes = splits.aggregate(lambda x: len(np.unique(x))).max()
+    col_classes = splits.aggregate(lambda x: len(x.dropna().unique())).max()
+
+    # if this value is equal to the number of channels in this round, then the value is repeated
+    # else value can have unique value per channel
+    n = len(np.unique(df["channel_id"]))
+
+    # classify colnames as object or channel features
+    # False if different measurements over channels (e.g. intensity feats), channel properties;
+    # True if all measurements have the same measurement (e.g.shape feats), object properties
+    col_classes = col_classes.apply(lambda x: False if x == n else True)
+    col_classes = col_classes.to_dict()
+
+    all_feats = np.array(df.columns)
+    all_feats = all_feats[
+        all_feats != tidy_id
+    ]  # list of all col names of df except tidy_id
+
+    col_booleans = np.array(
+        [col_classes[k] for k in all_feats]
+    )  # list of booleans according to dict
+
+    object_feats = all_feats[col_booleans]  # col names of object features (True)
+    channel_feats = all_feats[~col_booleans]  # col names of channel features (False)
+    return object_feats, channel_feats
+
+
+def save_tidy_plate_well_org(exp: Experiment, seg_channels):
+    org_seg_ch = seg_channels[0]
     org_df = accumulate_tables(exp)
 
     tidy_id = "plate_well_org"
@@ -88,35 +137,8 @@ def save_tidy_plate_well_org(exp: Experiment):
         + org_df["org_id"].astype(str)
     )
 
-    # split by tidy id
-    splits = org_df.groupby(tidy_id)
-
-    # for each organoid, calculate how many unique values of each measurement there are
-    # take the max over all organoids
-    # col_classes = splits.aggregate(lambda x: len(np.unique(x))).max()
-    col_classes = splits.aggregate(lambda x: len(x.unique())).max()
-
-    # if this value is equal to the number of channels in this round, then the value is repeated
-    # else value can have unique value per channel
-    n = len(np.unique(org_df["channel_id"]))
-
-    # classify colnames as object or channel features
-    # False if different measurements over channels (e.g. intensity feats), channel properties;
-    # True if all measurements have the same measurement (e.g.shape feats), object properties
-    col_classes = col_classes.apply(lambda x: False if x == n else True)
-    col_classes = col_classes.to_dict()
-
-    all_feats = np.array(org_df.columns)
-    all_feats = all_feats[
-        all_feats != tidy_id
-    ]  # list of all col names of df except tidy_id
-
-    col_booleans = np.array(
-        [col_classes[k] for k in all_feats]
-    )  # list of booleans according to dict
-
-    object_feats = all_feats[col_booleans]  # col names of object features (True)
-    channel_feats = all_feats[~col_booleans]  # col names of channel features (False)
+    # identify object (shape) features vs. channel features
+    object_feats, channel_feats = split_shape_vs_channel_feats(org_df, tidy_id)
 
     # make dataframe where each row is single organoid
     # if column is the same for all channels (True), its first value is taken and placed into dataframe
@@ -124,8 +146,7 @@ def save_tidy_plate_well_org(exp: Experiment):
 
     splits = org_df.groupby("channel_id")
 
-    # take C01 group and only select columns that are object_feats (does not matter which channel is used for this)
-    org_df_tidy = splits.get_group("C01").copy().reset_index(drop=True)
+    org_df_tidy = splits.get_group(org_seg_ch).copy().reset_index(drop=True)
     org_df_tidy = org_df_tidy.set_index(tidy_id)
     org_df_tidy = org_df_tidy[object_feats]  # select only object features
     org_df_tidy = org_df_tidy.add_prefix("C00.org.")
@@ -188,11 +209,6 @@ def load_nuclei_features(exp: Experiment):
     if not len(nuc_feat_df_list) == 0:
         nuc_df = pd.concat(nuc_feat_df_list, ignore_index=True, sort=False)
 
-        # can remove later!
-        # nuc_df = nuc_df.rename(columns={"org_label": "org_id"})
-        # nuc_df = nuc_df.drop(columns="organoid_id")
-        # can remove later!
-
         nuc_df = nuc_df.sort_values(
             by=[
                 "hcs_experiment",
@@ -206,9 +222,11 @@ def load_nuclei_features(exp: Experiment):
         )
 
         return nuc_df
+    raise RuntimeWarning("No nuclear feature extraction found in %s" % exp.name)
 
 
-def save_tidy_plate_well_org_nuc(exp: Experiment):
+def save_tidy_plate_well_org_nuc(exp: Experiment, seg_channels):
+    nuc_seg_ch = seg_channels[1]
     nuc_df = load_nuclei_features(exp)
 
     # make tidy id
@@ -222,9 +240,6 @@ def save_tidy_plate_well_org_nuc(exp: Experiment):
         + "_"
         + nuc_df["nuc_id"].astype(str)
     )
-
-    # set channel used for segmentation e.g. nuc seg run on C01
-    seg_channel = "C01"
 
     # take 100 random nuclei and determine feature classifications from them ; otherwise very slow
     npoints = 100
@@ -240,35 +255,8 @@ def save_tidy_plate_well_org_nuc(exp: Experiment):
     # select data for this random set of nuclei
     nuc_df_subset = nuc_df.loc[(nuc_df[tidy_id].isin(subset))]
 
-    # split by tidy id; each group is a nucleus
-    splits = nuc_df_subset.groupby(tidy_id)
-
-    # for each nuc, calculate how many unique values of each measurement there are
-    # take the max over all nuclei
-    # col_classes = splits.aggregate(lambda x: len(np.unique(x))).max()
-    col_classes = splits.aggregate(lambda x: len(x.unique())).max()
-
-    # if this value is equal to the number of channels in this round, then the value is repeated
-    # else value can have unique value per channel
-    n = len(np.unique(nuc_df_subset["channel_id"]))
-
-    # classify colnames as object or channel features
-    # False if different measurements over channels (e.g. intensity feats), channel properties;
-    # True if all measurements have the same measurement (e.g.shape feats), object properties
-    col_classes = col_classes.apply(lambda x: False if x == n else True)
-    col_classes = col_classes.to_dict()
-
-    all_feats = np.array(nuc_df_subset.columns)
-    all_feats = all_feats[
-        all_feats != tidy_id
-    ]  # list of all col names of df except tidy_id
-
-    col_booleans = np.array(
-        [col_classes[k] for k in all_feats]
-    )  # list of booleans according to dict
-
-    object_feats = all_feats[col_booleans]  # col names of object features (True)
-    channel_feats = all_feats[~col_booleans]  # col names of channel features (False)
+    # identify object (shape) features vs. channel features
+    object_feats, channel_feats = split_shape_vs_channel_feats(nuc_df_subset, tidy_id)
 
     # make dataframe where each row is single organoid
     # if column is the same for all channels (True), its first value is taken and placed into dataframe
@@ -276,8 +264,7 @@ def save_tidy_plate_well_org_nuc(exp: Experiment):
 
     splits = nuc_df.groupby("channel_id")
 
-    # take C01 group and only select columns that are object_feats (does not matter which channel is used for this)
-    nuc_df_tidy = splits.get_group(seg_channel).copy().reset_index(drop=True)
+    nuc_df_tidy = splits.get_group(nuc_seg_ch).copy().reset_index(drop=True)
     nuc_df_tidy = nuc_df_tidy.set_index(tidy_id)
     nuc_df_tidy = nuc_df_tidy[object_feats]  # select only object features
     nuc_df_tidy = nuc_df_tidy.add_prefix("C00.nuc.")
@@ -353,17 +340,13 @@ def load_membrane_features(exp: Experiment):
                 "channel_id",
             ]
         )
-
         return mem_df
-    
-    # there are no membrane feature, return None
-    return None
+    raise RuntimeWarning("No membrane feature extraction found in %s" % exp.name)
 
 
-def save_tidy_plate_well_org_mem(exp: Experiment):
+def save_tidy_plate_well_org_mem(exp: Experiment, seg_channels):
+    mem_seg_ch = seg_channels[2]
     mem_df = load_membrane_features(exp)
-    if mem_df is None:
-        return
 
     # make tidy id
     tidy_id = "plate_well_org_mem"
@@ -376,9 +359,6 @@ def save_tidy_plate_well_org_mem(exp: Experiment):
         + "_"
         + mem_df["mem_id"].astype(str)
     )
-
-    # set channel used for segmentation e.g. mem seg run on C04
-    seg_channel = "C04"
 
     # take 100 random membranes and determine feature classifications from them ; otherwise very slow
     npoints = 100
@@ -394,35 +374,8 @@ def save_tidy_plate_well_org_mem(exp: Experiment):
     # select data for this random set of nuclei
     mem_df_subset = mem_df.loc[(mem_df[tidy_id].isin(subset))]
 
-    # split by tidy id; each group is a membrane
-    splits = mem_df_subset.groupby(tidy_id)
-
-    # for each mem, calculate how many unique values of each measurement there are
-    # take the max over all nuclei
-    # col_classes = splits.aggregate(lambda x: len(np.unique(x))).max()
-    col_classes = splits.aggregate(lambda x: len(x.unique())).max()
-
-    # if this value is equal to the number of channels in this round, then the value is repeated
-    # else value can have unique value per channel
-    n = len(np.unique(mem_df_subset["channel_id"]))
-
-    # classify colnames as object or channel features
-    # False if different measurements over channels (e.g. intensity feats), channel properties;
-    # True if all measurements have the same measurement (e.g.shape feats), object properties
-    col_classes = col_classes.apply(lambda x: False if x == n else True)
-    col_classes = col_classes.to_dict()
-
-    all_feats = np.array(mem_df_subset.columns)
-    all_feats = all_feats[
-        all_feats != tidy_id
-    ]  # list of all col names of df except tidy_id
-
-    col_booleans = np.array(
-        [col_classes[k] for k in all_feats]
-    )  # list of booleans according to dict
-
-    object_feats = all_feats[col_booleans]  # col names of object features (True)
-    channel_feats = all_feats[~col_booleans]  # col names of channel features (False)
+    # identify object (shape) features vs. channel features
+    object_feats, channel_feats = split_shape_vs_channel_feats(mem_df_subset, tidy_id)
 
     # make dataframe where each row is single organoid
     # if column is the same for all channels (True), its first value is taken and placed into dataframe
@@ -430,8 +383,7 @@ def save_tidy_plate_well_org_mem(exp: Experiment):
 
     splits = mem_df.groupby("channel_id")
 
-    # take C01 group and only select columns that are object_feats (does not matter which channel is used for this)
-    mem_df_tidy = splits.get_group(seg_channel).copy().reset_index(drop=True)
+    mem_df_tidy = splits.get_group(mem_seg_ch).copy().reset_index(drop=True)
     mem_df_tidy = mem_df_tidy.set_index(tidy_id)
     mem_df_tidy = mem_df_tidy[object_feats]  # select only object features
     mem_df_tidy = mem_df_tidy.add_prefix("C00.mem.")
@@ -487,7 +439,9 @@ def write_nuc_to_mem_linking(exp: Experiment):
             join(exp.get_experiment_dir(), "linking_nuc_to_mem.csv"), index=False
         )  # saves csv
     else:
-        raise RuntimeError("No nuclear to membrane linking found for experiment %s" % exp.name)
+        raise RuntimeWarning(
+            "No nuclear to membrane linking found for experiment %s" % exp.name
+        )
 
 
 def write_merged_nuc_membrane_features(exp: Experiment):
@@ -922,7 +876,7 @@ def write_nuclear_linking_over_multiplexing_rounds(round_names, round_summary_cs
         link["duplicated"] = link["id_RX"].duplicated()
         # if want to keep first duplicate of label, remove keep=False
         link_filtered = link[[not elem for elem in link["duplicated"]]]
-        print("removed", len(link) - len(link_filtered), "duplicated RX nuclei")
+        # print("removed", len(link) - len(link_filtered), "duplicated RX nuclei")
 
         link_dict = link_filtered.set_index("id_RX").T.to_dict("index")[
             "id_R0"

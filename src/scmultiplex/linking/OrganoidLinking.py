@@ -1,3 +1,13 @@
+# Copyright (C) 2023 Friedrich Miescher Institute for Biomedical Research
+
+##############################################################################
+#                                                                            #
+# Author: Nicole Repina              <nicole.repina@fmi.ch>                  #
+# Author: Tim-Oliver Buchholz        <tim-oliver.buchholz@fmi.ch>            #
+# Author: Enrico Tagliavini          <enrico.tagliavini@fmi.ch>              #
+#                                                                            #
+##############################################################################
+
 import copy
 import logging
 import os
@@ -215,7 +225,7 @@ def get_linking_stats(
     )
 
     # df_save measurement into the well directory.
-    name = "linking_ovr_NEW_" + str(ovr_channel) + "_" + names[1] + "to" + names[0]
+    name = "linking_ovr_" + str(ovr_channel) + "_" + names[1] + "to" + names[0]
     path = join(well.well_dir, name + ".csv")
     df_filt.to_csv(path, index=False)  # df_saves csv
 

@@ -1,5 +1,14 @@
+# Copyright (C) 2023 Friedrich Miescher Institute for Biomedical Research
+
+##############################################################################
+#                                                                            #
+# Author: Nicole Repina              <nicole.repina@fmi.ch>                  #
+# Author: Tim-Oliver Buchholz        <tim-oliver.buchholz@fmi.ch>            #
+# Author: Enrico Tagliavini          <enrico.tagliavini@fmi.ch>              #
+#                                                                            #
+##############################################################################
+
 import argparse
-import configparser
 import prefect
 
 from faim_hcs.hcs.Experiment import Experiment
@@ -30,10 +39,9 @@ def load_experiment(exp_path):
 def write_nuc_to_mem_linking_task(exp):
     try:
         write_nuc_to_mem_linking(exp)
-    except RuntimeError as e:
+    except RuntimeWarning as e:
         logger = prefect.context.get("logger")
         logger.info('%s' % str(e))
-        logger.info('%s' % format_exc())
     else:
         write_merged_nuc_membrane_features(exp)
 
@@ -43,7 +51,7 @@ with Flow(
     executor=LocalDaskExecutor(),
     run_config=LocalRun(),
 ) as flow:
-    exp_path = Parameter("exp_path", default="/path/to/exp/summary.csv")
+    exp_path = Parameter("exp_path")
 
     exp = load_experiment(exp_path)
 

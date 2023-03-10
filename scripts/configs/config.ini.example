@@ -10,18 +10,24 @@ overview_spacing = 0.216,0.216
 round_names = R0,R1
 
 [00BuildExperiment.round_R0]
-name = testing_multi_R0
+name = R0
 nuc_ending = NUC_SEG3D_220523
 mem_ending = MEM_SEG3D_220523
 root_dir = ${00BuildExperiment:base_dir_raw}/testing_R0_multi
 fname_barcode_index = 2
+organoid_seg_channel = C01
+nuclear_seg_channel = C01
+membrane_seg_channel = C04
 
 [00BuildExperiment.round_R1]
-name = testing_multi_R1
+name = R1
 nuc_ending = ${00BuildExperiment.round_R0:nuc_ending}
 mem_ending = ${00BuildExperiment.round_R0:mem_ending}
 root_dir = ${00BuildExperiment:base_dir_raw}/testing_R1_multi
 fname_barcode_index = 3
+organoid_seg_channel = ${00BuildExperiment.round_R0:organoid_seg_channel}
+nuclear_seg_channel = ${00BuildExperiment.round_R0:nuclear_seg_channel}
+membrane_seg_channel = ${00BuildExperiment.round_R0:membrane_seg_channel}
 
 [01FeatureExtraction]
 excluded_plates = day2
@@ -29,7 +35,7 @@ excluded_wells = C02
 ovr_channel = C01
 name_ovr = regionprops_ovr_
 iop_cutoff = 0.6
-spacing = 3,1,1
 
 [02OrganoidLinking]
 iou_cutoff = 0.2
+
