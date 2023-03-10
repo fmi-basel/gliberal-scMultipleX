@@ -4,6 +4,7 @@ import os
 from collections import OrderedDict
 
 config = None
+spacing = None
 
 def init_config(config_file_path):
     global config

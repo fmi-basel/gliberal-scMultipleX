@@ -5,6 +5,11 @@ import math
 from skimage.measure import marching_cubes, mesh_surface_area, label, moments, regionprops
 from skimage.morphology import binary_erosion
 
+spacing = None
+
+def set_spacing(spacing_s):
+    global spacing
+    spacing = spacing_s
 
 def fixed_percentiles(region_mask, intensity):
     """
@@ -36,18 +41,18 @@ def stdv(region_mask, intensity):
     return np.std(intensity[region_mask], ddof=1)
 
 
-def bounding_box_ratio(prop_2D):
+def bounding_box_ratio(prop):
     """Return the ratio between the area and the bounding box area of the object
     Note this is the same as regionprops 'extent'
     """
-    return prop_2D.area / prop_2D.area_bbox
+    return prop.area / prop.area_bbox
 
 
-def convex_hull_ratio(prop_2D):
+def convex_hull_ratio(prop):
     """Return the ratio between the area and the convex hull area of the object
     Note this is the same as regionprops 'solidity'
     """
-    return prop_2D.area / prop_2D.area_convex
+    return prop.area / prop.area_convex
 
 
 def convex_hull_area_resid(prop_2D):
@@ -86,10 +91,10 @@ def circularity(prop_2D):
     return 4 * math.pi * (prop_2D.area / np.square(prop_2D.perimeter))
 
 
-def aspect_ratio(prop_2D):
+def aspect_ratio(prop):
     """Return the ratio of major axis length to equivalent diameter
     """
-    return prop_2D.major_axis_length / prop_2D.equivalent_diameter
+    return prop.major_axis_length / prop.equivalent_diameter
 
 
 def minor_major_axis_ratio(prop):
@@ -136,13 +141,13 @@ def disconnected_component(mask_2D):
     return disconnected
 
 
-def surface_area_marchingcube(mask_3D, feature_spacing = (2.7778, 1, 1)):
+def surface_area_marchingcube(mask_3D):
     """Return surface area of 3D label image
     """
     regionmask_int = mask_3D.astype(np.uint16)
     # add zero-pad on all sides, otherwise mesh is smaller than it should be
     regionmask_int = np.pad(regionmask_int, 1, 'constant')
-    verts, faces, normals, values = marching_cubes(regionmask_int, spacing=feature_spacing)
+    verts, faces, normals, values = marching_cubes(regionmask_int, spacing=spacing)
     surface_area = mesh_surface_area(verts, faces)
     return surface_area
 

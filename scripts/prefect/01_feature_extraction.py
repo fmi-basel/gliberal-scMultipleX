@@ -9,6 +9,9 @@ from prefect import Flow, Parameter, task, unmapped
 from prefect.executors import LocalDaskExecutor
 from prefect.run_configs import LocalRun
 
+import scmultiplex.config
+from scmultiplex.features.FeatureFunctions import set_spacing
+
 from scmultiplex.config import (
     commasplit,
     compute_workflow_params,
@@ -226,6 +229,8 @@ def main():
     args = parser.parse_args()
     
     r_params = get_config_params(args.config)
+    set_spacing(list(r_params.values())[0]['spacing'])
+
     for ro, kwargs in r_params.items():
         flow.run(parameters = kwargs)
 

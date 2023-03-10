@@ -100,9 +100,14 @@ def regionprops_to_row(ot, regionproperties, org_channel, nuc_channel, mem_chann
                     'y_pos_vox': labeled_obj['centroid'][1],
                     'z_pos_vox': labeled_obj['centroid'][0],
                     'volume_pix': labeled_obj['area'],
+                    'surface_area': labeled_obj['surface_area_marchingcube'],
+                    'equivDiam': labeled_obj['equivalent_diameter_area'],
+                    'solidity': labeled_obj['solidity'],
+                    'extent': labeled_obj['extent'],
                     'majorAxisLength': labeled_obj['major_axis_length'],
                     'minorAxisLength': labeled_obj['minor_axis_length'],
-                    'solidity': labeled_obj['solidity']
+                    'minmajAxisRatio': minor_major_axis_ratio(labeled_obj),
+                    'aspectRatio': aspect_ratio(labeled_obj),
                 }
 
             elif ot == 'nucleus':
@@ -121,9 +126,14 @@ def regionprops_to_row(ot, regionproperties, org_channel, nuc_channel, mem_chann
                     'y_pos_vox': labeled_obj['centroid'][1],
                     'z_pos_vox': labeled_obj['centroid'][0],
                     'volume_pix': labeled_obj['area'],
+                    'surface_area': labeled_obj['surface_area_marchingcube'],
+                    'equivDiam': labeled_obj['equivalent_diameter_area'],
+                    'solidity': labeled_obj['solidity'],
+                    'extent': labeled_obj['extent'],
                     'majorAxisLength': labeled_obj['major_axis_length'],
                     'minorAxisLength': labeled_obj['minor_axis_length'],
-                    'solidity': labeled_obj['solidity']
+                    'minmajAxisRatio': minor_major_axis_ratio(labeled_obj),
+                    'aspectRatio': aspect_ratio(labeled_obj),
                 }
 
             elif ot == 'membrane':

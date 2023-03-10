@@ -12,7 +12,9 @@ from scmultiplex.features.FeatureFunctions import (
     fixed_percentiles,
     kurtos,
     skewness,
-    stdv, disconnected_component,
+    stdv,
+    disconnected_component,
+    surface_area_marchingcube,
 )
 from scmultiplex.features.FeatureProps import (
     regionprops_to_row_organoid,
@@ -120,7 +122,7 @@ def extract_organoid_features(
         nuc_features = regionprops(
             nuc_seg,
             raw,
-            extra_properties=(fixed_percentiles, skewness, kurtos, stdv),
+            extra_properties=(fixed_percentiles, skewness, kurtos, stdv, surface_area_marchingcube),
             spacing=spacing,
         )
 
@@ -155,7 +157,7 @@ def extract_organoid_features(
         mem_features = regionprops(
             mem_seg,
             raw,
-            extra_properties=(fixed_percentiles, skewness, kurtos, stdv),
+            extra_properties=(fixed_percentiles, skewness, kurtos, stdv, surface_area_marchingcube),
             spacing=spacing,
         )
 
