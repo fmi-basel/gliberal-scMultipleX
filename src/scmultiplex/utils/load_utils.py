@@ -1,3 +1,13 @@
+# Copyright (C) 2023 Friedrich Miescher Institute for Biomedical Research
+
+##############################################################################
+#                                                                            #
+# Author: Nicole Repina              <nicole.repina@fmi.ch>                  #
+# Author: Tim-Oliver Buchholz        <tim-oliver.buchholz@fmi.ch>            #
+# Author: Enrico Tagliavini          <enrico.tagliavini@fmi.ch>              #
+#                                                                            #
+##############################################################################
+
 from faim_hcs.hcs.Experiment import Experiment
 from faim_hcs.records.WellRecord import WellRecord
 

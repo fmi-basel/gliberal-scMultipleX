@@ -1,3 +1,13 @@
+# Copyright (C) 2023 Friedrich Miescher Institute for Biomedical Research
+
+##############################################################################
+#                                                                            #
+# Author: Nicole Repina              <nicole.repina@fmi.ch>                  #
+# Author: Tim-Oliver Buchholz        <tim-oliver.buchholz@fmi.ch>            #
+# Author: Enrico Tagliavini          <enrico.tagliavini@fmi.ch>              #
+#                                                                            #
+##############################################################################
+
 import copy
 from os.path import join
 from typing import List, Tuple
