@@ -866,7 +866,7 @@ def write_nuclear_linking_over_multiplexing_rounds(round_names, round_summary_cs
         link["duplicated"] = link["id_RX"].duplicated()
         # if want to keep first duplicate of label, remove keep=False
         link_filtered = link[[not elem for elem in link["duplicated"]]]
-        print("removed", len(link) - len(link_filtered), "duplicated RX nuclei")
+        # print("removed", len(link) - len(link_filtered), "duplicated RX nuclei")
 
         link_dict = link_filtered.set_index("id_RX").T.to_dict("index")[
             "id_R0"
