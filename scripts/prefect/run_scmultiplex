@@ -16,6 +16,13 @@ from traceback import format_exc
 
 from scmultiplex.config import get_workflow_params
 
+try:
+	from os import waitstatus_to_exitcode
+except ImportError:
+	# older versions of python don't have the waitstatus_to_exitcode function
+	def waitstatus_to_exitcode(wstatus):
+		return wstatus[1]
+
 task_mapping = {}
 log_time_format = r"%Y%m%d-%H_%M_%S"
 
@@ -76,9 +83,16 @@ def run_task_fork_pty(task, config_file_path, logfile_path):
 	else:
 		with open(logfile_path, 'a') as logfile, os.fdopen(controlt_fd, "r", buffering = 1) as controlt:
 			tee(controlt, logfile)
-			ret = os.waitpid(pid, 0)
-		
-	return ret
+			wstatus = os.waitpid(pid, 0)
+		ret = waitstatus_to_exitcode(wstatus)
+		if ret != 0:
+			raise subprocess.CalledProcessError(
+				ret,
+				' '.join(cmd),
+				output = None,
+				stderr = None
+			)
+	return
 
 def run_task_shell_run(task, config_file_path, logfile_path):
 	cmd = 'python3 "%s" --config "%s" |& tee -a "%s"' % (task, config_file_path, logfile_path)
@@ -86,7 +100,8 @@ def run_task_shell_run(task, config_file_path, logfile_path):
 	print(executing_msg)
 	with open(logfile_path, 'a') as logfile:
 		logfile.write(executing_msg + '\n')
-	return subprocess.run(cmd, cwd = None, check = True, shell = True)
+	subprocess.run(cmd, cwd = None, check = True, shell = True)
+	return
 
 run_task = run_task_shell_run
 # run_task = run_task_fork_pty
