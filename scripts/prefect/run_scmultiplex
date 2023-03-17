@@ -59,9 +59,7 @@ def tee(stream, logfile):
 	try:
 		buf = stream.readline()
 		while len(buf) > 0:
-			# buf = buf.decode()
-			# print(buf)
-			print(buf, end = '')
+			sys.stdout.buffer.write(buf)
 			logfile.write(buf)
 			buf = stream.readline()
 	except OSError as e:
@@ -81,7 +79,7 @@ def run_task_fork_pty(task, config_file_path, logfile_path):
 		print('\n\nExecuting: %s' % ' '.join(cmd))
 		os.execvp(cmd[0], cmd)
 	else:
-		with open(logfile_path, 'a') as logfile, os.fdopen(controlt_fd, "r", buffering = 1) as controlt:
+		with open(logfile_path, 'ab') as logfile, os.fdopen(controlt_fd, "rb", buffering = 0) as controlt:
 			tee(controlt, logfile)
 			wstatus = os.waitpid(pid, 0)
 		ret = waitstatus_to_exitcode(wstatus)
