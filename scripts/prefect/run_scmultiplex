@@ -101,8 +101,8 @@ def run_task_shell_run(task, config_file_path, logfile_path):
 	subprocess.run(cmd, cwd = None, check = True, shell = True)
 	return
 
-run_task = run_task_shell_run
-# run_task = run_task_fork_pty
+# run_task = run_task_shell_run
+run_task = run_task_fork_pty
 
 def main(args):
 	config_path = args.config
