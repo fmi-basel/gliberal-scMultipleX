@@ -70,6 +70,7 @@ def tee(stream, logfile):
 		buf = stream.readline()
 		while len(buf) > 0:
 			sys.stdout.buffer.write(buf)
+			sys.stdout.buffer.flush()
 			logfile.write(buf)
 			buf = stream.readline()
 	except OSError as e:
