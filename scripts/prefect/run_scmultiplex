@@ -24,6 +24,7 @@ from traceback import format_exc
 
 
 from scmultiplex.config import get_workflow_params
+from scmultiplex.utils import get_core_count
 
 try:
 	from os import waitstatus_to_exitcode
@@ -69,6 +70,7 @@ def tee(stream, logfile):
 		buf = stream.readline()
 		while len(buf) > 0:
 			sys.stdout.buffer.write(buf)
+			sys.stdout.buffer.flush()
 			logfile.write(buf)
 			buf = stream.readline()
 	except OSError as e:
@@ -79,8 +81,8 @@ def tee(stream, logfile):
 			raise e from None
 	return
 
-def run_task_fork_pty(task, config_file_path, logfile_path):
-	cmd = 'python3 "%s" --config "%s"' % (task, config_file_path)
+def run_task_fork_pty(task, config_file_path, logfile_path, cpus):
+	cmd = 'python3 "%s" --config "%s" --cpus %d' % (task, config_file_path, cpus)
 	cmd = shlex.split(cmd)
 	pid, controlt_fd = pty.fork()
 	if pid == 0:
@@ -101,8 +103,8 @@ def run_task_fork_pty(task, config_file_path, logfile_path):
 			)
 	return
 
-def run_task_shell_run(task, config_file_path, logfile_path):
-	cmd = 'python3 "%s" --config "%s" |& tee -a "%s"' % (task, config_file_path, logfile_path)
+def run_task_shell_run(task, config_file_path, logfile_path, cpus):
+	cmd = 'python3 "%s" --config "%s" --cpus %d |& tee -a "%s"' % (task, config_file_path, cpus, logfile_path)
 	executing_msg = '\n\nExecuting: %s' % cmd
 	print(executing_msg)
 	with open(logfile_path, 'a') as logfile:
@@ -110,12 +112,14 @@ def run_task_shell_run(task, config_file_path, logfile_path):
 	subprocess.run(cmd, cwd = None, check = True, shell = True)
 	return
 
+
 # run_task = run_task_shell_run
 run_task = run_task_fork_pty
 
 def main(args):
 	config_path = args.config
 	tasks = args.tasks
+	cpus = args.cpus
 	setup_task_mapping()
 	task_list = parse_tasks(tasks)
 	
@@ -123,7 +127,7 @@ def main(args):
 	logfile_name = 'scmultiplex-%s.log' % datetime.now().strftime(log_time_format)
 	
 	for task in task_list:
-		run_task(task, config_path, os.path.join(save_dir, logfile_name))
+		run_task(task, config_path, os.path.join(save_dir, logfile_name), cpus)
 
 if __name__ == '__main__':
 	# workaround terminal width detection bug
@@ -143,6 +147,16 @@ if __name__ == '__main__':
 			required = True,
 			help = 'path to the config file for the scMultipleX workflow'
 	)
+
+	parser.add_argument(
+			'--cpus',
+			action = 'store',
+			type = int,
+			required = False,
+			default = get_core_count(), # get number of cores available for this process
+			help = 'specify the number of CPU cores used for parallelization'
+	)
+
 	parser.add_argument(
 			'--tasks',
 			action = 'store',

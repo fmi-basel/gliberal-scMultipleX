@@ -28,6 +28,7 @@ from scmultiplex.utils.accumulate_utils import (
     save_tidy_plate_well_org_mem
 )
 
+from scmultiplex.utils import get_core_count
 
 @task()
 def load_experiment(exp_path):
@@ -47,19 +48,24 @@ def save_tidy_task(exp, org_seg_ch, nuc_seg_ch, mem_seg_ch):
             logger.info('%s' % str(e))
 
 
-with Flow(
-    "Tidy Organoid, Nuclear, and Membrane Features",
-    executor=LocalDaskExecutor(),
-    run_config=LocalRun(),
-) as flow:
-    exp_path = Parameter("exp_path")
-    org_seg_ch = Parameter("org_seg_ch")
-    nuc_seg_ch = Parameter("nuc_seg_ch")
-    mem_seg_ch = Parameter("mem_seg_ch")
+def run_flow(r_params, cpus):
+    with Flow(
+        "Tidy Organoid, Nuclear, and Membrane Features",
+        executor=LocalDaskExecutor(scheduler="processes", num_workers=cpus),
+        run_config=LocalRun(),
+    ) as flow:
+        exp_path = Parameter("exp_path")
+        org_seg_ch = Parameter("org_seg_ch")
+        nuc_seg_ch = Parameter("nuc_seg_ch")
+        mem_seg_ch = Parameter("mem_seg_ch")
 
-    exps = load_experiment(exp_path)
+        exps = load_experiment(exp_path)
 
-    save_org = save_tidy_task(exps, org_seg_ch, nuc_seg_ch, mem_seg_ch)
+        save_org = save_tidy_task(exps, org_seg_ch, nuc_seg_ch, mem_seg_ch)
+
+    for ro, kwargs in r_params.items():
+        flow.run(parameters = kwargs)
+    return
 
 
 def get_config_params(config_file_path):
@@ -90,11 +96,13 @@ def get_config_params(config_file_path):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config")
+    parser.add_argument("--cpus", type=int, default=get_core_count())
     args = parser.parse_args()
+    cpus = args.cpus
 
     r_params = get_config_params(args.config)
-    for ro, kwargs in r_params.items():
-        flow.run(parameters = kwargs)
+
+    run_flow(r_params, cpus)
 
 
 if __name__ == "__main__":

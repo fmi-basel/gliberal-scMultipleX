@@ -27,6 +27,7 @@ from scmultiplex.utils.accumulate_utils import (
     write_nuc_to_mem_linking,
 )
 
+from scmultiplex.utils import get_core_count
 
 @task()
 def load_experiment(exp_path):
@@ -46,16 +47,21 @@ def write_nuc_to_mem_linking_task(exp):
         write_merged_nuc_membrane_features(exp)
 
 
-with Flow(
-    "Accumulate Results",
-    executor=LocalDaskExecutor(),
-    run_config=LocalRun(),
-) as flow:
-    exp_path = Parameter("exp_path")
+def run_flow(r_params, cpus):
+    with Flow(
+        "Accumulate Results",
+        executor=LocalDaskExecutor(scheduler="processes", num_workers=cpus),
+        run_config=LocalRun(),
+    ) as flow:
+        exp_path = Parameter("exp_path")
 
-    exp = load_experiment(exp_path)
+        exp = load_experiment(exp_path)
 
-    save_linking = write_nuc_to_mem_linking_task(exp)
+        save_linking = write_nuc_to_mem_linking_task(exp)
+
+    for ro, kwargs in r_params.items():
+        flow.run(parameters = kwargs)
+    return
 
 
 def get_config_params(config_file_path):
@@ -79,11 +85,13 @@ def get_config_params(config_file_path):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config")
+    parser.add_argument("--cpus", type=int, default=get_core_count())
     args = parser.parse_args()
+    cpus = args.cpus
 
     r_params = get_config_params(args.config)
-    for ro, kwargs in r_params.items():
-        flow.run(parameters = kwargs)
+
+    run_flow(r_params, cpus)
 
 
 if __name__ == "__main__":

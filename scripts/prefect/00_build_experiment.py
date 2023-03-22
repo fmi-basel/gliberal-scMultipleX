@@ -24,6 +24,7 @@ from scmultiplex.config import (
     parse_spacing,
 )
 from scmultiplex.utils.parse_utils import create_experiment
+from scmultiplex.utils import get_core_count
 
 
 @task(nout=5)
@@ -68,46 +69,52 @@ def create_experiment_task(
     )
 
 
-with Flow(
-    "Build-Experiment",
-    executor=LocalDaskExecutor(),
-    run_config=LocalRun(),
-) as flow:
-    well_pattern = Parameter("well_pattern")
-    raw_ch_pattern = Parameter("raw_ch_pattern")
-    mask_ending = Parameter("mask_ending")
-    nuc_ending = Parameter("nuc_ending")
-    mem_ending = Parameter("mem_ending")
+def run_flow(r_params, cpus):
+    with Flow(
+        "Build-Experiment",
+        executor=LocalDaskExecutor(scheduler="processes", num_workers=cpus),
+        run_config=LocalRun(),
+    ) as flow:
+        well_pattern = Parameter("well_pattern")
+        raw_ch_pattern = Parameter("raw_ch_pattern")
+        mask_ending = Parameter("mask_ending")
+        nuc_ending = Parameter("nuc_ending")
+        mem_ending = Parameter("mem_ending")
 
-    name = Parameter("name")
-    root_dir = Parameter("root_dir")
-    save_dir = Parameter("save_dir")
-    spacing = Parameter("spacing")
-    overview_spacing = Parameter("overview_spacing")
-    fname_barcode_index = Parameter("fname_barcode_index")
+        name = Parameter("name")
+        root_dir = Parameter("root_dir")
+        save_dir = Parameter("save_dir")
+        spacing = Parameter("spacing")
+        overview_spacing = Parameter("overview_spacing")
+        fname_barcode_index = Parameter("fname_barcode_index")
 
-    regexes = create_regexes(
-        well_pattern=well_pattern,
-        raw_ch_pattern=raw_ch_pattern,
-        mask_ending=mask_ending,
-        nuc_ending=nuc_ending,
-        mem_ending=mem_ending,
-    )
-    well_regex, raw_ch_regex, mask_regex, nuc_seg_regex, cell_seg_regex = regexes
+        regexes = create_regexes(
+            well_pattern=well_pattern,
+            raw_ch_pattern=raw_ch_pattern,
+            mask_ending=mask_ending,
+            nuc_ending=nuc_ending,
+            mem_ending=mem_ending,
+        )
+        well_regex, raw_ch_regex, mask_regex, nuc_seg_regex, cell_seg_regex = regexes
 
-    exp = create_experiment_task(
-        name=name,
-        root_dir=root_dir,
-        save_dir=save_dir,
-        overview_spacing=overview_spacing,
-        spacing=spacing,
-        fname_barcode_index=fname_barcode_index,
-        well_regex=well_regex,
-        raw_ch_regex=raw_ch_regex,
-        mask_regex=mask_regex,
-        nuc_seg_regex=nuc_seg_regex,
-        cell_seg_regex=cell_seg_regex,
-    )
+        exp = create_experiment_task(
+            name=name,
+            root_dir=root_dir,
+            save_dir=save_dir,
+            overview_spacing=overview_spacing,
+            spacing=spacing,
+            fname_barcode_index=fname_barcode_index,
+            well_regex=well_regex,
+            raw_ch_regex=raw_ch_regex,
+            mask_regex=mask_regex,
+            nuc_seg_regex=nuc_seg_regex,
+            cell_seg_regex=cell_seg_regex,
+        )
+
+    for ro, kwargs in r_params.items():
+        flow.run(parameters=kwargs)
+    return
+
 
 def get_config_params(config_file_path):
     round_names = get_round_names(config_file_path)
@@ -154,14 +161,16 @@ def get_config_params(config_file_path):
         round_params[ro] = rp
     return round_params
 
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config")
+    parser.add_argument("--cpus", type=int, default=get_core_count())
     args = parser.parse_args()
+    cpus = args.cpus
 
     r_params = get_config_params(args.config)
-    for ro, kwargs in r_params.items():
-        flow.run(parameters = kwargs)
+    run_flow(r_params, cpus)
 
 
 if __name__ == "__main__":

@@ -21,6 +21,7 @@ from prefect.run_configs import LocalRun
 
 import scmultiplex.config
 from scmultiplex.features.FeatureFunctions import set_spacing
+from scmultiplex.utils import get_core_count
 
 from scmultiplex.config import (
     commasplit,
@@ -96,6 +97,7 @@ def get_organoids(
 def organoid_feature_extraction_task(
     organoid, nuc_ending: str, mem_ending: str, mask_ending: str, spacing: List[float], org_seg_ch, nuc_seg_ch, mem_seg_ch
 ):
+    set_spacing(spacing)
     extract_organoid_features(
         organoid=organoid,
         nuc_ending=nuc_ending,
@@ -123,53 +125,59 @@ def link_nuc_to_membrane_task(
 
 
 # all feature extraction in one flow because writing to the same json file
-with Flow(
-    "Feature-Extraction",
-    executor=LocalDaskExecutor(),
-    run_config=LocalRun(),
-) as flow:
-    exp_path = Parameter("exp_path")
-    excluded_plates = Parameter("excluded_plates")
-    excluded_wells = Parameter("excluded_wells")
-    ovr_channel = Parameter("ovr_channel")
-    mask_ending = Parameter("mask_ending")
-    nuc_ending = Parameter("nuc_ending")
-    mem_ending = Parameter("mem_ending")
-    name_ovr = Parameter("name_ovr")
-    iop_cutoff = Parameter("iop_cutoff")
-    spacing = Parameter("spacing")
-    org_seg_ch = Parameter("org_seg_ch")
-    nuc_seg_ch = Parameter("nuc_seg_ch")
-    mem_seg_ch = Parameter("mem_seg_ch")
+def run_flow(r_params, cpus):
+    with Flow(
+        "Feature-Extraction",
+        executor=LocalDaskExecutor(scheduler="processes", num_workers=cpus),
+        run_config=LocalRun(),
+    ) as flow:
+        exp_path = Parameter("exp_path")
+        excluded_plates = Parameter("excluded_plates")
+        excluded_wells = Parameter("excluded_wells")
+        ovr_channel = Parameter("ovr_channel")
+        mask_ending = Parameter("mask_ending")
+        nuc_ending = Parameter("nuc_ending")
+        mem_ending = Parameter("mem_ending")
+        name_ovr = Parameter("name_ovr")
+        iop_cutoff = Parameter("iop_cutoff")
+        spacing = Parameter("spacing")
+        org_seg_ch = Parameter("org_seg_ch")
+        nuc_seg_ch = Parameter("nuc_seg_ch")
+        mem_seg_ch = Parameter("mem_seg_ch")
 
-    exp, wells = load_task(exp_path, excluded_plates, excluded_wells)
+        exp, wells = load_task(exp_path, excluded_plates, excluded_wells)
 
-    well_feature_extraction_ovr_task.map(
-        wells, unmapped(ovr_channel), unmapped(name_ovr)
-    )
+        well_feature_extraction_ovr_task.map(
+            wells, unmapped(ovr_channel), unmapped(name_ovr)
+        )
 
-    organoids = get_organoids(exp, mask_ending, excluded_plates, excluded_wells)
+        organoids = get_organoids(exp, mask_ending, excluded_plates, excluded_wells)
 
-    feat_ext = organoid_feature_extraction_task.map(
-        organoids,
-        unmapped(nuc_ending),
-        unmapped(mem_ending),
-        unmapped(mask_ending),
-        unmapped(spacing),
-        unmapped(org_seg_ch),
-        unmapped(nuc_seg_ch),
-        unmapped(mem_seg_ch),
-    )
+        feat_ext = organoid_feature_extraction_task.map(
+            organoids,
+            unmapped(nuc_ending),
+            unmapped(mem_ending),
+            unmapped(mask_ending),
+            unmapped(spacing),
+            unmapped(org_seg_ch),
+            unmapped(nuc_seg_ch),
+            unmapped(mem_seg_ch),
+        )
 
-    link_nuc_to_membrane_task.map(
-        organoids,
-        unmapped(ovr_channel),
-        unmapped(nuc_ending),
-        unmapped(mask_ending),
-        unmapped(mem_ending),
-        unmapped(iop_cutoff),
-        upstream_tasks=[feat_ext],
-    )
+        link_nuc_to_membrane_task.map(
+            organoids,
+            unmapped(ovr_channel),
+            unmapped(nuc_ending),
+            unmapped(mask_ending),
+            unmapped(mem_ending),
+            unmapped(iop_cutoff),
+            upstream_tasks=[feat_ext],
+        )
+
+    for ro, kwargs in r_params.items():
+        flow.run(parameters=kwargs)
+    return
+
 
 def get_config_params(config_file_path):
     
@@ -236,13 +244,13 @@ def get_config_params(config_file_path):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config")
+    parser.add_argument("--cpus", type=int, default=get_core_count())
     args = parser.parse_args()
+    cpus = args.cpus
     
     r_params = get_config_params(args.config)
-    set_spacing(list(r_params.values())[0]['spacing'])
 
-    for ro, kwargs in r_params.items():
-        flow.run(parameters = kwargs)
+    run_flow(r_params, cpus)
 
 
 if __name__ == "__main__":

@@ -27,6 +27,7 @@ from scmultiplex.config import (
     spacing_anisotropy_scalar,
 )
 from scmultiplex.linking.NucleiLinking import link_nuclei
+from scmultiplex.utils import get_core_count
 
 
 @task()
@@ -38,14 +39,14 @@ def load_experiment(exp_csv):
 
 @task()
 def get_organoids(
-    exp: Experiment, exluded_plates: List[str], excluded_wells: List[str]
+    exp: Experiment, excluded_plates: List[str], excluded_wells: List[str]
 ):
     exp.only_iterate_over_wells(False)
     exp.reset_iterator()
 
     organoids = []
     for organoid in exp:
-        if organoid.well.plate.plate_id not in exluded_plates:
+        if organoid.well.plate.plate_id not in excluded_plates:
             if organoid.well.well_id not in excluded_wells:
                 organoids.append(organoid)
 
@@ -71,35 +72,41 @@ def link_nuclei_task(organoid, ovr_channel, segname, rx_name, RX, z_anisotropy, 
     )
 
 
-with Flow(
-    "Nuclei-Linking", executor=LocalDaskExecutor(), run_config=LocalRun()
-) as flow:
-    rx_name = Parameter("RX_name")
-    r0_csv = Parameter("R0_path")
-    rx_csv = Parameter("RX_path")
-    excluded_plates = Parameter("excluded_plates")
-    excluded_wells = Parameter("excluded_wells")
-    nuc_ending = Parameter("nuc_ending")
-    ovr_channel = Parameter("ovr_channel")
-    spacing = Parameter("spacing")
-    org_seg_ch = Parameter("org_seg_ch")
-    nuc_seg_ch = Parameter("nuc_seg_ch")
+def run_flow(r_params, cpus):
+    with Flow(
+        "Nuclei-Linking", executor=LocalDaskExecutor(scheduler="processes", num_workers=cpus), run_config=LocalRun()
+    ) as flow:
+        rx_name = Parameter("RX_name")
+        r0_csv = Parameter("R0_path")
+        rx_csv = Parameter("RX_path")
+        excluded_plates = Parameter("excluded_plates")
+        excluded_wells = Parameter("excluded_wells")
+        nuc_ending = Parameter("nuc_ending")
+        ovr_channel = Parameter("ovr_channel")
+        spacing = Parameter("spacing")
+        org_seg_ch = Parameter("org_seg_ch")
+        nuc_seg_ch = Parameter("nuc_seg_ch")
 
-    R0 = load_experiment(r0_csv)
-    RX = load_experiment(rx_csv)
+        R0 = load_experiment(r0_csv)
+        RX = load_experiment(rx_csv)
 
-    r0_organoids = get_organoids(R0, excluded_plates, excluded_wells)
+        r0_organoids = get_organoids(R0, excluded_plates, excluded_wells)
 
-    link_nuclei_task.map(
-        r0_organoids,
-        unmapped(ovr_channel),
-        unmapped(nuc_ending),
-        unmapped(rx_name),
-        unmapped(RX),
-        unmapped(spacing),
-        unmapped(org_seg_ch),
-        unmapped(nuc_seg_ch),
-    )
+        link_nuclei_task.map(
+            r0_organoids,
+            unmapped(ovr_channel),
+            unmapped(nuc_ending),
+            unmapped(rx_name),
+            unmapped(RX),
+            unmapped(spacing),
+            unmapped(org_seg_ch),
+            unmapped(nuc_seg_ch),
+        )
+
+    for ro, kwargs in r_params.items():
+        flow.run(parameters = kwargs)
+    return
+
 
 def get_config_params(config_file_path):
     
@@ -171,14 +178,17 @@ def get_config_params(config_file_path):
 
     return round_tobelinked_params
 
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config")
+    parser.add_argument("--cpus", type=int, default=get_core_count())
     args = parser.parse_args()
+    cpus = args.cpus
 
     r_params = get_config_params(args.config)
-    for ro, kwargs in r_params.items():
-        flow.run(parameters = kwargs)
+
+    run_flow(r_params, cpus)
 
 
 if __name__ == "__main__":
