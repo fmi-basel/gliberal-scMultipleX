@@ -89,6 +89,11 @@ def run_task_fork_pty(task, config_file_path, logfile_path, cpus):
 	pid, controlt_fd = pty.fork()
 	if pid == 0:
 		# child
+		# reopen stdout and stderr, they are not always valid when inherited from the parent
+		# one example is SLURM, in that case the parent is not running in a pty and the two
+		# streams are mangled or anyway don't work
+		sys.stdout = os.fdopen(1, "w", buffering = 1)
+		sys.stderr = os.fdopen(2, "w", buffering = 1)
 		print('\n\nExecuting: %s' % ' '.join(cmd))
 		os.execvp(cmd[0], cmd)
 	else:
