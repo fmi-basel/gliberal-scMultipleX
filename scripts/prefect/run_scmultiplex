@@ -31,7 +31,9 @@ try:
 except ImportError:
 	# older versions of python don't have the waitstatus_to_exitcode function
 	def waitstatus_to_exitcode(wstatus):
-		return wstatus[1]
+		if os.WIFEXITED(wstatus[1]):
+			return os.WEXITSTATUS(wstatus[1])
+		return 1
 
 task_mapping = {}
 log_time_format = r"%Y%m%d-%H_%M_%S"
