@@ -28,6 +28,7 @@ from scmultiplex.config import (
 from scmultiplex.linking.OrganoidLinking import get_linking_stats, link_organoids
 from scmultiplex.utils.exclude_utils import exclude_conditions
 from scmultiplex.utils.load_utils import load_experiment
+from scmultiplex.utils import get_core_count
 
 
 @task(nout=2)
@@ -79,47 +80,54 @@ def get_linking_stats_task(well, seg_name, RX, iou_cutoff, names, ovr_channel):
     )
 
 
-with Flow(
-    "Feature-Extraction",
-    executor=LocalDaskExecutor(),
-    run_config=LocalRun(),
-) as flow:
-    R0_path = Parameter("R0_path")
-    RX_path = Parameter("RX_path")
-    RX_name = Parameter("RX_name")
-    excluded_plates = Parameter("excluded_plates")
-    excluded_wells = Parameter("excluded_wells")
-    iou_cutoff = Parameter("iou_cutoff")
-    ovr_channel = Parameter("ovr_channel")
+# keep threading for time being
+def run_flow(r_params, cpus):
+    with Flow(
+        "Feature-Extraction",
+        executor=LocalDaskExecutor(scheduler="threads", num_workers=cpus),
+        run_config=LocalRun(),
+    ) as flow:
+        R0_path = Parameter("R0_path")
+        RX_path = Parameter("RX_path")
+        RX_name = Parameter("RX_name")
+        excluded_plates = Parameter("excluded_plates")
+        excluded_wells = Parameter("excluded_wells")
+        iou_cutoff = Parameter("iou_cutoff")
+        ovr_channel = Parameter("ovr_channel")
 
-    R0, RX = load_exps(R0_path, RX_path)
-    names = get_names(RX_name)
+        R0, RX = load_exps(R0_path, RX_path)
+        names = get_names(RX_name)
 
-    seg_name, folder_name = get_seg_and_folder_name(RX_name)
+        seg_name, folder_name = get_seg_and_folder_name(RX_name)
 
-    wells = get_wells(
-        R0, excluded_plates=excluded_plates, excluded_wells=excluded_wells
-    )
+        wells = get_wells(
+            R0, excluded_plates=excluded_plates, excluded_wells=excluded_wells
+        )
 
-    linked_wells = link_organoids_task.map(
-        wells,
-        unmapped(ovr_channel),
-        unmapped(folder_name),
-        unmapped(R0),
-        unmapped(RX),
-        unmapped(seg_name),
-        unmapped(RX_name),
-    )
+        linked_wells = link_organoids_task.map(
+            wells,
+            unmapped(ovr_channel),
+            unmapped(folder_name),
+            unmapped(R0),
+            unmapped(RX),
+            unmapped(seg_name),
+            unmapped(RX_name),
+        )
 
-    get_linking_stats_task.map(
-        wells,
-        unmapped(seg_name),
-        unmapped(RX),
-        unmapped(iou_cutoff),
-        unmapped(names),
-        unmapped(ovr_channel),
-        upstream_tasks=[linked_wells],
-    )
+        get_linking_stats_task.map(
+            wells,
+            unmapped(seg_name),
+            unmapped(RX),
+            unmapped(iou_cutoff),
+            unmapped(names),
+            unmapped(ovr_channel),
+            upstream_tasks=[linked_wells],
+        )
+
+    for ro, kwargs in r_params.items():
+        flow.run(parameters = kwargs)
+    return
+
 
 def get_config_params(config_file_path):
     
@@ -177,11 +185,13 @@ def get_config_params(config_file_path):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config")
+    parser.add_argument("--cpus", type=int, default=get_core_count())
     args = parser.parse_args()
+    cpus = args.cpus
     
     r_params = get_config_params(args.config)
-    for ro, kwargs in r_params.items():
-        flow.run(parameters = kwargs)
+
+    run_flow(r_params, cpus)
 
 
 if __name__ == "__main__":

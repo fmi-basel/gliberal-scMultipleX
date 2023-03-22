@@ -26,6 +26,7 @@ from scmultiplex.utils.accumulate_utils import (
     write_nuclear_linking_over_multiplexing_rounds
 )
 
+from scmultiplex.utils import get_core_count
 
 @task()
 def load_experiment(exp_path):
@@ -46,23 +47,27 @@ def write_nuclear_linking_over_multiplexing_rounds_task(
     write_nuclear_linking_over_multiplexing_rounds(round_names, round_summary_csvs)
 
 
-with Flow(
-    "Merge Nuclear Linking",
-    executor=LocalDaskExecutor(),
-    run_config=LocalRun(),
-) as flow:
-    exp_path = Parameter("exp_path")
-    round_names = Parameter("round_names")
-    round_summary_csv = Parameter("round_summary_csv")
+def run_flow(r_params, cpus):
+    with Flow(
+        "Merge Nuclear Linking",
+        executor=LocalDaskExecutor(scheduler="processes", num_workers=cpus),
+        run_config=LocalRun(),
+    ) as flow:
+        exp_path = Parameter("exp_path")
+        round_names = Parameter("round_names")
+        round_summary_csv = Parameter("round_summary_csv")
 
-    exp = load_experiment(exp_path)
+        exp = load_experiment(exp_path)
 
-    save_platymatch_linking = merge_platymatch_linking_task(exp)
+        save_platymatch_linking = merge_platymatch_linking_task(exp)
 
-    nuc_ovr_mpx_rounds = write_nuclear_linking_over_multiplexing_rounds_task(
-        round_names,
-        round_summary_csv,
-    )
+        nuc_ovr_mpx_rounds = write_nuclear_linking_over_multiplexing_rounds_task(
+            round_names,
+            round_summary_csv,
+        )
+
+    flow.run(parameters=r_params)
+    return
 
 
 def get_config_params(config_file_path):
@@ -95,11 +100,13 @@ def get_config_params(config_file_path):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config")
+    parser.add_argument("--cpus", type=int, default=get_core_count())
     args = parser.parse_args()
+    cpus = args.cpus
 
     r_params = get_config_params(args.config)
-    flow.run(parameters = r_params)
 
+    run_flow(r_params, cpus)
 
 if __name__ == "__main__":
     main()
