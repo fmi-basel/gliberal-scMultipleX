@@ -50,7 +50,7 @@ def write_nuc_to_mem_linking_task(exp):
 def run_flow(r_params, cpus):
     with Flow(
         "Accumulate Results",
-        executor=LocalDaskExecutor(scheduler="processes", num_workers=cpus),
+        executor=LocalDaskExecutor(scheduler="threads", num_workers=cpus),
         run_config=LocalRun(),
     ) as flow:
         exp_path = Parameter("exp_path")

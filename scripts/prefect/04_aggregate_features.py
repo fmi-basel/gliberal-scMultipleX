@@ -51,7 +51,7 @@ def save_tidy_task(exp, org_seg_ch, nuc_seg_ch, mem_seg_ch):
 def run_flow(r_params, cpus):
     with Flow(
         "Tidy Organoid, Nuclear, and Membrane Features",
-        executor=LocalDaskExecutor(scheduler="processes", num_workers=cpus),
+        executor=LocalDaskExecutor(scheduler="threads", num_workers=cpus),
         run_config=LocalRun(),
     ) as flow:
         exp_path = Parameter("exp_path")
