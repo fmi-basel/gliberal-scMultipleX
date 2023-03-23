@@ -10,6 +10,7 @@
 
 import argparse
 import configparser
+import sys
 from typing import List
 
 import prefect
@@ -160,9 +161,13 @@ def run_flow(r_params, cpus):
             unmapped(iop_cutoff),
         )
 
+    ret = 0
     for ro, kwargs in r_params.items():
-        flow.run(parameters=kwargs)
-    return
+        state = flow.run(parameters=kwargs)
+        if state.is_failed():
+            ret += 1
+            break
+    return ret
 
 
 def get_config_params(config_file_path):
@@ -236,8 +241,8 @@ def main():
     
     r_params = get_config_params(args.config)
 
-    run_flow(r_params, cpus)
+    return run_flow(r_params, cpus)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

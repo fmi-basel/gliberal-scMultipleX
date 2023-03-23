@@ -10,6 +10,7 @@
 
 import argparse
 import prefect
+import sys
 
 from faim_hcs.hcs.Experiment import Experiment
 from prefect import Flow, Parameter, task
@@ -63,9 +64,13 @@ def run_flow(r_params, cpus):
 
         save_org = save_tidy_task(exps, org_seg_ch, nuc_seg_ch, mem_seg_ch)
 
+    ret = 0
     for ro, kwargs in r_params.items():
-        flow.run(parameters = kwargs)
-    return
+        state = flow.run(parameters=kwargs)
+        if state.is_failed():
+            ret += 1
+            break
+    return ret
 
 
 def get_config_params(config_file_path):
@@ -102,8 +107,8 @@ def main():
 
     r_params = get_config_params(args.config)
 
-    run_flow(r_params, cpus)
+    return run_flow(r_params, cpus)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
