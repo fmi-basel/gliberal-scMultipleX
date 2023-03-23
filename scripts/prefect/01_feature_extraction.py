@@ -142,11 +142,11 @@ def run_flow(r_params, cpus):
 
         exp, wells = load_task(exp_path, excluded_plates, excluded_wells)
 
-        well_feature_extraction_ovr_task.map(
+        wfeo_t = well_feature_extraction_ovr_task.map(
             wells, unmapped(ovr_channel), unmapped(name_ovr)
         )
 
-        organoids = get_organoids(exp, mask_ending, excluded_plates, excluded_wells)
+        organoids = get_organoids(exp, mask_ending, excluded_plates, excluded_wells, upstream_tasks = [wfeo_t])
         
         organioid_feature_extraction_and_linking_task.map(
             organoids,
@@ -159,6 +159,7 @@ def run_flow(r_params, cpus):
             unmapped(mem_seg_ch),
             unmapped(ovr_channel),
             unmapped(iop_cutoff),
+            upstream_tasks = [organoids],
         )
 
     ret = 0
