@@ -13,5 +13,13 @@ The workflow consists of the following tasks:
 - **Task 6 Aggregate Organoid Multiplex:** Output measured object features across multiplexing rounds
 - **Task 7 Aggregate Nuclear Multiplex:** Output measured nuclear features across multiplexing rounds
 
-## Cite
-The nuclei linking is built on [PlatyMatch](https://github.com/juglab/PlatyMatch) by Manan Lalit [DOI](https://doi.org/10.1007/978-3-030-66415-2_30).
+## Contributors and license
+
+Unless otherwise stated in each individual module, all scMultipleX components are released according to a BSD 3-Clause License, and Copyright is with Friedrich Miescher Institute for Biomedical Research.
+
+Fractal was conceived in the Liberali Lab at the Friedrich Miescher Institute for Biomedical Research, Switzerland. The project lead and development is with [@nrepina](https://github.com/nrepina), and refactor and development support is with [@enricotagliavini](https://github.com/enricotagliavini) and [@tibuch](https://github.com/tibuch).
+
+The nuclear multiplexed linking algorithm is built on [PlatyMatch](https://github.com/juglab/PlatyMatch) by Manan Lalit ([DOI](https://doi.org/10.1007/978-3-030-66415-2_30)).
+
+
+
