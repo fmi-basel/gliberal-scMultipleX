@@ -50,9 +50,8 @@ def get_seg_and_folder_name(RX_name):
 def get_wells(exp: Experiment, excluded_plates: List[str], excluded_wells: List[str]):
     return exclude_conditions(exp, excluded_plates, excluded_wells)
 
-
 @task()
-def link_organoids_task(well, ovr_channel, folder_name, R0, RX, seg_name, RX_name):
+def link_organoids_and_get_stats_task(well, ovr_channel, folder_name, R0, RX, seg_name, RX_name, iou_cutoff, names):
     link_organoids(
         well=well,
         ovr_channel=ovr_channel,
@@ -63,12 +62,6 @@ def link_organoids_task(well, ovr_channel, folder_name, R0, RX, seg_name, RX_nam
         RX_name=RX_name,
         logger=prefect.context.get("logger"),
     )
-
-    return well
-
-
-@task()
-def get_linking_stats_task(well, seg_name, RX, iou_cutoff, names, ovr_channel):
     get_linking_stats(
         well=well,
         seg_name=seg_name,
@@ -78,13 +71,13 @@ def get_linking_stats_task(well, seg_name, RX, iou_cutoff, names, ovr_channel):
         ovr_channel=ovr_channel,
         logger=prefect.context.get("logger"),
     )
-
+    return
 
 # keep threading for time being
 def run_flow(r_params, cpus):
     with Flow(
         "Feature-Extraction",
-        executor=LocalDaskExecutor(scheduler="threads", num_workers=cpus),
+        executor=LocalDaskExecutor(scheduler="processes", num_workers=cpus),
         run_config=LocalRun(),
     ) as flow:
         R0_path = Parameter("R0_path")
@@ -103,8 +96,8 @@ def run_flow(r_params, cpus):
         wells = get_wells(
             R0, excluded_plates=excluded_plates, excluded_wells=excluded_wells
         )
-
-        linked_wells = link_organoids_task.map(
+        
+        link_organoids_and_get_stats_task.map(
             wells,
             unmapped(ovr_channel),
             unmapped(folder_name),
@@ -112,16 +105,8 @@ def run_flow(r_params, cpus):
             unmapped(RX),
             unmapped(seg_name),
             unmapped(RX_name),
-        )
-
-        get_linking_stats_task.map(
-            wells,
-            unmapped(seg_name),
-            unmapped(RX),
             unmapped(iou_cutoff),
             unmapped(names),
-            unmapped(ovr_channel),
-            upstream_tasks=[linked_wells],
         )
 
     for ro, kwargs in r_params.items():

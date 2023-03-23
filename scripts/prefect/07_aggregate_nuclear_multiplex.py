@@ -50,7 +50,7 @@ def write_nuclear_linking_over_multiplexing_rounds_task(
 def run_flow(r_params, cpus):
     with Flow(
         "Merge Nuclear Linking",
-        executor=LocalDaskExecutor(scheduler="processes", num_workers=cpus),
+        executor=LocalDaskExecutor(scheduler="threads", num_workers=cpus),
         run_config=LocalRun(),
     ) as flow:
         exp_path = Parameter("exp_path")

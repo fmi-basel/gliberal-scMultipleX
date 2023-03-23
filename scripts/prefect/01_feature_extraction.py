@@ -94,9 +94,9 @@ def get_organoids(
 
 
 @task()
-def organoid_feature_extraction_task(
-    organoid, nuc_ending: str, mem_ending: str, mask_ending: str, spacing: List[float], org_seg_ch, nuc_seg_ch, mem_seg_ch
-):
+def organioid_feature_extraction_and_linking_task(
+    organoid, nuc_ending: str, mem_ending: str, mask_ending: str, spacing: List[float], org_seg_ch, nuc_seg_ch, mem_seg_ch, ovr_channel, iop_cutoff
+    ):
     set_spacing(spacing)
     extract_organoid_features(
         organoid=organoid,
@@ -108,12 +108,6 @@ def organoid_feature_extraction_task(
         nuc_seg_ch=nuc_seg_ch,
         mem_seg_ch=mem_seg_ch,
     )
-
-
-@task()
-def link_nuc_to_membrane_task(
-    organoid, ovr_channel, nuc_ending, mask_ending, mem_ending, iop_cutoff
-):
     link_nuc_to_membrane(
         organoid=organoid,
         ovr_channel=ovr_channel,
@@ -122,13 +116,13 @@ def link_nuc_to_membrane_task(
         mem_ending=mem_ending,
         iop_cutoff=iop_cutoff,
     )
-
+    return
 
 # all feature extraction in one flow because writing to the same json file
 def run_flow(r_params, cpus):
     with Flow(
         "Feature-Extraction",
-        executor=LocalDaskExecutor(scheduler="threads", num_workers=cpus),
+        executor=LocalDaskExecutor(scheduler="processes", num_workers=cpus),
         run_config=LocalRun(),
     ) as flow:
         exp_path = Parameter("exp_path")
@@ -152,8 +146,8 @@ def run_flow(r_params, cpus):
         )
 
         organoids = get_organoids(exp, mask_ending, excluded_plates, excluded_wells)
-
-        feat_ext = organoid_feature_extraction_task.map(
+        
+        organioid_feature_extraction_and_linking_task.map(
             organoids,
             unmapped(nuc_ending),
             unmapped(mem_ending),
@@ -162,16 +156,8 @@ def run_flow(r_params, cpus):
             unmapped(org_seg_ch),
             unmapped(nuc_seg_ch),
             unmapped(mem_seg_ch),
-        )
-
-        link_nuc_to_membrane_task.map(
-            organoids,
             unmapped(ovr_channel),
-            unmapped(nuc_ending),
-            unmapped(mask_ending),
-            unmapped(mem_ending),
             unmapped(iop_cutoff),
-            upstream_tasks=[feat_ext],
         )
 
     for ro, kwargs in r_params.items():
