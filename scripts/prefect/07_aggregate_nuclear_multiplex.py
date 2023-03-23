@@ -34,18 +34,10 @@ def load_experiment(exp_path):
     exp.load(exp_path)
     return exp
 
-
 @task()
-def merge_platymatch_linking_task(exp):
+def merge_scmultiplexed_features_task(exp, round_names, round_summary_csvs):
     merge_platymatch_linking(exp)
-
-
-@task()
-def write_nuclear_linking_over_multiplexing_rounds_task(
-    round_names, round_summary_csvs
-):
     write_nuclear_linking_over_multiplexing_rounds(round_names, round_summary_csvs)
-
 
 def run_flow(r_params, cpus):
     with Flow(
@@ -59,12 +51,7 @@ def run_flow(r_params, cpus):
 
         exp = load_experiment(exp_path)
 
-        save_platymatch_linking = merge_platymatch_linking_task(exp)
-
-        nuc_ovr_mpx_rounds = write_nuclear_linking_over_multiplexing_rounds_task(
-            round_names,
-            round_summary_csv,
-        )
+        merge_scmultiplexed_features_task(exp, round_names, round_summary_csv)
 
     flow.run(parameters=r_params)
     return

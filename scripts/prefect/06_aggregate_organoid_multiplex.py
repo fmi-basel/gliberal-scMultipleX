@@ -36,14 +36,8 @@ def load_experiment(exp_path):
 
 
 @task()
-def merge_org_linking_task(exp):
+def merge_orgmultiplexed_features_task(exp, round_names, round_summary_csvs):
     merge_org_linking(exp)
-
-
-@task()
-def write_organoid_linking_over_multiplexing_rounds_task(
-    round_names, round_summary_csvs
-):
     write_organoid_linking_over_multiplexing_rounds(round_names, round_summary_csvs)
 
 
@@ -59,11 +53,7 @@ def run_flow(r_params, cpus):
 
         exp = load_experiment(exp_path)
 
-        save_org_linking = merge_org_linking_task(exp)
-
-        org_ovr_mpx_rounds = write_organoid_linking_over_multiplexing_rounds_task(
-            round_names, round_summary_csv
-        )
+        merge_orgmultiplexed_features_task(exp, round_names, round_summary_csv)
 
     flow.run(parameters=r_params)
     return
