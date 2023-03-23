@@ -10,7 +10,8 @@ def init_config(config_file_path):
     global config
     if config is None:
         config = configparser.ConfigParser(interpolation = configparser.ExtendedInterpolation() )
-        config.read(config_file_path)
+        with open(config_file_path, 'r') as config_file_fd:
+            config.read_file(config_file_fd)
     return config
 
 
