@@ -1,4 +1,4 @@
-![Asset 13scMultiplex](https://user-images.githubusercontent.com/25291742/227270190-34aeb814-37e4-49ef-8347-dccab94684c8.png)
+![Asset 14scMultiplex](https://user-images.githubusercontent.com/25291742/227540510-b00e0b8e-241e-492f-9b67-0d01bb4250e2.png)
 
 # Overview
 
