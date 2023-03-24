@@ -10,6 +10,7 @@
 
 import argparse
 import configparser
+import sys
 
 from faim_hcs.hcs.Experiment import Experiment
 from prefect import Flow, Parameter, task
@@ -55,8 +56,11 @@ def run_flow(r_params, cpus):
 
         merge_orgmultiplexed_features_task(exp, round_names, round_summary_csv)
 
-    flow.run(parameters=r_params)
-    return
+    ret = 0
+    state = flow.run(parameters=r_params)
+    if state.is_failed():
+        ret += 1
+    return ret
 
 
 
@@ -96,8 +100,8 @@ def main():
 
     r_params = get_config_params(args.config)
 
-    run_flow(r_params, cpus)
+    return run_flow(r_params, cpus)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

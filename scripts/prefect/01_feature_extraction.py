@@ -10,6 +10,7 @@
 
 import argparse
 import configparser
+import sys
 from typing import List
 
 import prefect
@@ -141,11 +142,11 @@ def run_flow(r_params, cpus):
 
         exp, wells = load_task(exp_path, excluded_plates, excluded_wells)
 
-        well_feature_extraction_ovr_task.map(
+        wfeo_t = well_feature_extraction_ovr_task.map(
             wells, unmapped(ovr_channel), unmapped(name_ovr)
         )
 
-        organoids = get_organoids(exp, mask_ending, excluded_plates, excluded_wells)
+        organoids = get_organoids(exp, mask_ending, excluded_plates, excluded_wells, upstream_tasks = [wfeo_t])
         
         organioid_feature_extraction_and_linking_task.map(
             organoids,
@@ -158,11 +159,16 @@ def run_flow(r_params, cpus):
             unmapped(mem_seg_ch),
             unmapped(ovr_channel),
             unmapped(iop_cutoff),
+            upstream_tasks = [organoids],
         )
 
+    ret = 0
     for ro, kwargs in r_params.items():
-        flow.run(parameters=kwargs)
-    return
+        state = flow.run(parameters=kwargs)
+        if state.is_failed():
+            ret += 1
+            break
+    return ret
 
 
 def get_config_params(config_file_path):
@@ -236,8 +242,8 @@ def main():
     
     r_params = get_config_params(args.config)
 
-    run_flow(r_params, cpus)
+    return run_flow(r_params, cpus)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

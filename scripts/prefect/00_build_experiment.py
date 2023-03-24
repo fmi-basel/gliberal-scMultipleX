@@ -11,6 +11,7 @@
 import argparse
 import configparser
 import re
+import sys
 
 import prefect
 from prefect import Flow, Parameter, task
@@ -111,9 +112,13 @@ def run_flow(r_params, cpus):
             cell_seg_regex=cell_seg_regex,
         )
 
+    ret = 0
     for ro, kwargs in r_params.items():
-        flow.run(parameters=kwargs)
-    return
+        state = flow.run(parameters=kwargs)
+        if state.is_failed():
+            ret += 1
+            break
+    return ret
 
 
 def get_config_params(config_file_path):
@@ -170,8 +175,8 @@ def main():
     cpus = args.cpus
 
     r_params = get_config_params(args.config)
-    run_flow(r_params, cpus)
+    return run_flow(r_params, cpus)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
