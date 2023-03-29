@@ -128,6 +128,7 @@ def scmultiplex_measurements(
     input_channels: Dict[str, Dict[str, str]],
     label_image: str,
     output_table_name: str,
+    level = 0
 ):
     """
     Wrapper task for scmultiplex measurements for Fractal
@@ -138,9 +139,13 @@ def scmultiplex_measurements(
     :param component: TBD (default arg for Fractal tasks)
     """
 
-    level = 0  # Hard code to work at full resolution for measurements
     # Level-related constraint
     logger.info(f"This workflow acts at {level=}")
+    if level != 0:
+        # TODO: Test whether this constraint can be lifted
+        raise NotImplementedError(
+            "scMultipleX Measurements are only implemented for level 0"
+        )
 
     # Pre-processing of task inputs
     if len(input_paths) > 1:
@@ -165,9 +170,13 @@ def scmultiplex_measurements(
             "global coordinateTransformations at the multiscales "
             "level are not currently supported"
         )
+    
+    # FIXME: More reliable way to get the correct scale? 
+    # Would not work well with multiple different coordinateTransformations
+    spacing = multiscales[0]["datasets"][level]["coordinateTransformations"][0]["scale"]
+    print(spacing)
 
     # Read ROI table
-    zarrurl = f"{in_path}/{component}"
     ROI_table = ad.read_zarr(f"{in_path}/{component}/tables/{input_ROI_table}")
 
     # Read pixel sizes from zattrs file
@@ -257,6 +266,9 @@ def scmultiplex_measurements(
             # shape = input_label_arrays[name].shape
             # if shape[0] == 1:
 
+            # TODO: If it's 2D, does it make a difference whether the image is (1, 2160, 2560) vs. (2160, 2560)?
+            # Squash the first axis if only 1 there? And then also skip the first spacing axis if they are 3?
+
             regionproperties = regionprops(
                 label_img,
                 img,
@@ -330,6 +342,7 @@ if __name__ == "__main__":
         input_channels: Dict[str, Dict[str, str]]
         label_image: str
         output_table_name: str
+        level: int
 
     run_fractal_task(
         task_function=scmultiplex_measurements,
