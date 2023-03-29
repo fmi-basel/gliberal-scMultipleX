@@ -44,6 +44,7 @@ from scmultiplex.features.FeatureFunctions import (
     circularity,
     aspect_ratio,
     concavity_count,
+    set_spacing,
 )
 
 import fractal_tasks_core
@@ -61,11 +62,52 @@ __OME_NGFF_VERSION__ = fractal_tasks_core.__OME_NGFF_VERSION__
 logger = logging.getLogger(__name__)
 
 
-def get_regionprops_measurements(regionproperties, channel_prefix: str = ""):
+def get_regionprops_measurements(
+        label_img, 
+        img, 
+        spacing, 
+        is_2D = False,
+        measure_morphology=False,
+        calculate_surface_area=False,
+        min_area_fraction=0.005,
+        channel_prefix: str = ""
+    ):
+    # We could add an additional dict input: If you add that e.g. for abs_min, then that value is set for all entries
+    # Maybe also useful to set ROI name, ROI label, ROI table info etc.
+    # And other constant entries
+
+    # Set the global spacing. Not the cleanest solution, given that it is only 
+    # used in marching cube calculation via global, but directly via 
+    # regionprops elsewhere
+    set_spacing(spacing)
+
+    
+    # TODO: Add disconnected_component => constant for the object, calculated on the label image alone
+    
+    # TODO: Profile performance. Even without surface_area_marchingcube, 
+    # it still takes 4 min (instead of 5 min) for 3D calculation on my 
+    # test dataset. But without morphology measurements, all finish under 2 min
+    if measure_morphology and calculate_surface_area:
+        extra_properties = (fixed_percentiles, skewness, kurtos, stdv, surface_area_marchingcube)
+    else:
+        extra_properties = (fixed_percentiles, skewness, kurtos, stdv)
+    regionproperties = regionprops(
+        label_img,
+        img,
+        extra_properties=extra_properties,
+        spacing=spacing,
+    )
+
     row_list = []
     for labeled_obj in regionproperties:
-        common_row = {
+        # TODO: Add edge detection for border touching
+
+        # TODO: Add info about current ROI, ROI name, ROI label
+        label_info = {
             "label": int(labeled_obj["label"]),
+        }
+
+        intensity_measurements = {
             "mean_intensity": labeled_obj["mean_intensity"],
             "max_intensity": labeled_obj["max_intensity"],
             "min_intensity": labeled_obj["min_intensity"],
@@ -79,40 +121,69 @@ def get_regionprops_measurements(regionproperties, channel_prefix: str = ""):
             "skew": labeled_obj["skewness"],
             "kurtosis": labeled_obj["kurtos"],
         }
+        intensity_measurements_pref = {channel_prefix + '.' + str(key): val for key, val in intensity_measurements.items()}
 
-        # Additional features
-        # 'imgdim_x': img_dim[1],
-        # 'imgdim_y': img_dim[0],
-        # 'x_pos_pix': labeled_obj['centroid'][1],
-        # 'y_pos_pix': labeled_obj['centroid'][0],
-        # 'x_pos_weighted_pix': labeled_obj['weighted_centroid'][1],
-        # 'y_pos_weighted_pix': labeled_obj['weighted_centroid'][0],
-        # 'x_massDisp_pix': labeled_obj['weighted_centroid'][1] - labeled_obj['centroid'][1],
-        # 'y_massDisp_pix': labeled_obj['weighted_centroid'][0] - labeled_obj['centroid'][0],
-        # 'abs_min': abs_min_intensity,
-        # 'area_pix': labeled_obj['area'],
-        # 'area_convhull': labeled_obj['area_convex'],
-        # 'area_bbox': labeled_obj['area_bbox'],
-        # 'perimeter': labeled_obj['perimeter'],
-        # 'equivDiam': labeled_obj['equivalent_diameter_area'],
-        # 'eccentricity': labeled_obj['eccentricity'],
-        # 'circularity': circularity(labeled_obj),
-        # 'solidity': labeled_obj['solidity'],
-        # 'extent': labeled_obj['extent'],
-        # 'majorAxisLength': labeled_obj['major_axis_length'],
-        # 'minorAxisLength': labeled_obj['minor_axis_length'],
-        # 'minmajAxisRatio': minor_major_axis_ratio(labeled_obj),
-        # 'aspectRatio': aspect_ratio(labeled_obj),
-        # 'concavity': convex_hull_area_resid(labeled_obj),
-        # 'concavity_count': concavity_count(labeled_obj, min_area_fraction=0.005),
-        # 'asymmetry': convex_hull_centroid_dif(labeled_obj),
+        if measure_morphology:
+            morphology_measurements = {
+                'imgdim_x': img.shape[-1],
+                'imgdim_y': img.shape[-2],
+                'x_pos_weighted_pix': labeled_obj['weighted_centroid'][1],
+                'y_pos_weighted_pix': labeled_obj['weighted_centroid'][0],
+                'x_massDisp_pix': labeled_obj['weighted_centroid'][1] - labeled_obj['centroid'][1],
+                'y_massDisp_pix': labeled_obj['weighted_centroid'][0] - labeled_obj['centroid'][0],
+                'area_bbox': labeled_obj['area_bbox'],
+                'equivDiam': labeled_obj['equivalent_diameter_area'],
+                'extent': labeled_obj['extent'],
+                'solidity': labeled_obj['solidity'],
+            }
+            # Sometimes, major & minor axis calculations fail with a 
+            # ValueError: math domain error
+            try:
+                morphology_measurements['majorAxisLength'] = labeled_obj['major_axis_length']
+                morphology_measurements['minorAxisLength'] = labeled_obj['minor_axis_length']
+                morphology_measurements['minmajAxisRatio'] = minor_major_axis_ratio(labeled_obj)
+                morphology_measurements['aspectRatio'] = aspect_ratio(labeled_obj)
+            except ValueError:
+                morphology_measurements['majorAxisLength'] = np.NaN
+                morphology_measurements['minorAxisLength'] = np.NaN
+                morphology_measurements['minmajAxisRatio'] = np.NaN
+                morphology_measurements['aspectRatio'] = np.NaN
 
-        row_list.append(common_row)
+            if is_2D:
+                morphology_2D_only = {
+                    'x_pos_pix': labeled_obj['centroid'][1],
+                    'y_pos_pix': labeled_obj['centroid'][0],
+                    'area_pix': labeled_obj['area'],
+                    'perimeter': labeled_obj['perimeter'],
+                    'concavity': convex_hull_area_resid(labeled_obj),
+                    'asymmetry': convex_hull_centroid_dif(labeled_obj),
+                    'eccentricity': labeled_obj['eccentricity'],
+                    'circularity': circularity(labeled_obj),
+                    'concavity_count': concavity_count(labeled_obj, min_area_fraction=min_area_fraction),
+                }
+                morphology_measurements = morphology_measurements | morphology_2D_only
+            else:
+                morphology_3d_only = {
+                    'x_pos_vox': labeled_obj['centroid'][2],
+                    'y_pos_vox': labeled_obj['centroid'][1],
+                    'z_pos_vox': labeled_obj['centroid'][0],
+                    'area_convhull': labeled_obj['area_convex'],
+                    'volume_pix': labeled_obj['area'],
+                }
+                if calculate_surface_area:
+                    morphology_3d_only['surface_area'] = labeled_obj['surface_area_marchingcube']
+                morphology_measurements = morphology_measurements | morphology_3d_only
+
+            row_list.append(label_info | intensity_measurements_pref | morphology_measurements)
+        else:
+            row_list.append(label_info | intensity_measurements_pref)
     df_well = pd.DataFrame(row_list)
 
+    # TODO: Make some computationally expensive measurements optional => surface area?
+
     # FIXME: Add the prefix only to relevant columns (i.e. not label, not shapes etc.)
-    df_well = df_well.add_prefix(channel_prefix + ".")
-    df_well["label"] = df_well[channel_prefix + ".label"]
+    # df_well = df_well.add_prefix(channel_prefix + ".")
+    # df_well["label"] = df_well[channel_prefix + ".label"]
     return df_well
 
 
@@ -128,7 +199,9 @@ def scmultiplex_measurements(
     input_channels: Dict[str, Dict[str, str]],
     label_image: str,
     output_table_name: str,
-    level = 0
+    level = 0,
+    measure_morphology: bool = True,
+    measure_surface_area: bool = True,
 ):
     """
     Wrapper task for scmultiplex measurements for Fractal
@@ -174,7 +247,6 @@ def scmultiplex_measurements(
     # FIXME: More reliable way to get the correct scale? 
     # Would not work well with multiple different coordinateTransformations
     spacing = multiscales[0]["datasets"][level]["coordinateTransformations"][0]["scale"]
-    print(spacing)
 
     # Read ROI table
     ROI_table = ad.read_zarr(f"{in_path}/{component}/tables/{input_ROI_table}")
@@ -199,7 +271,6 @@ def scmultiplex_measurements(
     # Loop over image inputs and assign corresponding channel of the image
     for name in input_channels.keys():
         params = input_channels[name]
-        print(name, params)
         if "wavelength_id" in params and "channel_label" in params:
             raise ValueError(
                 "One and only one among channel_label and wavelength_id"
@@ -219,11 +290,8 @@ def scmultiplex_measurements(
 
     # Set target_shape for upscaling labels
     if not input_image_arrays:
-        # FIXME: Stop input_channels is empty? Or just make shape measurements?
-        logger.warning(f"No images loaded for {input_channels=}")
-
-        # upscale_labels = True
-    # Loop over label inputs and load corresponding (upscaled) image
+        # FIXME: Allow user to just make morphology measurements?
+        raise ValueError(f"No images loaded for {input_channels=}")
 
     # FIXME: Add check whether label exists?
     input_label_image = da.from_zarr(
@@ -253,37 +321,45 @@ def scmultiplex_measurements(
 
         # Load the label image
         label_img = input_label_image[region].compute()
-
-        # FIXME: Get actual spacing
-        spacing = (1, 1, 1)
+        if label_img.shape[0] == 1:
+            logger.info('Label image is 2D only, processing with 2D options')
+            label_img = np.squeeze(label_img, axis=0)
 
         # Set inputs
         df_roi = pd.DataFrame()
+        first_channel = True
         for input_name in input_channels.keys():
             img = input_image_arrays[input_name][region].compute()
+            # TODO: Add option to mask with a ROI label mask. Actually only 
+            # needs input masking here, as the return value is a table
 
-            # TODO: Use different measurements for 2D vs. 3D
-            # shape = input_label_arrays[name].shape
-            # if shape[0] == 1:
+            # Check whether the input is 2D or 3D
+            if img.shape[0] == 1:
+                logger.info('Image is 2D only, processing with 2D options')
+                img = np.squeeze(img, axis=0)
+                real_spacing = spacing[1:]
+                is_2D = True
+            elif len(img.shape) == 2:
+                real_spacing = spacing
+                is_2D = True
+            elif len(img.shape) == 3:
+                real_spacing = spacing
+                is_2D = False
+            else:
+                raise NotImplementedError(f"Loaded an image of shape {img.shape}. Processing is only supported for 2D & 3D images")
 
-            # TODO: If it's 2D, does it make a difference whether the image is (1, 2160, 2560) vs. (2160, 2560)?
-            # Squash the first axis if only 1 there? And then also skip the first spacing axis if they are 3?
-
-            regionproperties = regionprops(
-                label_img,
-                img,
-                extra_properties=(
-                    fixed_percentiles,
-                    skewness,
-                    kurtos,
-                    stdv,
-                    surface_area_marchingcube,
-                ),
-                spacing=spacing,
-            )
+            calc_morphology = first_channel and measure_morphology
             new_df = get_regionprops_measurements(
-                regionproperties, channel_prefix=input_name
+                label_img, 
+                img, 
+                spacing=real_spacing, 
+                is_2D=is_2D, 
+                measure_morphology=calc_morphology,
+                calculate_surface_area=measure_surface_area,
+                channel_prefix=input_name
             )
+            # Only measure morphology for the first intensity channel provided => just once per label image
+            first_channel = False
 
             if "label" in df_roi.columns:
                 df_roi = df_roi.merge(right=new_df, how="outer", on="label")
@@ -294,8 +370,6 @@ def scmultiplex_measurements(
 
     print(df_well)
     print(list(df_well.columns))
-
-
 
     # Output handling: "dataframe" type (for each output, concatenate ROI
     # dataframes, clean up, and store in a AnnData table on-disk)
@@ -343,6 +417,8 @@ if __name__ == "__main__":
         label_image: str
         output_table_name: str
         level: int
+        measure_morphology: bool
+        measure_surface_area: bool
 
     run_fractal_task(
         task_function=scmultiplex_measurements,
