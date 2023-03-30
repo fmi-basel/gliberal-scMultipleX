@@ -27,25 +27,7 @@ import numpy as np
 import pandas as pd
 import zarr
 from anndata.experimental import write_elem
-from skimage.measure import regionprops
-from scmultiplex.features.FeatureFunctions import (
-    fixed_percentiles,
-    kurtos,
-    skewness,
-    stdv,
-    disconnected_component,
-    surface_area_marchingcube,
-)
-
-from scmultiplex.features.FeatureFunctions import (
-    minor_major_axis_ratio,
-    convex_hull_area_resid,
-    convex_hull_centroid_dif,
-    circularity,
-    aspect_ratio,
-    concavity_count,
-    set_spacing,
-)
+from scmultiplex.fractal.feature_wrapper import get_regionprops_measurements
 
 import fractal_tasks_core
 from fractal_tasks_core.lib_channels import get_channel_from_image_zarr
@@ -62,131 +44,6 @@ __OME_NGFF_VERSION__ = fractal_tasks_core.__OME_NGFF_VERSION__
 logger = logging.getLogger(__name__)
 
 
-def get_regionprops_measurements(
-        label_img, 
-        img, 
-        spacing, 
-        is_2D = False,
-        measure_morphology=False,
-        calculate_surface_area=False,
-        min_area_fraction=0.005,
-        channel_prefix: str = ""
-    ):
-    # We could add an additional dict input: If you add that e.g. for abs_min, then that value is set for all entries
-    # Maybe also useful to set ROI name, ROI label, ROI table info etc.
-    # And other constant entries
-
-    # Set the global spacing. Not the cleanest solution, given that it is only 
-    # used in marching cube calculation via global, but directly via 
-    # regionprops elsewhere
-    set_spacing(spacing)
-
-    
-    # TODO: Add disconnected_component => constant for the object, calculated on the label image alone
-    
-    # TODO: Profile performance. Even without surface_area_marchingcube, 
-    # it still takes 4 min (instead of 5 min) for 3D calculation on my 
-    # test dataset. But without morphology measurements, all finish under 2 min
-    if measure_morphology and calculate_surface_area:
-        extra_properties = (fixed_percentiles, skewness, kurtos, stdv, surface_area_marchingcube)
-    else:
-        extra_properties = (fixed_percentiles, skewness, kurtos, stdv)
-    regionproperties = regionprops(
-        label_img,
-        img,
-        extra_properties=extra_properties,
-        spacing=spacing,
-    )
-
-    row_list = []
-    for labeled_obj in regionproperties:
-        # TODO: Add edge detection for border touching
-
-        # TODO: Add info about current ROI, ROI name, ROI label
-        label_info = {
-            "label": int(labeled_obj["label"]),
-        }
-
-        intensity_measurements = {
-            "mean_intensity": labeled_obj["mean_intensity"],
-            "max_intensity": labeled_obj["max_intensity"],
-            "min_intensity": labeled_obj["min_intensity"],
-            "percentile25": labeled_obj["fixed_percentiles"][0],
-            "percentile50": labeled_obj["fixed_percentiles"][1],
-            "percentile75": labeled_obj["fixed_percentiles"][2],
-            "percentile90": labeled_obj["fixed_percentiles"][3],
-            "percentile95": labeled_obj["fixed_percentiles"][4],
-            "percentile99": labeled_obj["fixed_percentiles"][5],
-            "stdev": labeled_obj["stdv"],
-            "skew": labeled_obj["skewness"],
-            "kurtosis": labeled_obj["kurtos"],
-        }
-        intensity_measurements_pref = {channel_prefix + '.' + str(key): val for key, val in intensity_measurements.items()}
-
-        if measure_morphology:
-            morphology_measurements = {
-                'imgdim_x': img.shape[-1],
-                'imgdim_y': img.shape[-2],
-                'x_pos_weighted_pix': labeled_obj['weighted_centroid'][1],
-                'y_pos_weighted_pix': labeled_obj['weighted_centroid'][0],
-                'x_massDisp_pix': labeled_obj['weighted_centroid'][1] - labeled_obj['centroid'][1],
-                'y_massDisp_pix': labeled_obj['weighted_centroid'][0] - labeled_obj['centroid'][0],
-                'area_bbox': labeled_obj['area_bbox'],
-                'equivDiam': labeled_obj['equivalent_diameter_area'],
-                'extent': labeled_obj['extent'],
-                'solidity': labeled_obj['solidity'],
-            }
-            # Sometimes, major & minor axis calculations fail with a 
-            # ValueError: math domain error
-            try:
-                morphology_measurements['majorAxisLength'] = labeled_obj['major_axis_length']
-                morphology_measurements['minorAxisLength'] = labeled_obj['minor_axis_length']
-                morphology_measurements['minmajAxisRatio'] = minor_major_axis_ratio(labeled_obj)
-                morphology_measurements['aspectRatio'] = aspect_ratio(labeled_obj)
-            except ValueError:
-                morphology_measurements['majorAxisLength'] = np.NaN
-                morphology_measurements['minorAxisLength'] = np.NaN
-                morphology_measurements['minmajAxisRatio'] = np.NaN
-                morphology_measurements['aspectRatio'] = np.NaN
-
-            if is_2D:
-                morphology_2D_only = {
-                    'x_pos_pix': labeled_obj['centroid'][1],
-                    'y_pos_pix': labeled_obj['centroid'][0],
-                    'area_pix': labeled_obj['area'],
-                    'perimeter': labeled_obj['perimeter'],
-                    'concavity': convex_hull_area_resid(labeled_obj),
-                    'asymmetry': convex_hull_centroid_dif(labeled_obj),
-                    'eccentricity': labeled_obj['eccentricity'],
-                    'circularity': circularity(labeled_obj),
-                    'concavity_count': concavity_count(labeled_obj, min_area_fraction=min_area_fraction),
-                }
-                morphology_measurements = morphology_measurements | morphology_2D_only
-            else:
-                morphology_3d_only = {
-                    'x_pos_vox': labeled_obj['centroid'][2],
-                    'y_pos_vox': labeled_obj['centroid'][1],
-                    'z_pos_vox': labeled_obj['centroid'][0],
-                    'area_convhull': labeled_obj['area_convex'],
-                    'volume_pix': labeled_obj['area'],
-                }
-                if calculate_surface_area:
-                    morphology_3d_only['surface_area'] = labeled_obj['surface_area_marchingcube']
-                morphology_measurements = morphology_measurements | morphology_3d_only
-
-            row_list.append(label_info | intensity_measurements_pref | morphology_measurements)
-        else:
-            row_list.append(label_info | intensity_measurements_pref)
-    df_well = pd.DataFrame(row_list)
-
-    # TODO: Make some computationally expensive measurements optional => surface area?
-
-    # FIXME: Add the prefix only to relevant columns (i.e. not label, not shapes etc.)
-    # df_well = df_well.add_prefix(channel_prefix + ".")
-    # df_well["label"] = df_well[channel_prefix + ".label"]
-    return df_well
-
-
 def scmultiplex_measurements(
     *,
     # Default arguments for fractal tasks:
@@ -199,9 +56,9 @@ def scmultiplex_measurements(
     input_channels: Dict[str, Dict[str, str]],
     label_image: str,
     output_table_name: str,
-    level = 0,
+    level=0,
     measure_morphology: bool = True,
-    measure_surface_area: bool = True,
+    allow_duplicate_labels: bool = False,
 ):
     """
     Wrapper task for scmultiplex measurements for Fractal
@@ -210,6 +67,11 @@ def scmultiplex_measurements(
     :param output_path: TBD (default arg for Fractal tasks)
     :param metadata: TBD (default arg for Fractal tasks)
     :param component: TBD (default arg for Fractal tasks)
+    :param allow_duplicate_labels: Set to True to allow saving measurement
+                                   tables with non-unique label values. Can
+                                   happen when segmentation is run on a
+                                   different ROI than the measurements
+                                   (e.g. segment per well, but measure per FOV)
     """
 
     # Level-related constraint
@@ -224,9 +86,17 @@ def scmultiplex_measurements(
     if len(input_paths) > 1:
         raise NotImplementedError("We currently only support a single in_path")
     in_path = Path(input_paths[0]).as_posix()
-    num_levels = metadata["num_levels"]
+    # num_levels = metadata["num_levels"]
     coarsening_xy = metadata["coarsening_xy"]
-    label_dtype = np.uint32
+
+    # Check output tables
+    group_tables = zarr.group(f"{Path(output_path)}/{component}/tables/")
+    current_tables = group_tables.attrs.asdict().get("tables") or []
+    if output_table_name in current_tables:
+        raise ValueError(
+            f"{Path(output_path)}/{component}/tables/ already includes "
+            f"{output_table_name=} in {current_tables=}"
+        )
 
     # Load zattrs file and multiscales
     zattrs_file = f"{in_path}/{component}/.zattrs"
@@ -243,8 +113,8 @@ def scmultiplex_measurements(
             "global coordinateTransformations at the multiscales "
             "level are not currently supported"
         )
-    
-    # FIXME: More reliable way to get the correct scale? 
+
+    # FIXME: More reliable way to get the correct scale?
     # Would not work well with multiple different coordinateTransformations
     spacing = multiscales[0]["datasets"][level]["coordinateTransformations"][0]["scale"]
 
@@ -290,7 +160,7 @@ def scmultiplex_measurements(
 
     # Set target_shape for upscaling labels
     if not input_image_arrays:
-        # FIXME: Allow user to just make morphology measurements?
+        # TODO: Allow user to just make morphology measurements?
         raise ValueError(f"No images loaded for {input_channels=}")
 
     # FIXME: Add check whether label exists?
@@ -298,8 +168,8 @@ def scmultiplex_measurements(
         f"{in_path}/{component}/labels/{label_image}/{level}"
     )
 
-    # FIXME: Allow shape measurements without intensity image?
-    # Then need to upscale differently
+    # If we allow shape measurements without intensity images,
+    # then need to upscale differently
     target_shape = list(input_image_arrays.values())[0].shape
     input_label_image = upscale_array(
         array=input_label_image,
@@ -313,6 +183,7 @@ def scmultiplex_measurements(
     #####
 
     df_well = pd.DataFrame()
+    df_info_well = pd.DataFrame()
     for i_ROI, indices in enumerate(list_indices):
         s_z, e_z, s_y, e_y, s_x, e_x = indices[:]
         region = (slice(s_z, e_z), slice(s_y, e_y), slice(s_x, e_x))
@@ -322,20 +193,21 @@ def scmultiplex_measurements(
         # Load the label image
         label_img = input_label_image[region].compute()
         if label_img.shape[0] == 1:
-            logger.info('Label image is 2D only, processing with 2D options')
+            logger.info("Label image is 2D only, processing with 2D options")
             label_img = np.squeeze(label_img, axis=0)
 
         # Set inputs
         df_roi = pd.DataFrame()
+        df_info_roi = pd.DataFrame()
         first_channel = True
         for input_name in input_channels.keys():
             img = input_image_arrays[input_name][region].compute()
-            # TODO: Add option to mask with a ROI label mask. Actually only 
+            # TODO: Add option to mask with a ROI label mask. Actually only
             # needs input masking here, as the return value is a table
 
             # Check whether the input is 2D or 3D
             if img.shape[0] == 1:
-                logger.info('Image is 2D only, processing with 2D options')
+                logger.info("Image is 2D only, processing with 2D options")
                 img = np.squeeze(img, axis=0)
                 real_spacing = spacing[1:]
                 is_2D = True
@@ -346,58 +218,79 @@ def scmultiplex_measurements(
                 real_spacing = spacing
                 is_2D = False
             else:
-                raise NotImplementedError(f"Loaded an image of shape {img.shape}. Processing is only supported for 2D & 3D images")
+                raise NotImplementedError(
+                    f"Loaded an image of shape {img.shape}. "
+                    "Processing is only supported for 2D & 3D images"
+                )
+
+            # Define some constant values to be added as a separat column to
+            # the obs table
+            # TODO: Add ROI label once we allow for masked ROIs
+            extra_values = {
+                "ROI_table_name": input_ROI_table,
+                "ROI_name": ROI_table.obs.index[i_ROI],
+            }
 
             calc_morphology = first_channel and measure_morphology
-            new_df = get_regionprops_measurements(
-                label_img, 
-                img, 
-                spacing=real_spacing, 
-                is_2D=is_2D, 
+            new_df, new_info_df = get_regionprops_measurements(
+                label_img,
+                img,
+                spacing=real_spacing,
+                is_2D=is_2D,
                 measure_morphology=calc_morphology,
-                calculate_surface_area=measure_surface_area,
-                channel_prefix=input_name
+                channel_prefix=input_name,
+                extra_values=extra_values,
             )
-            # Only measure morphology for the first intensity channel provided => just once per label image
+
+            # Only measure morphology for the first intensity channel provided 
+            # => just once per label image
             first_channel = False
 
             if "label" in df_roi.columns:
                 df_roi = df_roi.merge(right=new_df, how="outer", on="label")
+                df_info_roi = df_info_roi.merge(
+                    right=new_info_df, how="outer", on="label"
+                )
             else:
                 df_roi = pd.concat([df_roi, new_df], axis=1)
+                df_info_roi = pd.concat([df_info_roi, new_info_df], axis=1)
 
         df_well = pd.concat([df_well, df_roi], axis=0, ignore_index=True)
+        df_info_well = pd.concat([df_info_well, df_info_roi], axis=0, ignore_index=True)
 
     print(df_well)
     print(list(df_well.columns))
 
-    # Output handling: "dataframe" type (for each output, concatenate ROI
-    # dataframes, clean up, and store in a AnnData table on-disk)
+    # Ensure that the label column in df_well & df_info_well match
+    if not (df_well["label"] == df_info_well["label"]).all():
+        raise ValueError(
+            f"Label column in df_well and df_info_well do not match. {df_well['label']} != {df_info_well['label']}"
+        )
 
-    # Concatenate all FOV dataframes
-    # list_dfs = output_dataframe_lists[name]
-    # df_well = pd.concat(list_dfs, axis=0, ignore_index=True)
-    # Extract labels and drop them from df_well
+    # Check that labels are unique
+    # Typical issue: Ran segmentation per well, but measurement per FOV 
+    # => splits labels into multiple measurements 
+    if not allow_duplicate_labels:
+        total_measurements = len(df_well["label"])
+        unique_labels = len(df_well["label"].unique())
+        if not total_measurements == unique_labels:
+            raise ValueError(
+                "Measurement contains non-unique labels: \n"
+                f"{total_measurements =}, {unique_labels =}, "
+            )
 
-    labels = pd.DataFrame(df_well["label"].astype(str))
     df_well.drop(labels=["label"], axis=1, inplace=True)
     # Convert all to float (warning: some would be int, in principle)
     measurement_dtype = np.float32
     df_well = df_well.astype(measurement_dtype)
     # Convert to anndata
     measurement_table = ad.AnnData(df_well, dtype=measurement_dtype)
-    measurement_table.obs = labels
+    # measurement_table.obs = labels
+    measurement_table.obs = df_info_well
+
     # Write to zarr group
-    group_tables = zarr.group(f"{in_path}/{component}/tables/")
     write_elem(group_tables, output_table_name, measurement_table)
     # Update OME-NGFF metadata
-    current_tables = group_tables.attrs.asdict().get("tables") or []
-    if output_table_name in current_tables:
-        # FIXME: move this check to an earlier stage of the task
-        raise ValueError(
-            f"{in_path}/{component}/tables/ already includes "
-            f"{output_table_name=} in {current_tables=}"
-        )
     new_tables = current_tables + [output_table_name]
     group_tables.attrs["tables"] = new_tables
 
@@ -418,7 +311,6 @@ if __name__ == "__main__":
         output_table_name: str
         level: int
         measure_morphology: bool
-        measure_surface_area: bool
 
     run_fractal_task(
         task_function=scmultiplex_measurements,
