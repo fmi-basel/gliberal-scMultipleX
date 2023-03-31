@@ -110,7 +110,7 @@ def aspect_ratio(prop):
 def minor_major_axis_ratio(prop):
     """Return the ratio of major to minor axis
     """
-    if prop.minor_axis_length == 0:
+    if prop.major_axis_length == 0:
         return np.float('NaN')
     else:
         return prop.minor_axis_length / prop.major_axis_length
@@ -176,3 +176,41 @@ def flag_touching(ovr_seg_img, ovr_seg_tiles):
     ]  # create list of labels and remove 0 background label
 
     return touching_labels_lst
+
+
+def is_touching_border_xy(labeled_obj, img_shape):
+    """
+    Helper function to check if an object is touching the border of the image
+    in the xy plane.
+    """
+    if len(img_shape) == 2:
+        if labeled_obj.bbox[0] == 0 or labeled_obj.bbox[1] == 0:
+            return True
+        elif labeled_obj.bbox[2] == img_shape[0] or labeled_obj.bbox[3] == img_shape[1]:
+            return True
+        else:
+            return False
+    elif len(img_shape) == 3:
+        if labeled_obj.bbox[1] == 0 or labeled_obj.bbox[2] == 0:
+            return True
+        elif labeled_obj.bbox[4] == img_shape[1] or labeled_obj.bbox[5] == img_shape[2]:
+            return True
+        else:
+            return False
+    else:
+        raise NotImplementedError("Only 2D and 3D images are supported in is_touching_border_xy")
+
+def is_touching_border_z(labeled_obj, img_shape):
+    """
+    Helper function to check if an object is touching the border of the image
+    in the 3D in the Z direction.
+    """
+    if len(img_shape) == 3:
+        if labeled_obj.bbox[0] == 0:
+            return True
+        elif labeled_obj.bbox[3] == img_shape[0]:
+            return True
+        else:
+            return False
+    else:
+        raise NotImplementedError("Only 3D images are supported in is_touching_border_z")
