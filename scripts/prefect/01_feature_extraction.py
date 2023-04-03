@@ -95,7 +95,7 @@ def get_organoids(
 
 
 @task()
-def organioid_feature_extraction_and_linking_task(
+def organoid_feature_extraction_and_linking_task(
     organoid, nuc_ending: str, mem_ending: str, mask_ending: str, spacing: List[float], org_seg_ch, nuc_seg_ch, mem_seg_ch, ovr_channel, iop_cutoff
     ):
     set_spacing(spacing)
@@ -148,7 +148,7 @@ def run_flow(r_params, cpus):
 
         organoids = get_organoids(exp, mask_ending, excluded_plates, excluded_wells, upstream_tasks = [wfeo_t])
         
-        organioid_feature_extraction_and_linking_task.map(
+        organoid_feature_extraction_and_linking_task.map(
             organoids,
             unmapped(nuc_ending),
             unmapped(mem_ending),
