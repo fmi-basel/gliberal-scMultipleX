@@ -90,7 +90,7 @@ def get_config_params(config_file_path):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config")
+    parser.add_argument("--config", required = True)
     parser.add_argument("--cpus", type=int, default=get_core_count())
     args = parser.parse_args()
     cpus = args.cpus
