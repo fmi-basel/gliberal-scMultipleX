@@ -33,7 +33,7 @@ def get_regionprops_measurements(
     is_2D: bool,
     measure_morphology=False,
     min_area_fraction=0.005,
-    channel_prefix: str = "",
+    channel_prefix: [str, None] = "",
     extra_values: Dict[str, Any] = {},
 ):
     """
@@ -100,26 +100,41 @@ def get_regionprops_measurements(
             "stdev": labeled_obj["stdv"],
             "skew": labeled_obj["skewness"],
             "kurtosis": labeled_obj["kurtos"],
+            "x_pos_weighted_pix": labeled_obj["weighted_centroid"][-1],
+            "y_pos_weighted_pix": labeled_obj["weighted_centroid"][-2],
+            "x_massDisp_pix": labeled_obj["weighted_centroid"][-1]
+                              - labeled_obj["centroid"][-1],
+            "y_massDisp_pix": labeled_obj["weighted_centroid"][-2]
+                              - labeled_obj["centroid"][-2],
         }
-        intensity_measurements_pref = {
-            channel_prefix + "." + str(key): val
-            for key, val in intensity_measurements.items()
-        }
+
+        # add 3D-specific intensity measurements
+        if not is_2D:
+            intensity_3D_only = {
+                "z_pos_weighted_pix": labeled_obj["weighted_centroid"][-3],
+                "z_massDisp_pix": labeled_obj["weighted_centroid"][-3]
+                                  - labeled_obj["centroid"][-3],
+            }
+            intensity_measurements.update(intensity_3D_only)
+
+        # channel prefix addition is optional
+        if channel_prefix is not None:
+            intensity_measurements_pref = {
+                channel_prefix + "." + str(key): val
+                for key, val in intensity_measurements.items()
+            }
+        else:
+            intensity_measurements_pref = intensity_measurements
 
         if measure_morphology:
             morphology_measurements = {
-                "imgdim_x": img.shape[-1],
-                "imgdim_y": img.shape[-2],
                 "is_touching_border_xy": is_touching_border_xy(
                     labeled_obj, img_shape=img.shape
                 ),
-                "x_pos_weighted_pix": labeled_obj["weighted_centroid"][1],
-                "y_pos_weighted_pix": labeled_obj["weighted_centroid"][0],
-                "x_massDisp_pix": labeled_obj["weighted_centroid"][1]
-                - labeled_obj["centroid"][1],
-                "y_massDisp_pix": labeled_obj["weighted_centroid"][0]
-                - labeled_obj["centroid"][0],
+                "imgdim_x": img.shape[-1],
+                "imgdim_y": img.shape[-2],
                 "area_bbox": labeled_obj["area_bbox"],
+                'area_convhull': labeled_obj['area_convex'],
                 "equivDiam": labeled_obj["equivalent_diameter_area"],
                 "extent": labeled_obj["extent"],
                 "solidity": labeled_obj["solidity"],
@@ -147,8 +162,8 @@ def get_regionprops_measurements(
 
             if is_2D:
                 morphology_2D_only = {
-                    "x_pos_pix": labeled_obj["centroid"][1],
-                    "y_pos_pix": labeled_obj["centroid"][0],
+                    "x_pos_pix": labeled_obj["centroid"][-1],
+                    "y_pos_pix": labeled_obj["centroid"][-2],
                     "area_pix": labeled_obj["area"],
                     "perimeter": labeled_obj["perimeter"],
                     "concavity": convex_hull_area_resid(labeled_obj),
@@ -162,26 +177,27 @@ def get_regionprops_measurements(
                         labeled_obj.image
                     ),
                 }
-                morphology_measurements = morphology_measurements | morphology_2D_only
+                morphology_measurements.update(morphology_2D_only)
             else:
                 morphology_3d_only = {
-                    "x_pos_vox": labeled_obj["centroid"][2],
-                    "y_pos_vox": labeled_obj["centroid"][1],
-                    "z_pos_vox": labeled_obj["centroid"][0],
+                    "imgdim_z": img.shape[-3],
+                    "x_pos_vox": labeled_obj["centroid"][-1],
+                    "y_pos_vox": labeled_obj["centroid"][-2],
+                    "z_pos_vox": labeled_obj["centroid"][-3],
                     "is_touching_border_z": is_touching_border_z(
                         labeled_obj, img_shape=img.shape
                     ),
-                    "area_convhull": labeled_obj["area_convex"],
                     "volume_pix": labeled_obj["area"],
                     "surface_area": labeled_obj["surface_area_marchingcube"],
                 }
-                morphology_measurements = morphology_measurements | morphology_3d_only
+                morphology_measurements.update(morphology_3d_only)
 
-            measurement_rows.append(
-                label_info | intensity_measurements_pref | morphology_measurements
-            )
+            label_info.update(intensity_measurements_pref)
+            label_info.update(morphology_measurements)
+            measurement_rows.append(label_info)
         else:
-            measurement_rows.append(label_info | intensity_measurements_pref)
+            label_info.update(intensity_measurements_pref)
+            measurement_rows.append(label_info)
 
     df_well = pd.DataFrame(measurement_rows)
     df_obs = pd.DataFrame(observation_rows)

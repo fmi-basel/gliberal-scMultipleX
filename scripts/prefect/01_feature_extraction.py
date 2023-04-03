@@ -108,6 +108,7 @@ def organioid_feature_extraction_and_linking_task(
         org_seg_ch=org_seg_ch,
         nuc_seg_ch=nuc_seg_ch,
         mem_seg_ch=mem_seg_ch,
+        measure_morphology=True,
     )
     link_nuc_to_membrane(
         organoid=organoid,

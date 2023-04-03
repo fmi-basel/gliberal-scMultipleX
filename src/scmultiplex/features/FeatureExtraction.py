@@ -26,12 +26,141 @@ from scmultiplex.features.FeatureFunctions import (
     disconnected_component,
     surface_area_marchingcube,
 )
-from scmultiplex.features.FeatureProps import (
-    regionprops_to_row_organoid,
-    regionprops_to_row_nucleus,
-    regionprops_to_row_membrane
-)
+
+from scmultiplex.features.FeatureProps import measure_features
+
 from scmultiplex.linking.matching import matching
+
+
+# TODO add as config parameter measure_morphology
+
+
+def extract_organoid_features(
+    organoid: OrganoidRecord,
+    nuc_ending: str,
+    mem_ending: str,
+    mask_ending: str,
+    spacing: Tuple[float],
+    org_seg_ch,
+    nuc_seg_ch,
+    mem_seg_ch,
+    measure_morphology,
+):
+    nuc_seg = organoid.get_segmentation(nuc_ending)  # load segmentation images
+    mem_seg = organoid.get_segmentation(mem_ending)  # load segmentation images
+    org_seg = organoid.get_segmentation(mask_ending)
+
+
+    # for each raw image, extract organoid-level features
+    first_channel = True
+
+    for channel in organoid.raw_files:
+
+        # Load raw data.
+        raw = organoid.get_raw_data(channel)  # this is the raw image
+
+        # create organoid MIP
+        raw_mip = np.zeros(
+            org_seg.shape
+        )  # initialize array to dimensions of mask image
+        for plane in raw:
+            raw_mip = np.maximum(raw_mip, plane)
+
+        abs_min_intensity = np.amin(raw_mip)
+
+        calc_morphology = first_channel and measure_morphology
+
+        extra_values_common = {'hcs_experiment': organoid.well.plate.experiment.name,
+                               'root_dir': organoid.well.plate.experiment.root_dir,
+                               'plate_id': organoid.well.plate.plate_id,
+                               'well_id': organoid.well.well_id,
+                               'channel_id': channel,
+                               'org_id': int(organoid.organoid_id.rpartition("_")[2]),
+                               'intensity_img': organoid.raw_files[channel],
+                               }
+        extra_values_org = {
+            'segmentation_org': organoid.segmentations[mask_ending],
+            'object_type': 'organoid',
+            'abs_min': abs_min_intensity,
+        }
+
+        measure_features(
+            object_type = 'org',
+            organoid = organoid,
+            channel = channel,
+            label_img = org_seg,
+            img = raw_mip,
+            spacing = spacing,
+            is_2D = True,
+            measure_morphology = calc_morphology,
+            min_area_fraction = 0.005,
+            channel_prefix = None,
+            extra_values_common = extra_values_common,
+            extra_values_object = extra_values_org,
+            )
+
+        # NUCLEAR feature extraction
+        if nuc_seg is not None:
+
+            extra_values_nuc = {
+                'segmentation_nuc': organoid.segmentations[nuc_ending],
+                'object_type': 'nucleus'
+            }
+
+            # make binary organoid mask and crop nuclear labels to this mask to limit nuclei from neighboring orgs
+            org_seg_binary = copy.deepcopy(org_seg)
+            org_seg_binary[org_seg_binary > 0] = 1
+            nuc_seg = nuc_seg * org_seg_binary
+
+            measure_features(
+                object_type='nuc',
+                organoid=organoid,
+                channel=channel,
+                label_img=nuc_seg,
+                img=raw,
+                spacing=spacing,
+                is_2D=False,
+                measure_morphology=calc_morphology,
+                min_area_fraction=0.005,
+                channel_prefix=None,
+                extra_values_common=extra_values_common,
+                extra_values_object=extra_values_nuc,
+            )
+
+
+        # MEMBRANE feature extraction
+        if mem_seg is not None:
+
+            extra_values_mem = {
+                'segmentation_mem': organoid.segmentations[mem_ending],
+                'object_type': 'membrane'
+            }
+
+            org_seg_binary = copy.deepcopy(org_seg)
+            org_seg_binary[org_seg_binary > 0] = 1
+            mem_seg = mem_seg * org_seg_binary
+
+            measure_features(
+                object_type='mem',
+                organoid=organoid,
+                channel=channel,
+                label_img=mem_seg,
+                img=raw,
+                spacing=spacing,
+                is_2D=False,
+                measure_morphology=calc_morphology,
+                min_area_fraction=0.005,
+                channel_prefix=None,
+                extra_values_common=extra_values_common,
+                extra_values_object=extra_values_mem,
+            )
+
+        first_channel = False
+
+    return
+
+
+
 
 
 def extract_2d_ovr(
@@ -61,7 +190,7 @@ def extract_2d_ovr(
     return df_ovr
 
 
-def extract_organoid_features(
+def extract_organoid_features_old(
     organoid: OrganoidRecord,
     nuc_ending: str,
     mem_ending: str,

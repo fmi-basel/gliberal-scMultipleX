@@ -8,7 +8,9 @@
 #                                                                            #
 ##############################################################################
 
+import os
 import pandas as pd
+
 from traceback import print_exc
 
 from scmultiplex.features.FeatureFunctions import (
@@ -20,10 +22,63 @@ from scmultiplex.features.FeatureFunctions import (
     concavity_count
 )
 
-# TODO
-# CHECK FOR NONE-VALUE OF abs_min_intensity=None, img_dim=None; throw an exception if they're None for the organoid
+from scmultiplex.fractal.feature_wrapper import get_regionprops_measurements
 
-object_types = ['organoid', 'nucleus', 'membrane']
+object_types = ['org', 'nuc', 'mem']
+
+def measure_features(object_type,
+                     organoid,
+                     channel,
+                     label_img,
+                     img,
+                     spacing,
+                     is_2D,
+                     measure_morphology,
+                     min_area_fraction,
+                     channel_prefix,
+                     extra_values_common,
+                     extra_values_object,
+                     ):
+
+    if object_type not in object_types:
+        raise ValueError('object type must be one of: %s' % ', '.join(object_types))
+
+    # if user inputs 3D spacing, crop to 2D for organoid feature extraction
+    if object_type == 'org' and len(spacing) == 3:
+        spacing = spacing[1:]
+
+    extra_values = extra_values_common.copy()
+    extra_values.update(extra_values_object)
+
+    num_df, info_df = get_regionprops_measurements(
+        label_img=label_img,
+        img=img,
+        spacing=spacing,
+        is_2D=is_2D,
+        measure_morphology=measure_morphology,
+        min_area_fraction=min_area_fraction,
+        channel_prefix=channel_prefix,
+        extra_values=extra_values,
+    )
+
+    num_df = num_df.drop('label', axis=1)
+    if object_type == 'org':
+        info_df = info_df.drop('label', axis=1)
+    else:
+        info_df = info_df.rename(columns={"label": object_type + "_id"})
+
+    df = pd.concat([info_df, num_df], axis=1)
+
+    # Save measurement into the organoid directory.
+    name = "regionprops_" + object_type + "_" + str(channel)
+    path = os.path.join(organoid.organoid_dir, name + ".csv")
+    df.to_csv(path, index=False)  # saves csv
+
+    # Add the measurement to the faim-hcs datastructure and save.
+    organoid.add_measurement(name, path)
+    organoid.save()  # updates json file
+
+    return
 
 
 def regionprops_to_row(ot, regionproperties, org_channel, nuc_channel, mem_channel, organoid, channel, mask_ending, nuc_ending,
