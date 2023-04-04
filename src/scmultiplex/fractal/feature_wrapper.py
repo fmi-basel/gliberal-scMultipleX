@@ -28,8 +28,8 @@ from scmultiplex.features.FeatureFunctions import (
 
 def get_regionprops_measurements(
     label_img: np.array,
-    img: np.array,
-    spacing: tuple,
+    img: [np.array, None],
+    spacing: [tuple, None],
     is_2D: bool,
     measure_morphology=False,
     min_area_fraction=0.005,
@@ -56,21 +56,25 @@ def get_regionprops_measurements(
     # Set the global spacing. Is used in surface_area_marchingcube
     set_spacing(spacing)
 
-    regionproperties = regionprops(
-        label_img,
-        img,
-        extra_properties=(
-            fixed_percentiles,
-            skewness,
-            kurtos,
-            stdv,
-            surface_area_marchingcube,
-        ),
-        spacing=spacing,
-    )
+    if img is None:
+        regionproperties = regionprops(label_img)
+    else:
+        regionproperties = regionprops(
+            label_img,
+            img,
+            extra_properties=(
+                fixed_percentiles,
+                skewness,
+                kurtos,
+                stdv,
+                surface_area_marchingcube,
+            ),
+            spacing=spacing,
+        )
 
     measurement_rows = []
     observation_rows = []
+
     for labeled_obj in regionproperties:
         obs_info = {
             "label": int(labeled_obj["label"]),
@@ -87,117 +91,127 @@ def get_regionprops_measurements(
             "label": int(labeled_obj["label"]),
         }
 
-        intensity_measurements = {
-            "mean_intensity": labeled_obj["mean_intensity"],
-            "max_intensity": labeled_obj["max_intensity"],
-            "min_intensity": labeled_obj["min_intensity"],
-            "percentile25": labeled_obj["fixed_percentiles"][0],
-            "percentile50": labeled_obj["fixed_percentiles"][1],
-            "percentile75": labeled_obj["fixed_percentiles"][2],
-            "percentile90": labeled_obj["fixed_percentiles"][3],
-            "percentile95": labeled_obj["fixed_percentiles"][4],
-            "percentile99": labeled_obj["fixed_percentiles"][5],
-            "stdev": labeled_obj["stdv"],
-            "skew": labeled_obj["skewness"],
-            "kurtosis": labeled_obj["kurtos"],
-            "x_pos_weighted_pix": labeled_obj["weighted_centroid"][-1],
-            "y_pos_weighted_pix": labeled_obj["weighted_centroid"][-2],
-            "x_massDisp_pix": labeled_obj["weighted_centroid"][-1]
-                              - labeled_obj["centroid"][-1],
-            "y_massDisp_pix": labeled_obj["weighted_centroid"][-2]
-                              - labeled_obj["centroid"][-2],
-        }
-
-        # add 3D-specific intensity measurements
-        if not is_2D:
-            intensity_3D_only = {
-                "z_pos_weighted_pix": labeled_obj["weighted_centroid"][-3],
-                "z_massDisp_pix": labeled_obj["weighted_centroid"][-3]
-                                  - labeled_obj["centroid"][-3],
+        if img is None:
+            # make overview df
+            ovr_measurements = {
+                "x_pos_pix_global": labeled_obj["centroid"][-1],
+                "y_pos_pix_global": labeled_obj["centroid"][-2],
             }
-            intensity_measurements.update(intensity_3D_only)
+            label_info.update(ovr_measurements)
+            measurement_rows.append(label_info)
 
-        # channel prefix addition is optional
-        if channel_prefix is not None:
-            intensity_measurements_pref = {
-                channel_prefix + "." + str(key): val
-                for key, val in intensity_measurements.items()
-            }
         else:
-            intensity_measurements_pref = intensity_measurements
-
-        if measure_morphology:
-            morphology_measurements = {
-                "is_touching_border_xy": is_touching_border_xy(
-                    labeled_obj, img_shape=img.shape
-                ),
-                "imgdim_x": img.shape[-1],
-                "imgdim_y": img.shape[-2],
-                "area_bbox": labeled_obj["area_bbox"],
-                'area_convhull': labeled_obj['area_convex'],
-                "equivDiam": labeled_obj["equivalent_diameter_area"],
-                "extent": labeled_obj["extent"],
-                "solidity": labeled_obj["solidity"],
+            intensity_measurements = {
+                "mean_intensity": labeled_obj["mean_intensity"],
+                "max_intensity": labeled_obj["max_intensity"],
+                "min_intensity": labeled_obj["min_intensity"],
+                "percentile25": labeled_obj["fixed_percentiles"][0],
+                "percentile50": labeled_obj["fixed_percentiles"][1],
+                "percentile75": labeled_obj["fixed_percentiles"][2],
+                "percentile90": labeled_obj["fixed_percentiles"][3],
+                "percentile95": labeled_obj["fixed_percentiles"][4],
+                "percentile99": labeled_obj["fixed_percentiles"][5],
+                "stdev": labeled_obj["stdv"],
+                "skew": labeled_obj["skewness"],
+                "kurtosis": labeled_obj["kurtos"],
+                "x_pos_weighted_pix": labeled_obj["weighted_centroid"][-1],
+                "y_pos_weighted_pix": labeled_obj["weighted_centroid"][-2],
+                "x_massDisp_pix": labeled_obj["weighted_centroid"][-1]
+                                  - labeled_obj["centroid"][-1],
+                "y_massDisp_pix": labeled_obj["weighted_centroid"][-2]
+                                  - labeled_obj["centroid"][-2],
             }
-            # Sometimes, major & minor axis calculations fail with a
-            # ValueError: math domain error
-            try:
-                morphology_measurements["majorAxisLength"] = labeled_obj[
-                    "major_axis_length"
-                ]
-                morphology_measurements["minorAxisLength"] = labeled_obj[
-                    "minor_axis_length"
-                ]
-                morphology_measurements["minmajAxisRatio"] = minor_major_axis_ratio(
-                    labeled_obj
-                )
-                morphology_measurements[
-                    "aspectRatio_equivalentDiameter"
-                ] = aspect_ratio(labeled_obj)
-            except ValueError:
-                morphology_measurements["majorAxisLength"] = np.NaN
-                morphology_measurements["minorAxisLength"] = np.NaN
-                morphology_measurements["minmajAxisRatio"] = np.NaN
-                morphology_measurements["aspectRatio_equivalentDiameter"] = np.NaN
 
-            if is_2D:
-                morphology_2D_only = {
-                    "x_pos_pix": labeled_obj["centroid"][-1],
-                    "y_pos_pix": labeled_obj["centroid"][-2],
-                    "area_pix": labeled_obj["area"],
-                    "perimeter": labeled_obj["perimeter"],
-                    "concavity": convex_hull_area_resid(labeled_obj),
-                    "asymmetry": convex_hull_centroid_dif(labeled_obj),
-                    "eccentricity": labeled_obj["eccentricity"],
-                    "circularity": circularity(labeled_obj),
-                    "concavity_count": concavity_count(
-                        labeled_obj, min_area_fraction=min_area_fraction
-                    ),
-                    "disconnected_components": disconnected_component(
-                        labeled_obj.image
-                    ),
+            # add 3D-specific intensity measurements
+            if not is_2D:
+                intensity_3D_only = {
+                    "z_pos_weighted_pix": labeled_obj["weighted_centroid"][-3],
+                    "z_massDisp_pix": labeled_obj["weighted_centroid"][-3]
+                                      - labeled_obj["centroid"][-3],
                 }
-                morphology_measurements.update(morphology_2D_only)
+                intensity_measurements.update(intensity_3D_only)
+
+            # channel prefix addition is optional
+            if channel_prefix is not None:
+                intensity_measurements_pref = {
+                    channel_prefix + "." + str(key): val
+                    for key, val in intensity_measurements.items()
+                }
             else:
-                morphology_3d_only = {
-                    "imgdim_z": img.shape[-3],
-                    "x_pos_vox": labeled_obj["centroid"][-1],
-                    "y_pos_vox": labeled_obj["centroid"][-2],
-                    "z_pos_vox": labeled_obj["centroid"][-3],
-                    "is_touching_border_z": is_touching_border_z(
+                intensity_measurements_pref = intensity_measurements
+
+            if measure_morphology:
+                morphology_measurements = {
+                    "is_touching_border_xy": is_touching_border_xy(
                         labeled_obj, img_shape=img.shape
                     ),
-                    "volume_pix": labeled_obj["area"],
-                    "surface_area": labeled_obj["surface_area_marchingcube"],
+                    "imgdim_x": img.shape[-1],
+                    "imgdim_y": img.shape[-2],
+                    "area_bbox": labeled_obj["area_bbox"],
+                    'area_convhull': labeled_obj['area_convex'],
+                    "equivDiam": labeled_obj["equivalent_diameter_area"],
+                    "extent": labeled_obj["extent"],
+                    "solidity": labeled_obj["solidity"],
                 }
-                morphology_measurements.update(morphology_3d_only)
+                # Sometimes, major & minor axis calculations fail with a
+                # ValueError: math domain error
+                try:
+                    morphology_measurements["majorAxisLength"] = labeled_obj[
+                        "major_axis_length"
+                    ]
+                    morphology_measurements["minorAxisLength"] = labeled_obj[
+                        "minor_axis_length"
+                    ]
+                    morphology_measurements["minmajAxisRatio"] = minor_major_axis_ratio(
+                        labeled_obj
+                    )
+                    morphology_measurements[
+                        "aspectRatio_equivalentDiameter"
+                    ] = aspect_ratio(labeled_obj)
+                except ValueError:
+                    morphology_measurements["majorAxisLength"] = np.NaN
+                    morphology_measurements["minorAxisLength"] = np.NaN
+                    morphology_measurements["minmajAxisRatio"] = np.NaN
+                    morphology_measurements["aspectRatio_equivalentDiameter"] = np.NaN
 
-            label_info.update(intensity_measurements_pref)
-            label_info.update(morphology_measurements)
-            measurement_rows.append(label_info)
-        else:
-            label_info.update(intensity_measurements_pref)
-            measurement_rows.append(label_info)
+                if is_2D:
+                    morphology_2D_only = {
+                        "x_pos_pix": labeled_obj["centroid"][-1],
+                        "y_pos_pix": labeled_obj["centroid"][-2],
+                        "area_pix": labeled_obj["area"],
+                        "perimeter": labeled_obj["perimeter"],
+                        "concavity": convex_hull_area_resid(labeled_obj),
+                        "asymmetry": convex_hull_centroid_dif(labeled_obj),
+                        "eccentricity": labeled_obj["eccentricity"],
+                        "circularity": circularity(labeled_obj),
+                        "concavity_count": concavity_count(
+                            labeled_obj, min_area_fraction=min_area_fraction
+                        ),
+                        "disconnected_components": disconnected_component(
+                            labeled_obj.image
+                        ),
+                    }
+                    morphology_measurements.update(morphology_2D_only)
+                else:
+                    morphology_3d_only = {
+                        "imgdim_z": img.shape[-3],
+                        "x_pos_vox": labeled_obj["centroid"][-1],
+                        "y_pos_vox": labeled_obj["centroid"][-2],
+                        "z_pos_vox": labeled_obj["centroid"][-3],
+                        "is_touching_border_z": is_touching_border_z(
+                            labeled_obj, img_shape=img.shape
+                        ),
+                        "volume_pix": labeled_obj["area"],
+                        "surface_area": labeled_obj["surface_area_marchingcube"],
+                    }
+                    morphology_measurements.update(morphology_3d_only)
+
+                label_info.update(intensity_measurements_pref)
+                label_info.update(morphology_measurements)
+                measurement_rows.append(label_info)
+            else:
+                label_info.update(intensity_measurements_pref)
+                measurement_rows.append(label_info)
 
     df_well = pd.DataFrame(measurement_rows)
     df_obs = pd.DataFrame(observation_rows)

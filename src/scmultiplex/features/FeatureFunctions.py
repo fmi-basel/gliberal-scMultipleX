@@ -163,6 +163,9 @@ def surface_area_marchingcube(mask_3D):
 
 
 def flag_touching(ovr_seg_img, ovr_seg_tiles):
+    """Return list of integer org_id's that are touching tile border in well overview image
+    Calculated based on tile image of Drogon output
+    """
     tile_borders = (ovr_seg_tiles - binary_erosion(ovr_seg_tiles)).astype(
         bool
     )  # generate tile borders
@@ -171,9 +174,8 @@ def flag_touching(ovr_seg_img, ovr_seg_tiles):
         ovr_seg_img[tile_borders]
     )  # includes the 0 background label
 
-    touching_labels_lst = [
-        "object_" + str(x) for x in touching_labels[touching_labels > 0]
-    ]  # create list of labels and remove 0 background label
+    # create list of labels and remove 0 background label
+    touching_labels_lst = [int(x) for x in touching_labels[touching_labels > 0]]
 
     return touching_labels_lst
 

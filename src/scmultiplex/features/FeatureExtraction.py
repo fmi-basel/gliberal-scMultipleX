@@ -16,23 +16,14 @@ import numpy as np
 import pandas as pd
 from faim_hcs.records.OrganoidRecord import OrganoidRecord
 from faim_hcs.records.WellRecord import WellRecord
-from skimage.measure import regionprops
 
-from scmultiplex.features.FeatureFunctions import (
-    fixed_percentiles,
-    kurtos,
-    skewness,
-    stdv,
-    disconnected_component,
-    surface_area_marchingcube,
-)
+from scmultiplex.features.FeatureFunctions import flag_touching
 
 from scmultiplex.features.FeatureProps import measure_features
 
 from scmultiplex.linking.matching import matching
 
-
-# TODO add as config parameter measure_morphology
+from scmultiplex.utils.load_utils import load_ovr
 
 
 def extract_organoid_features(
@@ -41,9 +32,6 @@ def extract_organoid_features(
     mem_ending: str,
     mask_ending: str,
     spacing: Tuple[float],
-    org_seg_ch,
-    nuc_seg_ch,
-    mem_seg_ch,
     measure_morphology,
 ):
     nuc_seg = organoid.get_segmentation(nuc_ending)  # load segmentation images
@@ -86,7 +74,7 @@ def extract_organoid_features(
 
         measure_features(
             object_type = 'org',
-            organoid = organoid,
+            record = organoid,
             channel = channel,
             label_img = org_seg,
             img = raw_mip,
@@ -97,6 +85,7 @@ def extract_organoid_features(
             channel_prefix = None,
             extra_values_common = extra_values_common,
             extra_values_object = extra_values_org,
+            touching_labels = None,
             )
 
         # NUCLEAR feature extraction
@@ -114,7 +103,7 @@ def extract_organoid_features(
 
             measure_features(
                 object_type='nuc',
-                organoid=organoid,
+                record=organoid,
                 channel=channel,
                 label_img=nuc_seg,
                 img=raw,
@@ -125,8 +114,8 @@ def extract_organoid_features(
                 channel_prefix=None,
                 extra_values_common=extra_values_common,
                 extra_values_object=extra_values_nuc,
+                touching_labels=None,
             )
-
 
         # MEMBRANE feature extraction
         if mem_seg is not None:
@@ -142,7 +131,7 @@ def extract_organoid_features(
 
             measure_features(
                 object_type='mem',
-                organoid=organoid,
+                record=organoid,
                 channel=channel,
                 label_img=mem_seg,
                 img=raw,
@@ -153,6 +142,7 @@ def extract_organoid_features(
                 channel_prefix=None,
                 extra_values_common=extra_values_common,
                 extra_values_object=extra_values_mem,
+                touching_labels=None,
             )
 
         first_channel = False
@@ -160,167 +150,43 @@ def extract_organoid_features(
     return
 
 
-
-
-
-def extract_2d_ovr(
-    well: WellRecord, ovr_channel: str, ovr_seg_img, touching_labels: List[str]
+def extract_well_features(
+    well: WellRecord,
+    ovr_channel: str,
 ):
-    df_ovr = pd.DataFrame()
-    ovr_features = regionprops(ovr_seg_img)
+    ovr_seg_img, ovr_seg_tiles = load_ovr(well, ovr_channel)
 
-    for obj in ovr_features:
-        organoid_id = "object_" + str(obj["label"])
-        row = {
-            "hcs_experiment": well.plate.experiment.name,
-            "plate_id": well.plate.plate_id,
-            "well_id": well.well_id,
-            "org_id": int(organoid_id.rpartition("_")[2]),
-            "segmentation_ovr": well.segmentations[ovr_channel],
-            "flag_tile_border": organoid_id
-            in touching_labels,  # TRUE (1) means organoid is touching a tile border
-            "x_pos_pix_global": obj["centroid"][1],
-            "y_pos_pix_global": obj["centroid"][0],
-            "area_pix_global": obj["area"],
-        }
+    touching_labels = flag_touching(ovr_seg_img, ovr_seg_tiles)
 
-        df_ovr = pd.concat(
-            [df_ovr, pd.DataFrame.from_records([row])], ignore_index=True
-        )
-    return df_ovr
+    # if ovr_seg_img is None and ovr_seg_tiles is None:
+    #     logger.warning(f"ovr_seg does not exists. Skipping {well.well_id}.")
 
+    extra_values_common = {'hcs_experiment': well.plate.experiment.name,
+                           'plate_id': well.plate.plate_id,
+                           'well_id': well.well_id,
+                           }
 
-def extract_organoid_features_old(
-    organoid: OrganoidRecord,
-    nuc_ending: str,
-    mem_ending: str,
-    mask_ending: str,
-    spacing: Tuple[float],
-    org_seg_ch,
-    nuc_seg_ch,
-    mem_seg_ch,
-):
-    nuc_seg = organoid.get_segmentation(nuc_ending)  # load segmentation images
-    mem_seg = organoid.get_segmentation(mem_ending)  # load segmentation images
-    org_seg = organoid.get_segmentation(mask_ending)
+    extra_values_ovr = {
+        "segmentation_ovr": well.segmentations[ovr_channel],
+    }
 
-    # for each raw image, extract organoid-level features
-    for channel in organoid.raw_files:
-        # Load raw data.
-        raw = organoid.get_raw_data(channel)  # this is the raw image
+    measure_features(
+        object_type='ovr',
+        record=well,
+        channel=ovr_channel,
+        label_img=ovr_seg_img,
+        img=None,
+        spacing=None,
+        is_2D=True,
+        measure_morphology=False,
+        min_area_fraction=0.005,
+        channel_prefix=None,
+        extra_values_common=extra_values_common,
+        extra_values_object=extra_values_ovr,
+        touching_labels=touching_labels,
+    )
 
-        # create organoid MIP
-        raw_mip = np.zeros(
-            org_seg.shape
-        )  # initialize array to dimensions of mask image
-        for plane in raw:
-            raw_mip = np.maximum(raw_mip, plane)
-
-        # organoid feature extraction
-        org_features = regionprops(
-            org_seg,
-            raw_mip,
-            extra_properties=(fixed_percentiles, skewness, kurtos, stdv),
-        )
-
-        abs_min_intensity = np.amin(raw_mip)
-        img_dim = org_seg.shape
-        disconnected = disconnected_component(org_seg)
-
-        df_org = regionprops_to_row_organoid(regionproperties=org_features,
-                                         org_channel=org_seg_ch,
-                                         nuc_channel=nuc_seg_ch,
-                                         mem_channel=mem_seg_ch,
-                                         organoid=organoid,
-                                         channel=channel,
-                                         mask_ending=mask_ending,
-                                         nuc_ending=nuc_ending,
-                                         mem_ending=mem_ending,
-                                         abs_min_intensity=abs_min_intensity,
-                                         img_dim=img_dim,
-                                         disconnected=disconnected)
-
-        # Save measurement into the organoid directory.
-        name = "regionprops_org_" + str(channel)
-        path = join(organoid.organoid_dir, name + ".csv")
-        df_org.to_csv(path, index=False)  # saves csv
-
-        # Add the measurement to the faim-hcs datastructure and save.
-        organoid.add_measurement(name, path)
-        organoid.save()  # updates json file
-
-        # NUCLEAR feature extraction
-        if nuc_seg is None:
-            continue  # skip organoids that don't have a nuclear segmentation
-
-        # make binary organoid mask and crop nuclear labels to this mask to limit nuclei from neighboting orgs
-        org_seg_binary = copy.deepcopy(org_seg)
-        org_seg_binary[org_seg_binary > 0] = 1
-        nuc_seg = nuc_seg * org_seg_binary
-
-        nuc_features = regionprops(
-            nuc_seg,
-            raw,
-            extra_properties=(fixed_percentiles, skewness, kurtos, stdv, surface_area_marchingcube),
-            spacing=spacing,
-        )
-
-        df_nuc = regionprops_to_row_nucleus(regionproperties=nuc_features,
-                                         org_channel=org_seg_ch,
-                                         nuc_channel=nuc_seg_ch,
-                                         mem_channel=mem_seg_ch,
-                                         organoid=organoid,
-                                         channel=channel,
-                                         mask_ending=mask_ending,
-                                         nuc_ending=nuc_ending,
-                                         mem_ending=mem_ending,
-                                         abs_min_intensity=None,
-                                         img_dim=None,
-                                         disconnected=None)
-
-        # Save measurement into the organoid directory.
-        name = "regionprops_nuc_" + str(channel)
-        path = join(organoid.organoid_dir, name + ".csv")
-        df_nuc.to_csv(path, index=False)  # saves csv
-
-        # Add the measurement to the faim-hcs datastructure and save.
-        organoid.add_measurement(name, path)
-        organoid.save()  # updates json file
-
-        # MEMBRANE feature extraction
-        if mem_seg is None:
-            continue  # skip organoids that don't have a cell segmentation
-
-        mem_seg = mem_seg * org_seg_binary
-
-        mem_features = regionprops(
-            mem_seg,
-            raw,
-            extra_properties=(fixed_percentiles, skewness, kurtos, stdv, surface_area_marchingcube),
-            spacing=spacing,
-        )
-
-        df_mem = regionprops_to_row_membrane(regionproperties=mem_features,
-                                         org_channel=org_seg_ch,
-                                         nuc_channel=nuc_seg_ch,
-                                         mem_channel=mem_seg_ch,
-                                         organoid=organoid,
-                                         channel=channel,
-                                         mask_ending=mask_ending,
-                                         nuc_ending=nuc_ending,
-                                         mem_ending=mem_ending,
-                                         abs_min_intensity=None,
-                                         img_dim=None,
-                                         disconnected=None)
-
-        # Save measurement into the organoid directory.
-        name = "regionprops_mem_" + str(channel)
-        path = join(organoid.organoid_dir, name + ".csv")
-        df_mem.to_csv(path, index=False)  # saves csv
-
-        # Add the measurement to the faim-hcs datastructure and save.
-        organoid.add_measurement(name, path)
-        organoid.save()  # updates json file
+    return
 
 
 def link_nuc_to_membrane(

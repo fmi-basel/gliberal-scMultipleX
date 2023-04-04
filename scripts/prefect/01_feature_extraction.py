@@ -34,8 +34,8 @@ from scmultiplex.config import (
     spacing_anisotropy_tuple,
 )
 from scmultiplex.features.FeatureExtraction import (
-    extract_2d_ovr,
     extract_organoid_features,
+    extract_well_features,
     link_nuc_to_membrane,
 )
 from scmultiplex.features.FeatureFunctions import flag_touching
@@ -59,15 +59,11 @@ def load_task(exp_path: str, excluded_plates: List[str], excluded_wells: List[st
 
 @task()
 def well_feature_extraction_ovr_task(well: WellRecord, ovr_channel: str, name_ovr: str):
-    logger = prefect.context.get("logger")
-    ovr_seg_img, ovr_seg_tiles = load_ovr(well, ovr_channel)
-
-    if ovr_seg_img is None and ovr_seg_tiles is None:
-        logger.warning(f"ovr_seg does not exists. Skipping {well.well_id}.")
-    else:
-        touching_labels_lst = flag_touching(ovr_seg_img, ovr_seg_tiles)
-        df_ovr = extract_2d_ovr(well, ovr_channel, ovr_seg_img, touching_labels_lst)
-        save_to_well(well, name_ovr + ovr_channel, df_ovr)
+    extract_well_features(
+        well=well,
+        ovr_channel=ovr_channel,
+    )
+    return
 
 
 @task()
@@ -105,9 +101,6 @@ def organioid_feature_extraction_and_linking_task(
         mem_ending=mem_ending,
         mask_ending=mask_ending,
         spacing=tuple(spacing),
-        org_seg_ch=org_seg_ch,
-        nuc_seg_ch=nuc_seg_ch,
-        mem_seg_ch=mem_seg_ch,
         measure_morphology=True,
     )
     link_nuc_to_membrane(
