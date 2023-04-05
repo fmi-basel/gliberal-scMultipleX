@@ -4,6 +4,7 @@ from skimage.measure import regionprops
 import numpy as np
 import pandas as pd
 
+from scmultiplex.config import spacing_anisotropy_scalar
 from scmultiplex.features.FeatureFunctions import (
     fixed_percentiles,
     kurtos,
@@ -195,9 +196,10 @@ def get_regionprops_measurements(
                 else:
                     morphology_3d_only = {
                         "imgdim_z": img.shape[-3],
-                        "x_pos_vox": labeled_obj["centroid"][-1],
-                        "y_pos_vox": labeled_obj["centroid"][-2],
-                        "z_pos_vox": labeled_obj["centroid"][-3],
+                        "x_pos_pix": labeled_obj["centroid"][-1],
+                        "y_pos_pix": labeled_obj["centroid"][-2],
+                        "z_pos_pix_scaled": labeled_obj["centroid"][-3],
+                        "z_pos_pix_img": labeled_obj["centroid"][-3]/spacing_anisotropy_scalar(spacing),
                         "is_touching_border_z": is_touching_border_z(
                             labeled_obj, img_shape=img.shape
                         ),
