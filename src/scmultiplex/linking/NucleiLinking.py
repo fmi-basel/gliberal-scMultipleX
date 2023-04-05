@@ -11,7 +11,7 @@
 from os.path import join
 
 import pandas as pd
-from faim_hcs.records.OrganoidRecord import OrganoidRecord
+from scmultiplex.faim_hcs.records.OrganoidRecord import OrganoidRecord
 
 from scmultiplex.platymatch.run_platymatch import runAffine, runFFD
 

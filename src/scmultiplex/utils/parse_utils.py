@@ -13,10 +13,10 @@ from glob import glob
 from os.path import basename, exists, isdir, join, split, splitext
 from typing import List, Pattern, Tuple
 
-from faim_hcs.hcs.Experiment import Experiment
-from faim_hcs.records.OrganoidRecord import OrganoidRecord
-from faim_hcs.records.PlateRecord import PlateRecord
-from faim_hcs.records.WellRecord import WellRecord
+from scmultiplex.faim_hcs.hcs.Experiment import Experiment
+from scmultiplex.faim_hcs.records.OrganoidRecord import OrganoidRecord
+from scmultiplex.faim_hcs.records.PlateRecord import PlateRecord
+from scmultiplex.faim_hcs.records.WellRecord import WellRecord
 from tqdm import tqdm
 
 

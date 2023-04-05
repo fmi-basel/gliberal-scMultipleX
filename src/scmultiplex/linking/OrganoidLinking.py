@@ -17,8 +17,8 @@ from typing import List
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from faim_hcs.hcs.Experiment import Experiment
-from faim_hcs.records.WellRecord import WellRecord
+from scmultiplex.faim_hcs.hcs.Experiment import Experiment
+from scmultiplex.faim_hcs.records.WellRecord import WellRecord
 from scipy.ndimage import shift
 from skimage.io import imsave
 from skimage.registration import phase_cross_correlation

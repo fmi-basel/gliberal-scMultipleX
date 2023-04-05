@@ -13,7 +13,7 @@ from os.path import join
 
 import numpy as np
 import pandas as pd
-from faim_hcs.hcs.Experiment import Experiment
+from scmultiplex.faim_hcs.hcs.Experiment import Experiment
 
 
 def load_organoid_features(exp: Experiment):

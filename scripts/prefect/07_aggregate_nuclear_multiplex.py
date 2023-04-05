@@ -12,7 +12,7 @@ import argparse
 import configparser
 import sys
 
-from faim_hcs.hcs.Experiment import Experiment
+from scmultiplex.faim_hcs.hcs.Experiment import Experiment
 from prefect import Flow, Parameter, task
 from prefect.executors import LocalDaskExecutor
 from prefect.run_configs import LocalRun

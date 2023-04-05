@@ -14,7 +14,7 @@ import sys
 from typing import List
 
 import prefect
-from faim_hcs.hcs.Experiment import Experiment
+from scmultiplex.faim_hcs.hcs.Experiment import Experiment
 from prefect import Flow, Parameter, task, unmapped
 from prefect.executors import LocalDaskExecutor
 from prefect.run_configs import LocalRun

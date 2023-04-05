@@ -14,8 +14,8 @@ from typing import List, Tuple
 
 import numpy as np
 import pandas as pd
-from faim_hcs.records.OrganoidRecord import OrganoidRecord
-from faim_hcs.records.WellRecord import WellRecord
+from scmultiplex.faim_hcs.records.OrganoidRecord import OrganoidRecord
+from scmultiplex.faim_hcs.records.WellRecord import WellRecord
 
 from scmultiplex.features.FeatureFunctions import flag_touching
 
