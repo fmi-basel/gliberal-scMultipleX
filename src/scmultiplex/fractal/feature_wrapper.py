@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Dict, Union
 from typing import Dict
 from skimage.measure import regionprops
 import numpy as np
@@ -29,22 +29,24 @@ from scmultiplex.features.FeatureFunctions import (
 
 def get_regionprops_measurements(
     label_img: np.array,
-    img: [np.array, None],
-    spacing: [tuple, None],
+    img: Union[np.array, None],
+    spacing: Union[tuple, None],
     is_2D: bool,
     measure_morphology=False,
     min_area_fraction=0.005,
-    channel_prefix: [str, None] = "",
+    channel_prefix: Union[str, None] = None,
     extra_values: Dict[str, Any] = {},
 ):
     """
     :param label_img: 2D or 3D numpy array of labeled objects
-    :param img: 2D or 3D numpy array of the intensity image to measure
+    :param img: Optional 2D or 3D numpy array of the intensity image to measure. 
+                If None, only the label image is measured.
     :param spacing: Tuple of the spacing in z, y, x.
     :param is_2D: Boolean indicating if the image is 2D or 3D
     :param measure_morphology: Boolean indicating if morphology measurements should be made
     :param min_area_fraction: Minimum area fraction for concavity count
-    :param channel_prefix: String to prefix to the column names of intensity measurements
+    :param channel_prefix: String to prefix to the column names of 
+                           intensity measurements. Defaults to None => no prefix
     :param extra_values: Dictionary of column names (keys) and constant values
                          (values) for constant values that should be added to
                          each row of the measurement
