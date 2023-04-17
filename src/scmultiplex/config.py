@@ -71,3 +71,9 @@ def spacing_anisotropy_scalar(spacing):
         return list(spacing_anisotropy_tuple(spacing))[0]
     else:
         raise ValueError('expect 3-dimensional pixel spacing for z-anisotropy calculation')
+
+
+def spacing_to2d(spacing):
+    if len(spacing) == 3:
+        return spacing[1:]
+    return spacing

@@ -3,7 +3,7 @@ from skimage.measure import regionprops
 import numpy as np
 import pandas as pd
 
-from scmultiplex.config import spacing_anisotropy_scalar
+from scmultiplex.config import spacing_anisotropy_scalar, spacing_to2d
 from scmultiplex.features.FeatureFunctions import (
     fixed_percentiles,
     kurtos,
@@ -155,11 +155,12 @@ def get_regionprops_measurements(
                 morphology_measurements["aspectRatio_equivalentDiameter"] = np.NaN
 
             if is_2D:
+                spacing_2d = spacing_to2d(spacing)
                 morphology_2D_only = {
                     "area_pix": labeled_obj["area"],
                     "perimeter": labeled_obj["perimeter"],
                     "concavity": convex_hull_area_resid(labeled_obj),
-                    "asymmetry": convex_hull_centroid_dif(labeled_obj),
+                    "asymmetry": convex_hull_centroid_dif(labeled_obj, spacing_2d),
                     "eccentricity": labeled_obj["eccentricity"],
                     "circularity": circularity(labeled_obj),
                     "concavity_count": concavity_count(
