@@ -1,5 +1,4 @@
 from typing import Any, Dict, Union
-from typing import Dict
 from skimage.measure import regionprops
 import numpy as np
 import pandas as pd
