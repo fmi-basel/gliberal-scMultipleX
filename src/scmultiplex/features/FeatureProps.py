@@ -10,7 +10,7 @@
 
 import pandas as pd
 
-from scmultiplex.fractal.feature_wrapper import get_regionprops_measurements
+from scmultiplex.features.feature_wrapper import get_regionprops_measurements
 
 from scmultiplex.utils.save_utils import save_to_record
 

@@ -27,7 +27,7 @@ import numpy as np
 import pandas as pd
 import zarr
 from anndata.experimental import write_elem
-from scmultiplex.fractal.feature_wrapper import get_regionprops_measurements
+from scmultiplex.features.feature_wrapper import get_regionprops_measurements
 
 import fractal_tasks_core
 from fractal_tasks_core.lib_channels import get_channel_from_image_zarr

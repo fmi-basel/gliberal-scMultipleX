@@ -21,9 +21,9 @@ from devtools import debug
 # from fractal_tasks_core.yokogawa_to_ome_zarr import yokogawa_to_ome_zarr
 from scmultiplex_feature_measurements import scmultiplex_measurements
 
-zarr_path = "/Users/joel/shares/workShareJoel/v1_fractal/fractal-demos/examples/02_cardio_small/tmp_cardio-2x2-testing/output/"
+# zarr_path = "/Users/joel/shares/workShareJoel/v1_fractal/fractal-demos/examples/02_cardio_small/tmp_cardio-2x2-testing/output/"
 # metadata_path = "/Users/joel/shares/homeShareFractal/joel/fractal_v1/fractal-demos/examples/server/{artifacts-110}/workflow_000007_job_000006/metadata.json"
-metadata_path = "/Users/joel/shares/homeShareFractal/joel/fractal_v1/fractal-demos/examples/server/{artifacts-110}/workflow_000007_job_000006/metadata_3D.json"
+# metadata_path = "/Users/joel/shares/homeShareFractal/joel/fractal_v1/fractal-demos/examples/server/{artifacts-110}/workflow_000007_job_000006/metadata_3D.json"
 
 zarr_path = "/Users/joel/Dropbox/Joel/FMI/Code/fractal/fractal-demos/examples/01_cardio_tiny_dataset/tmp_cardiac-iPSCs/output/"
 metadata_path = "/Users/joel/Dropbox/Joel/FMI/Code/fractal/fractal-demos/examples/server/artifacts/workflow_000001_job_000001/metadata.json" 
@@ -38,7 +38,7 @@ input_channels = {
     # "C03": {"wavelength_id": "A02_C03"}, 
 }
 label_image = 'nuclei'
-output_table_name = 'table_scmultiplex_2D_17'
+output_table_name = 'table_scmultiplex_2D_dev-nar'
 measure_morphology = True
 
 # scmultiplex task running on existing Zarr file:
