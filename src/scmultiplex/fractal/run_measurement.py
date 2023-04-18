@@ -25,20 +25,20 @@ from scmultiplex_feature_measurements import scmultiplex_measurements
 # metadata_path = "/Users/joel/shares/homeShareFractal/joel/fractal_v1/fractal-demos/examples/server/{artifacts-110}/workflow_000007_job_000006/metadata.json"
 # metadata_path = "/Users/joel/shares/homeShareFractal/joel/fractal_v1/fractal-demos/examples/server/{artifacts-110}/workflow_000007_job_000006/metadata_3D.json"
 
-zarr_path = "/Users/joel/Dropbox/Joel/FMI/Code/fractal/fractal-demos/examples/01_cardio_tiny_dataset/tmp_cardiac-iPSCs/output/"
-metadata_path = "/Users/joel/Dropbox/Joel/FMI/Code/fractal/fractal-demos/examples/server/artifacts/workflow_000001_job_000001/metadata.json" 
+zarr_path = "/Users/joel/Dropbox/Joel/FMI/Code/fractal/fractal-demos/examples/01_cardio_tiny_dataset/tmp_cardiac-tiny-scMultiplex/output/"
+metadata_path = "/Users/joel/Dropbox/Joel/FMI/Code/fractal/fractal-demos/examples/server/artifacts/workflow_000015_job_000015/metadata.json" 
 
 with open(metadata_path) as json_file:
     metadata = json.load(json_file)
 
 
 input_channels = {
-    "C01": {"wavelength_id": "A01_C01"}, 
+    # "C01": {"wavelength_id": "A01_C01"}, 
     # "C02": {"wavelength_id": "A01_C02"}, 
     # "C03": {"wavelength_id": "A02_C03"}, 
 }
 label_image = 'nuclei'
-output_table_name = 'table_scmultiplex_2D_dev-nar'
+output_table_name = 'table_scmultiplex_2D_no_int_img'
 measure_morphology = True
 
 # scmultiplex task running on existing Zarr file:

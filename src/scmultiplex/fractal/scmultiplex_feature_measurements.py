@@ -53,20 +53,40 @@ def scmultiplex_measurements(
     metadata: Dict[str, Any],
     # Task-specific arguments:
     input_ROI_table: str = "FOV_ROI_table",
-    input_channels: Dict[str, Dict[str, str]],
+    input_channels: Dict[str, Dict[str, str]] = {},
     label_image: str,
     output_table_name: str,
-    level=0,
+    level: int = 0,
+    label_level: int = 0,
     measure_morphology: bool = True,
     allow_duplicate_labels: bool = False,
 ):
     """
-    Wrapper task for scmultiplex measurements for Fractal
+    Wrapper task for scmultiplex measurements for Fractal to generate
+    measurements of intensities and morphologies
 
     :param input_paths: TBD (default arg for Fractal tasks)
     :param output_path: TBD (default arg for Fractal tasks)
     :param metadata: TBD (default arg for Fractal tasks)
     :param component: TBD (default arg for Fractal tasks)
+    :param input_ROI_table: Name of the ROI table to loop over. Needs to exists
+                            as a ROI table in the OME-Zarr file
+    :param input_channels: Dictionary of channels to measure. Keys are the
+                           names that will be added as prefixes to the
+                           measurements, values are another dictionary
+                           containing either wavelength_id or channel_label
+                           information to allow Fractal to find the correct
+                           channel (but not both). Example:
+                            {"C01": {"wavelength_id": "A01_C01"}
+                            To only measure morphology, provide an empty dict
+    :param label_image: Name of the label image to use for measurements.
+                        Needs to exist in OME-Zarr file
+    :param output_table_name: Name of the output AnnData table to save the
+                              measurements in. A table of this name can't exist
+                              yet in the OME-Zarr file
+    :param level: Resolution of the intensity image to load for measurements.
+                  Only tested for level 0
+    : param measure_morphology: Set to True to measure morphology features
     :param allow_duplicate_labels: Set to True to allow saving measurement
                                    tables with non-unique label values. Can
                                    happen when segmentation is run on a
@@ -114,10 +134,6 @@ def scmultiplex_measurements(
             "level are not currently supported"
         )
 
-    # FIXME: More reliable way to get the correct scale?
-    # Would not work well with multiple different coordinateTransformations
-    spacing = multiscales[0]["datasets"][level]["coordinateTransformations"][0]["scale"]
-
     # Read ROI table
     ROI_table = ad.read_zarr(f"{in_path}/{component}/tables/{input_ROI_table}")
 
@@ -159,26 +175,39 @@ def scmultiplex_measurements(
         logger.info(f"{input_image_arrays=}")
 
     # Set target_shape for upscaling labels
-    if not input_image_arrays:
-        # TODO: Allow user to just make morphology measurements?
-        raise ValueError(f"No images loaded for {input_channels=}")
+    # if not input_image_arrays:
+    #     # TODO: Allow user to just make morphology measurements?
+    #     raise ValueError(f"No images loaded for {input_channels=}")
 
     # FIXME: Add check whether label exists?
     input_label_image = da.from_zarr(
-        f"{in_path}/{component}/labels/{label_image}/{level}"
+        f"{in_path}/{component}/labels/{label_image}/{label_level}"
     )
 
-    # If we allow shape measurements without intensity images,
-    # then need to upscale differently
-    target_shape = list(input_image_arrays.values())[0].shape
-    input_label_image = upscale_array(
-        array=input_label_image,
-        target_shape=target_shape,
-        axis=[1, 2],
-        pad_with_zeros=True,
-    )
+    if input_channels:
+        # Upsample the label image to match the intensity image
+        target_shape = list(input_image_arrays.values())[0].shape
+        input_label_image = upscale_array(
+            array=input_label_image,
+            target_shape=target_shape,
+            axis=[1, 2],
+            pad_with_zeros=True,
+        )
+        # FIXME: More reliable way to get the correct scale? => switch to ome-zarr-py?
+        # Would not work well with multiple different coordinateTransformations
+        spacing = multiscales[0]["datasets"][level]["coordinateTransformations"][0]["scale"]
+        logger.info(f"Loaded {label_image=} and {params=}")
+    else:
+        logger.info(
+            "No intensity images provided, only calculating measurement for "
+            f"the label image {label_image}"
+            )
+        zattrs_file_label = f"{in_path}/{component}/labels/{label_image}/.zattrs"
+        with open(zattrs_file_label, "r") as jsonfile:
+            zattrs_label = json.load(jsonfile)
+        spacing = zattrs_label["multiscales"][0]["datasets"][level]["coordinateTransformations"][0]["scale"]
 
-    logger.info(f"Loaded {label_image=} and {params=}")
+    
 
     #####
 
@@ -191,61 +220,94 @@ def scmultiplex_measurements(
         logger.info(f"ROI {i_ROI+1}/{num_ROIs}: {region=}")
 
         # Load the label image
+        # TODO: Add option to mask with a ROI label mask. Actually only
+        # needs input masking here, as the return value is a table
         label_img = input_label_image[region].compute()
         if label_img.shape[0] == 1:
             logger.info("Label image is 2D only, processing with 2D options")
             label_img = np.squeeze(label_img, axis=0)
+            real_spacing = spacing[1:]
+            is_2D = True
+        elif len(label_img.shape) == 2:
+            is_2D = True
+            real_spacing = spacing
+        elif len(label_img.shape) == 3:
+            is_2D = False
+            real_spacing = spacing
+        else:
+            raise NotImplementedError(
+                f"Loaded an image of shape {label_img.shape}. "
+                "Processing is only supported for 2D & 3D images"
+            )
+        
+        # Define some constant values to be added as a separat column to
+        # the obs table
+        # TODO: Add ROI label once we allow for masked ROIs
+        extra_values = {
+            "ROI_table_name": input_ROI_table,
+            "ROI_name": ROI_table.obs.index[i_ROI],
+        }
 
         # Set inputs
         df_roi = pd.DataFrame()
         df_info_roi = pd.DataFrame()
         first_channel = True
-        for input_name in input_channels.keys():
-            img = input_image_arrays[input_name][region].compute()
-            # TODO: Add option to mask with a ROI label mask. Actually only
-            # needs input masking here, as the return value is a table
+        if input_channels:
+            for input_name in input_channels.keys():
+                img = input_image_arrays[input_name][region].compute()
+                # TODO: Add option to mask with a ROI label mask. Actually only
+                # needs input masking here, as the return value is a table
 
-            # Check whether the input is 2D or 3D
-            if img.shape[0] == 1:
-                logger.info("Image is 2D only, processing with 2D options")
-                img = np.squeeze(img, axis=0)
-                real_spacing = spacing[1:]
-                is_2D = True
-            elif len(img.shape) == 2:
-                real_spacing = spacing
-                is_2D = True
-            elif len(img.shape) == 3:
-                real_spacing = spacing
-                is_2D = False
-            else:
-                raise NotImplementedError(
-                    f"Loaded an image of shape {img.shape}. "
-                    "Processing is only supported for 2D & 3D images"
+                # Check whether the input is 2D or 3D & matches the label_img
+                if img.shape[0] == 1 and is_2D:
+                    img = np.squeeze(img, axis=0)
+                elif len(img.shape) == 2 and is_2D:
+                    pass
+                elif len(img.shape) == 3 and not is_2D:
+                    pass
+                else:
+                    raise NotImplementedError(
+                        f"Loaded an image of shape {img.shape}. "
+                        f"and label image of shape {label_img.shape}."
+                        "Processing is only supported for 2D & 3D images"
+                        "and where the label image and the input image have"
+                        "the same dimensionality."
+                    )
+
+                calc_morphology = first_channel and measure_morphology
+                new_df, new_info_df = get_regionprops_measurements(
+                    label_img,
+                    img,
+                    spacing=real_spacing,
+                    is_2D=is_2D,
+                    measure_morphology=calc_morphology,
+                    channel_prefix=input_name,
+                    extra_values=extra_values,
                 )
 
-            # Define some constant values to be added as a separat column to
-            # the obs table
-            # TODO: Add ROI label once we allow for masked ROIs
-            extra_values = {
-                "ROI_table_name": input_ROI_table,
-                "ROI_name": ROI_table.obs.index[i_ROI],
-            }
+                # Only measure morphology for the first intensity channel provided
+                # => just once per label image
+                first_channel = False
 
+                if "label" in df_roi.columns:
+                    df_roi = df_roi.merge(right=new_df, how="outer", on="label")
+                    df_info_roi = df_info_roi.merge(
+                        right=new_info_df, how="outer", on="label"
+                    )
+                else:
+                    df_roi = pd.concat([df_roi, new_df], axis=1)
+                    df_info_roi = pd.concat([df_info_roi, new_info_df], axis=1)
+        else:
+            # Only measure morphology
             calc_morphology = first_channel and measure_morphology
             new_df, new_info_df = get_regionprops_measurements(
                 label_img,
-                img,
+                img = None,
                 spacing=real_spacing,
                 is_2D=is_2D,
                 measure_morphology=calc_morphology,
-                channel_prefix=input_name,
                 extra_values=extra_values,
-            )
-
-            # Only measure morphology for the first intensity channel provided 
-            # => just once per label image
-            first_channel = False
-
+            )    
             if "label" in df_roi.columns:
                 df_roi = df_roi.merge(right=new_df, how="outer", on="label")
                 df_info_roi = df_info_roi.merge(
@@ -264,12 +326,13 @@ def scmultiplex_measurements(
     # Ensure that the label column in df_well & df_info_well match
     if not (df_well["label"] == df_info_well["label"]).all():
         raise ValueError(
-            f"Label column in df_well and df_info_well do not match. {df_well['label']} != {df_info_well['label']}"
+            "Label column in df_well and df_info_well do not match. "
+            f"{df_well['label']} != {df_info_well['label']}"
         )
 
     # Check that labels are unique
-    # Typical issue: Ran segmentation per well, but measurement per FOV 
-    # => splits labels into multiple measurements 
+    # Typical issue: Ran segmentation per well, but measurement per FOV
+    # => splits labels into multiple measurements
     if not allow_duplicate_labels:
         total_measurements = len(df_well["label"])
         unique_labels = len(df_well["label"].unique())
