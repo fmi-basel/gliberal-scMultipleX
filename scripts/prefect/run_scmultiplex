@@ -25,6 +25,7 @@ from traceback import format_exc
 
 from scmultiplex.config import get_workflow_params
 from scmultiplex.utils import get_core_count
+from scmultiplex import version
 
 try:
 	from os import waitstatus_to_exitcode
@@ -132,9 +133,13 @@ def main(args):
 	
 	save_dir = get_config_params(config_path)['save_dir']
 	logfile_name = 'scmultiplex-%s.log' % datetime.now().strftime(log_time_format)
+	logfile_path = os.path.join(save_dir, logfile_name)
+	print('scMultipleX version %s' % version)
+	with open(logfile_path, 'a') as logfile:
+		logfile.write('scMultipleX version %s' % version)
 	
 	for task in task_list:
-		run_task(task, config_path, os.path.join(save_dir, logfile_name), cpus)
+		run_task(task, config_path, logfile_path, cpus)
 
 if __name__ == '__main__':
 	# workaround terminal width detection bug
