@@ -202,8 +202,7 @@ def scmultiplex_measurements(
             zattrs_label = json.load(jsonfile)
         spacing = zattrs_label["multiscales"][0]["datasets"][level]["coordinateTransformations"][0]["scale"]
 
-    #####
-
+    ##### Loop over ROIs to make measurements #####
     df_well = pd.DataFrame()
     df_info_well = pd.DataFrame()
     for i_ROI, indices in enumerate(list_indices):
@@ -339,9 +338,9 @@ def scmultiplex_measurements(
     # Convert all to float (warning: some would be int, in principle)
     measurement_dtype = np.float32
     df_well = df_well.astype(measurement_dtype)
+    df_well.index = df_well.index.map(str)
     # Convert to anndata
     measurement_table = ad.AnnData(df_well, dtype=measurement_dtype)
-    # measurement_table.obs = labels
     measurement_table.obs = df_info_well
 
     # Write to zarr group
