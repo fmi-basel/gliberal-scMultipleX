@@ -312,9 +312,6 @@ def scmultiplex_measurements(
         df_well = pd.concat([df_well, df_roi], axis=0, ignore_index=True)
         df_info_well = pd.concat([df_info_well, df_info_roi], axis=0, ignore_index=True)
 
-    print(df_well)
-    print(list(df_well.columns))
-
     # Ensure that the label column in df_well & df_info_well match
     if not (df_well["label"] == df_info_well["label"]).all():
         raise ValueError(
@@ -365,6 +362,7 @@ if __name__ == "__main__":
         label_image: str
         output_table_name: str
         level: int
+        label_level: int
         measure_morphology: bool
 
     run_fractal_task(

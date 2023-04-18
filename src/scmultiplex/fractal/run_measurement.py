@@ -38,7 +38,7 @@ input_channels = {
     # "C03": {"wavelength_id": "A02_C03"}, 
 }
 label_image = 'nuclei'
-output_table_name = 'table_scmultiplex_2D_no_int_img'
+output_table_name = 'table_scmultiplex_2D_index'
 measure_morphology = True
 
 # scmultiplex task running on existing Zarr file:
