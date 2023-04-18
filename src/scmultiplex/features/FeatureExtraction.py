@@ -33,14 +33,15 @@ def extract_organoid_features(
     mask_ending: str,
     spacing: Tuple[float],
     measure_morphology,
+    organoid_seg_channel,
+    nuclear_seg_channel,
+    membrane_seg_channel,
 ):
     nuc_seg = organoid.get_segmentation(nuc_ending)  # load segmentation images
     mem_seg = organoid.get_segmentation(mem_ending)  # load segmentation images
     org_seg = organoid.get_segmentation(mask_ending)
 
-
     # for each raw image, extract organoid-level features
-    first_channel = True
 
     for channel in organoid.raw_files:
 
@@ -56,7 +57,7 @@ def extract_organoid_features(
 
         abs_min_intensity = np.amin(raw_mip)
 
-        calc_morphology = first_channel and measure_morphology
+        calc_morphology = (channel == organoid_seg_channel) and measure_morphology
 
         extra_values_common = {'hcs_experiment': organoid.well.plate.experiment.name,
                                'root_dir': organoid.well.plate.experiment.root_dir,
@@ -71,6 +72,7 @@ def extract_organoid_features(
             'object_type': 'organoid',
             'abs_min': abs_min_intensity,
         }
+
 
         measure_features(
             object_type = 'org',
@@ -90,6 +92,7 @@ def extract_organoid_features(
 
         # NUCLEAR feature extraction
         if nuc_seg is not None:
+            calc_morphology = (channel == nuclear_seg_channel) and measure_morphology
 
             extra_values_nuc = {
                 'segmentation_nuc': organoid.segmentations[nuc_ending],
@@ -119,6 +122,7 @@ def extract_organoid_features(
 
         # MEMBRANE feature extraction
         if mem_seg is not None:
+            calc_morphology = (channel == membrane_seg_channel) and measure_morphology
 
             extra_values_mem = {
                 'segmentation_mem': organoid.segmentations[mem_ending],
@@ -144,8 +148,6 @@ def extract_organoid_features(
                 extra_values_object=extra_values_mem,
                 touching_labels=None,
             )
-
-        first_channel = False
 
     return
 
