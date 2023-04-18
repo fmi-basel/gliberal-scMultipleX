@@ -86,7 +86,8 @@ def scmultiplex_measurements(
                               yet in the OME-Zarr file
     :param level: Resolution of the intensity image to load for measurements.
                   Only tested for level 0
-    : param measure_morphology: Set to True to measure morphology features
+    :param label_level: Resolution of the label image to load for measurements.
+    :param measure_morphology: Set to True to measure morphology features
     :param allow_duplicate_labels: Set to True to allow saving measurement
                                    tables with non-unique label values. Can
                                    happen when segmentation is run on a
@@ -96,10 +97,11 @@ def scmultiplex_measurements(
 
     # Level-related constraint
     logger.info(f"This workflow acts at {level=}")
-    if level != 0:
+    if level != 0 or label_level != 0:
         # TODO: Test whether this constraint can be lifted
-        raise NotImplementedError(
-            "scMultipleX Measurements are only implemented for level 0"
+        logger.warning(
+            f"Measuring at {level=} & {label_level=}: It's not recommended "
+            "to measure at lower resolutions"
         )
 
     # Pre-processing of task inputs

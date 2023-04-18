@@ -33,13 +33,15 @@ with open(metadata_path) as json_file:
 
 
 input_channels = {
-    # "C01": {"wavelength_id": "A01_C01"}, 
+    "C01": {"wavelength_id": "A01_C01"}, 
     # "C02": {"wavelength_id": "A01_C02"}, 
     # "C03": {"wavelength_id": "A02_C03"}, 
 }
 label_image = 'nuclei'
-output_table_name = 'table_scmultiplex_2D_index'
+output_table_name = 'table_scmultiplex_level_00'
 measure_morphology = True
+level = 0
+label_level = 0
 
 # scmultiplex task running on existing Zarr file:
 for component in metadata["image"]:
@@ -51,6 +53,8 @@ for component in metadata["image"]:
         input_ROI_table = "well_ROI_table", #"well_ROI_table", #"FOV_ROI_table",
         input_channels = input_channels,
         label_image = label_image,
+        label_level = label_level,
+        level = level,
         output_table_name = output_table_name,
         measure_morphology = measure_morphology,
     )
