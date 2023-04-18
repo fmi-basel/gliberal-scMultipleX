@@ -124,10 +124,10 @@ def get_regionprops_measurements(
         if measure_morphology:
             morphology_measurements = {
                 "is_touching_border_xy": is_touching_border_xy(
-                    labeled_obj, img_shape=img.shape
+                    labeled_obj, img_shape=label_img.shape
                 ),
-                "imgdim_x": img.shape[-1],
-                "imgdim_y": img.shape[-2],
+                "imgdim_x": label_img.shape[-1],
+                "imgdim_y": label_img.shape[-2],
                 "area_bbox": labeled_obj["area_bbox"],
                 "area_convhull": labeled_obj["area_convex"],
                 "equivDiam": labeled_obj["equivalent_diameter_area"],
