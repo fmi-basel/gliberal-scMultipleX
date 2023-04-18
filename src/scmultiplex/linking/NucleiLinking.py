@@ -75,10 +75,10 @@ def link_nuclei(organoid, ovr_channel, segname, rx_name, RX, z_anisotropy, org_s
 
                 # N x 5 (first column is ids, last column is size)
                 R0_numpy = R0_df[
-                    ["nuc_id", "x_pos_vox", "y_pos_vox", "z_pos_vox", "volume_pix"]
+                    ["nuc_id", "x_pos_pix", "y_pos_pix", "z_pos_pix_scaled", "volume_pix"]
                 ].to_numpy()
                 RX_numpy = RX_df[
-                    ["nuc_id", "x_pos_vox", "y_pos_vox", "z_pos_vox", "volume_pix"]
+                    ["nuc_id", "x_pos_pix", "y_pos_pix", "z_pos_pix_scaled", "volume_pix"]
                 ].to_numpy()
 
                 # output of feature extraction z-centroid is scaled by z-anisotropy
