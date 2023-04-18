@@ -366,6 +366,7 @@ if __name__ == "__main__":
         level: int
         label_level: int
         measure_morphology: bool
+        allow_duplicate_labels: bool
 
     run_fractal_task(
         task_function=scmultiplex_measurements,

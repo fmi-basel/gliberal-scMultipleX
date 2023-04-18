@@ -38,7 +38,7 @@ input_channels = {
     # "C03": {"wavelength_id": "A02_C03"}, 
 }
 label_image = 'nuclei'
-output_table_name = 'table_scmultiplex_level_00'
+output_table_name = 'table_scmultiplex_refactor'
 measure_morphology = True
 level = 0
 label_level = 0
