@@ -174,11 +174,6 @@ def scmultiplex_measurements(
         logger.info(f"Prepared input with {name=} and {params=}")
         logger.info(f"{input_image_arrays=}")
 
-    # Set target_shape for upscaling labels
-    # if not input_image_arrays:
-    #     # TODO: Allow user to just make morphology measurements?
-    #     raise ValueError(f"No images loaded for {input_channels=}")
-
     # FIXME: Add check whether label exists?
     input_label_image = da.from_zarr(
         f"{in_path}/{component}/labels/{label_image}/{label_level}"
@@ -206,8 +201,6 @@ def scmultiplex_measurements(
         with open(zattrs_file_label, "r") as jsonfile:
             zattrs_label = json.load(jsonfile)
         spacing = zattrs_label["multiscales"][0]["datasets"][level]["coordinateTransformations"][0]["scale"]
-
-    
 
     #####
 
