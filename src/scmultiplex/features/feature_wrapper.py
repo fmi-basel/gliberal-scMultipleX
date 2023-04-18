@@ -173,9 +173,9 @@ def get_regionprops_measurements(
                 morphology_measurements.update(morphology_2D_only)
             else:
                 morphology_3d_only = {
-                    "imgdim_z": img.shape[-3],
+                    "imgdim_z": label_img.shape[-3],
                     "is_touching_border_z": is_touching_border_z(
-                        labeled_obj, img_shape=img.shape
+                        labeled_obj, img_shape=label_img.shape
                     ),
                     "volume_pix": labeled_obj["area"],
                     "surface_area": labeled_obj["surface_area_marchingcube"],
