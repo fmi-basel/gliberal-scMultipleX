@@ -210,6 +210,7 @@ def is_touching_border_xy(labeled_obj, img_shape):
     else:
         raise NotImplementedError("Only 2D and 3D images are supported in is_touching_border_xy")
 
+
 def is_touching_border_z(labeled_obj, img_shape):
     """
     Helper function to check if an object is touching the border of the image
@@ -224,3 +225,11 @@ def is_touching_border_z(labeled_obj, img_shape):
             return False
     else:
         raise NotImplementedError("Only 3D images are supported in is_touching_border_z")
+
+
+def centroid_weighted_correct(labeled_obj, spacing):
+    centroid_local = labeled_obj.centroid_weighted_local
+    bb_origin = np.array([x.start for x in labeled_obj.slice])
+    bb_origin_scaled = bb_origin * spacing
+    return bb_origin_scaled + centroid_local
+

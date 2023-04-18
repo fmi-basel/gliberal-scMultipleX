@@ -5,6 +5,7 @@ import pandas as pd
 
 from scmultiplex.config import spacing_anisotropy_scalar, spacing_to2d
 from scmultiplex.features.FeatureFunctions import (
+    centroid_weighted_correct,
     fixed_percentiles,
     kurtos,
     skewness,
@@ -225,6 +226,17 @@ def get_regionprops_measurements(
                 intensity_measurements_pref = intensity_measurements
 
             label_info.update(intensity_measurements_pref)
+
+        if True:
+            if 'x_pos_weighted_pix' in label_info:
+                corrected_weighted_centroid = centroid_weighted_correct(labeled_obj, spacing)
+                label_info['x_pos_weighted_pix'] = corrected_weighted_centroid[-1]
+                label_info['y_pos_weighted_pix'] = corrected_weighted_centroid[-2]
+                label_info['x_massDisp_pix'] = corrected_weighted_centroid[-1] - labeled_obj["centroid"][-1]
+                label_info['y_massDisp_pix'] = corrected_weighted_centroid[-2] - labeled_obj["centroid"][-2]
+                if 'z_pos_weighted_pix' in label_info:
+                    label_info['z_pos_weighted_pix'] = corrected_weighted_centroid[-3]
+                    label_info['z_massDisp_pix'] = corrected_weighted_centroid[-3] - labeled_obj["centroid"][-3]
 
         measurement_rows.append(label_info)
 
