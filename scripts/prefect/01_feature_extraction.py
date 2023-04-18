@@ -92,8 +92,9 @@ def get_organoids(
 
 @task()
 def organoid_feature_extraction_and_linking_task(
-    organoid, nuc_ending: str, mem_ending: str, mask_ending: str, spacing: List[float], org_seg_ch, nuc_seg_ch, mem_seg_ch, ovr_channel, iop_cutoff
-    ):
+    organoid, nuc_ending: str, mem_ending: str, mask_ending: str, spacing: List[float],
+        org_seg_ch, nuc_seg_ch, mem_seg_ch, ovr_channel, iop_cutoff):
+
     set_spacing(spacing)
     extract_organoid_features(
         organoid=organoid,
@@ -102,6 +103,9 @@ def organoid_feature_extraction_and_linking_task(
         mask_ending=mask_ending,
         spacing=tuple(spacing),
         measure_morphology=True,
+        organoid_seg_channel=org_seg_ch,
+        nuclear_seg_channel=nuc_seg_ch,
+        membrane_seg_channel=mem_seg_ch,
     )
     link_nuc_to_membrane(
         organoid=organoid,
@@ -112,6 +116,7 @@ def organoid_feature_extraction_and_linking_task(
         iop_cutoff=iop_cutoff,
     )
     return
+
 
 # all feature extraction in one flow because writing to the same json file
 def run_flow(r_params, cpus):
