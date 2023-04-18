@@ -58,6 +58,9 @@ def measure_features(object_type,
     elif object_type == 'ovr':
         info_df = info_df.rename(columns={"label": "org_id"})
         info_df["flag_tile_border"] = info_df["org_id"].isin(touching_labels)
+
+        num_df = num_df.rename(columns={"x_pos_pix": "x_pos_pix_global",
+                                        "y_pos_pix": "y_pos_pix_global"})
     else:
         info_df = info_df.rename(columns={"label": object_type + "_id"})
 

@@ -91,9 +91,10 @@ def get_organoids(
 
 
 @task()
-def organioid_feature_extraction_and_linking_task(
-    organoid, nuc_ending: str, mem_ending: str, mask_ending: str, spacing: List[float], org_seg_ch, nuc_seg_ch, mem_seg_ch, ovr_channel, iop_cutoff
-    ):
+def organoid_feature_extraction_and_linking_task(
+    organoid, nuc_ending: str, mem_ending: str, mask_ending: str, spacing: List[float],
+        org_seg_ch, nuc_seg_ch, mem_seg_ch, ovr_channel, iop_cutoff):
+
     set_spacing(spacing)
     extract_organoid_features(
         organoid=organoid,
@@ -102,6 +103,9 @@ def organioid_feature_extraction_and_linking_task(
         mask_ending=mask_ending,
         spacing=tuple(spacing),
         measure_morphology=True,
+        organoid_seg_channel=org_seg_ch,
+        nuclear_seg_channel=nuc_seg_ch,
+        membrane_seg_channel=mem_seg_ch,
     )
     link_nuc_to_membrane(
         organoid=organoid,
@@ -112,6 +116,7 @@ def organioid_feature_extraction_and_linking_task(
         iop_cutoff=iop_cutoff,
     )
     return
+
 
 # all feature extraction in one flow because writing to the same json file
 def run_flow(r_params, cpus):
@@ -142,7 +147,7 @@ def run_flow(r_params, cpus):
 
         organoids = get_organoids(exp, mask_ending, excluded_plates, excluded_wells, upstream_tasks = [wfeo_t])
         
-        organioid_feature_extraction_and_linking_task.map(
+        organoid_feature_extraction_and_linking_task.map(
             organoids,
             unmapped(nuc_ending),
             unmapped(mem_ending),
@@ -229,7 +234,7 @@ def get_config_params(config_file_path):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config")
+    parser.add_argument("--config", required = True)
     parser.add_argument("--cpus", type=int, default=get_core_count())
     args = parser.parse_args()
     cpus = args.cpus

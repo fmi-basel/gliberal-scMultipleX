@@ -74,11 +74,15 @@ def convex_hull_area_resid(prop_2D):
 
 # from Ark
 # https://github.com/angelolab/ark-analysis/blob/main/src/ark/segmentation/regionprops_extraction.py
-def convex_hull_centroid_dif(prop_2D):
+def convex_hull_centroid_dif(prop_2D, spacing):
     """Return the normalized euclidian distance between the centroid of the object label
         and the centroid of the convex hull
         Normalize to the object area; becomes fraction of object composed of divots & indentations
     """
+
+    if len(spacing) != 2:
+        raise ValueError("spacing must be 2D for convex_hull_centroid_dif calculation")
+
     # Use image that has same size as bounding box (not original seg)
     object_image = prop_2D.image
     object_moments = moments(object_image)
@@ -89,8 +93,12 @@ def convex_hull_centroid_dif(prop_2D):
     convex_moments = moments(convex_image)
     convex_centroid = np.array([convex_moments[1, 0] / convex_moments[0, 0], convex_moments[0, 1] / convex_moments[0, 0]])
 
+    # rescale to correct scaling
+    object_centroid_scaled = object_centroid * spacing
+    convex_centroid_scaled = convex_centroid * spacing
+
     # calculate 2-norm (Euclidean distance) and normalize
-    centroid_dist = np.linalg.norm(object_centroid - convex_centroid) / np.sqrt(prop_2D.area)
+    centroid_dist = np.linalg.norm(object_centroid_scaled - convex_centroid_scaled) / np.sqrt(prop_2D.area)
 
     return centroid_dist
 
@@ -202,6 +210,7 @@ def is_touching_border_xy(labeled_obj, img_shape):
     else:
         raise NotImplementedError("Only 2D and 3D images are supported in is_touching_border_xy")
 
+
 def is_touching_border_z(labeled_obj, img_shape):
     """
     Helper function to check if an object is touching the border of the image
@@ -216,3 +225,11 @@ def is_touching_border_z(labeled_obj, img_shape):
             return False
     else:
         raise NotImplementedError("Only 3D images are supported in is_touching_border_z")
+
+
+def centroid_weighted_correct(labeled_obj, spacing):
+    centroid_local = labeled_obj.centroid_weighted_local
+    bb_origin = np.array([x.start for x in labeled_obj.slice])
+    bb_origin_scaled = bb_origin * spacing
+    return bb_origin_scaled + centroid_local
+

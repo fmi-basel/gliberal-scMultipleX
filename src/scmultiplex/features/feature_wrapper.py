@@ -1,11 +1,11 @@
 from typing import Any, Dict, Union
-from typing import Dict
 from skimage.measure import regionprops
 import numpy as np
 import pandas as pd
 
-from scmultiplex.config import spacing_anisotropy_scalar
+from scmultiplex.config import spacing_anisotropy_scalar, spacing_to2d
 from scmultiplex.features.FeatureFunctions import (
+    centroid_weighted_correct,
     fixed_percentiles,
     kurtos,
     skewness,
@@ -111,14 +111,14 @@ def get_regionprops_measurements(
 
         if measure_morphology:
             morphology_measurements = get_morphology_measurements(
-                labeled_obj, label_img.shape, is_2D, min_area_fraction
+                labeled_obj, label_img.shape, spacing, is_2D, min_area_fraction
             )
 
             label_info.update(morphology_measurements)
 
         if img is not None:
             intensity_measurements = get_intensity_measurements(
-                labeled_obj, channel_prefix, is_2D
+                labeled_obj, channel_prefix, spacing, is_2D
             )
 
             label_info.update(intensity_measurements)
@@ -131,7 +131,7 @@ def get_regionprops_measurements(
     return df_well, df_obs
 
 
-def get_intensity_measurements(labeled_obj, channel_prefix, is_2D):
+def get_intensity_measurements(labeled_obj, channel_prefix, spacing, is_2D):
     intensity_measurements = {
         "mean_intensity": labeled_obj["mean_intensity"],
         "max_intensity": labeled_obj["max_intensity"],
@@ -145,8 +145,8 @@ def get_intensity_measurements(labeled_obj, channel_prefix, is_2D):
         "stdev": labeled_obj["stdv"],
         "skew": labeled_obj["skewness"],
         "kurtosis": labeled_obj["kurtos"],
-        "x_pos_weighted_pix": labeled_obj["weighted_centroid"][-1],
-        "y_pos_weighted_pix": labeled_obj["weighted_centroid"][-2],
+        # "x_pos_weighted_pix": labeled_obj["weighted_centroid"][-1],
+        # "y_pos_weighted_pix": labeled_obj["weighted_centroid"][-2],
         "x_massDisp_pix": labeled_obj["weighted_centroid"][-1]
         - labeled_obj["centroid"][-1],
         "y_massDisp_pix": labeled_obj["weighted_centroid"][-2]
@@ -156,11 +156,22 @@ def get_intensity_measurements(labeled_obj, channel_prefix, is_2D):
     # add 3D-specific intensity measurements
     if not is_2D:
         intensity_3D_only = {
-            "z_pos_weighted_pix": labeled_obj["weighted_centroid"][-3],
+            # "z_pos_weighted_pix": labeled_obj["weighted_centroid"][-3],
             "z_massDisp_pix": labeled_obj["weighted_centroid"][-3]
             - labeled_obj["centroid"][-3],
         }
         intensity_measurements.update(intensity_3D_only)
+
+    # New centroid weighting block
+    if True:
+        corrected_weighted_centroid = centroid_weighted_correct(labeled_obj, spacing)
+        intensity_measurements['x_pos_weighted_pix'] = corrected_weighted_centroid[-1]
+        intensity_measurements['y_pos_weighted_pix'] = corrected_weighted_centroid[-2]
+        intensity_measurements['x_massDisp_pix'] = corrected_weighted_centroid[-1] - labeled_obj["centroid"][-1]
+        intensity_measurements['y_massDisp_pix'] = corrected_weighted_centroid[-2] - labeled_obj["centroid"][-2]
+        if not is_2D:
+            intensity_measurements['z_pos_weighted_pix'] = corrected_weighted_centroid[-3]
+            intensity_measurements['z_massDisp_pix'] = corrected_weighted_centroid[-3] - labeled_obj["centroid"][-3]
 
     # channel prefix addition is optional
     if channel_prefix is not None:
@@ -174,7 +185,7 @@ def get_intensity_measurements(labeled_obj, channel_prefix, is_2D):
     return intensity_measurements_pref
 
 
-def get_morphology_measurements(labeled_obj, img_shape, is_2D, min_area_fraction):
+def get_morphology_measurements(labeled_obj, img_shape, spacing, is_2D, min_area_fraction):
     morphology_measurements = {
         "is_touching_border_xy": is_touching_border_xy(
             labeled_obj, img_shape=img_shape
@@ -209,11 +220,12 @@ def get_morphology_measurements(labeled_obj, img_shape, is_2D, min_area_fraction
         morphology_measurements["aspectRatio_equivalentDiameter"] = np.NaN
 
     if is_2D:
+        spacing_2d = spacing_to2d(spacing)
         morphology_2D_only = {
             "area_pix": labeled_obj["area"],
             "perimeter": labeled_obj["perimeter"],
             "concavity": convex_hull_area_resid(labeled_obj),
-            "asymmetry": convex_hull_centroid_dif(labeled_obj),
+            "asymmetry": convex_hull_centroid_dif(labeled_obj, spacing_2d),
             "eccentricity": labeled_obj["eccentricity"],
             "circularity": circularity(labeled_obj),
             "concavity_count": concavity_count(
