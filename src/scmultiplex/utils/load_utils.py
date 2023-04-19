@@ -8,8 +8,8 @@
 #                                                                            #
 ##############################################################################
 
-from faim_hcs.hcs.Experiment import Experiment
-from faim_hcs.records.WellRecord import WellRecord
+from scmultiplex.faim_hcs.hcs.Experiment import Experiment
+from scmultiplex.faim_hcs.records.WellRecord import WellRecord
 
 
 def load_experiment(exp_path):

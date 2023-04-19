@@ -11,7 +11,7 @@
 from os.path import join
 
 import pandas as pd
-from faim_hcs.records.WellRecord import WellRecord, OrganoidRecord
+from scmultiplex.faim_hcs.records.WellRecord import WellRecord, OrganoidRecord
 
 
 def save_to_record(record, name: str, df: pd.DataFrame):

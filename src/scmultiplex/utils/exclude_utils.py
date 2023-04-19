@@ -10,7 +10,7 @@
 
 from typing import List
 
-from faim_hcs.hcs.Experiment import Experiment
+from scmultiplex.faim_hcs.hcs.Experiment import Experiment
 
 
 def exclude_conditions(
