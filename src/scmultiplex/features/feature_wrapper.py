@@ -105,138 +105,23 @@ def get_regionprops_measurements(
             "label": int(labeled_obj["label"]),
         }
 
-        # Always include xy positions
-        coordinate_measurements = {
-            "x_pos_pix": labeled_obj["centroid"][-1],
-            "y_pos_pix": labeled_obj["centroid"][-2],
-        }
-
+        # Always include coordinates
+        coordinate_measurements = get_coordinates(labeled_obj, spacing, is_2D)
         label_info.update(coordinate_measurements)
 
-        if not is_2D:
-            coordinate_measurements_3D = {
-                "z_pos_pix_scaled": labeled_obj["centroid"][-3],
-                "z_pos_pix_img": labeled_obj["centroid"][-3]
-                / spacing_anisotropy_scalar(spacing)
-            }
-            label_info.update(coordinate_measurements_3D)
-
         if measure_morphology:
-            morphology_measurements = {
-                "is_touching_border_xy": is_touching_border_xy(
-                    labeled_obj, img_shape=img.shape
-                ),
-                "imgdim_x": img.shape[-1],
-                "imgdim_y": img.shape[-2],
-                "area_bbox": labeled_obj["area_bbox"],
-                "area_convhull": labeled_obj["area_convex"],
-                "equivDiam": labeled_obj["equivalent_diameter_area"],
-                "extent": labeled_obj["extent"],
-                "solidity": labeled_obj["solidity"],
-            }
-            # Sometimes, major & minor axis calculations fail with a
-            # ValueError: math domain error
-            try:
-                morphology_measurements["majorAxisLength"] = labeled_obj[
-                    "major_axis_length"
-                ]
-                morphology_measurements["minorAxisLength"] = labeled_obj[
-                    "minor_axis_length"
-                ]
-                morphology_measurements["minmajAxisRatio"] = minor_major_axis_ratio(
-                    labeled_obj
-                )
-                morphology_measurements[
-                    "aspectRatio_equivalentDiameter"
-                ] = aspect_ratio(labeled_obj)
-            except ValueError:
-                morphology_measurements["majorAxisLength"] = np.NaN
-                morphology_measurements["minorAxisLength"] = np.NaN
-                morphology_measurements["minmajAxisRatio"] = np.NaN
-                morphology_measurements["aspectRatio_equivalentDiameter"] = np.NaN
-
-            if is_2D:
-                spacing_2d = spacing_to2d(spacing)
-                morphology_2D_only = {
-                    "area_pix": labeled_obj["area"],
-                    "perimeter": labeled_obj["perimeter"],
-                    "concavity": convex_hull_area_resid(labeled_obj),
-                    "asymmetry": convex_hull_centroid_dif(labeled_obj, spacing_2d),
-                    "eccentricity": labeled_obj["eccentricity"],
-                    "circularity": circularity(labeled_obj),
-                    "concavity_count": concavity_count(
-                        labeled_obj, min_area_fraction=min_area_fraction
-                    ),
-                    "disconnected_components": disconnected_component(
-                        labeled_obj.image
-                    ),
-                }
-                morphology_measurements.update(morphology_2D_only)
-            else:
-                morphology_3d_only = {
-                    "imgdim_z": img.shape[-3],
-                    "is_touching_border_z": is_touching_border_z(
-                        labeled_obj, img_shape=img.shape
-                    ),
-                    "volume_pix": labeled_obj["area"],
-                    "surface_area": labeled_obj["surface_area_marchingcube"],
-                }
-                morphology_measurements.update(morphology_3d_only)
+            morphology_measurements = get_morphology_measurements(
+                labeled_obj, label_img.shape, spacing, is_2D, min_area_fraction
+            )
 
             label_info.update(morphology_measurements)
 
         if img is not None:
-            intensity_measurements = {
-                "mean_intensity": labeled_obj["mean_intensity"],
-                "max_intensity": labeled_obj["max_intensity"],
-                "min_intensity": labeled_obj["min_intensity"],
-                "percentile25": labeled_obj["fixed_percentiles"][0],
-                "percentile50": labeled_obj["fixed_percentiles"][1],
-                "percentile75": labeled_obj["fixed_percentiles"][2],
-                "percentile90": labeled_obj["fixed_percentiles"][3],
-                "percentile95": labeled_obj["fixed_percentiles"][4],
-                "percentile99": labeled_obj["fixed_percentiles"][5],
-                "stdev": labeled_obj["stdv"],
-                "skew": labeled_obj["skewness"],
-                "kurtosis": labeled_obj["kurtos"],
-                "x_pos_weighted_pix": labeled_obj["weighted_centroid"][-1],
-                "y_pos_weighted_pix": labeled_obj["weighted_centroid"][-2],
-                "x_massDisp_pix": labeled_obj["weighted_centroid"][-1]
-                - labeled_obj["centroid"][-1],
-                "y_massDisp_pix": labeled_obj["weighted_centroid"][-2]
-                - labeled_obj["centroid"][-2],
-            }
+            intensity_measurements = get_intensity_measurements(
+                labeled_obj, channel_prefix, spacing, is_2D
+            )
 
-            # add 3D-specific intensity measurements
-            if not is_2D:
-                intensity_3D_only = {
-                    "z_pos_weighted_pix": labeled_obj["weighted_centroid"][-3],
-                    "z_massDisp_pix": labeled_obj["weighted_centroid"][-3]
-                    - labeled_obj["centroid"][-3],
-                }
-                intensity_measurements.update(intensity_3D_only)
-
-            # channel prefix addition is optional
-            if channel_prefix is not None:
-                intensity_measurements_pref = {
-                    channel_prefix + "." + str(key): val
-                    for key, val in intensity_measurements.items()
-                }
-            else:
-                intensity_measurements_pref = intensity_measurements
-
-            label_info.update(intensity_measurements_pref)
-
-        if True:
-            if 'x_pos_weighted_pix' in label_info:
-                corrected_weighted_centroid = centroid_weighted_correct(labeled_obj, spacing)
-                label_info['x_pos_weighted_pix'] = corrected_weighted_centroid[-1]
-                label_info['y_pos_weighted_pix'] = corrected_weighted_centroid[-2]
-                label_info['x_massDisp_pix'] = corrected_weighted_centroid[-1] - labeled_obj["centroid"][-1]
-                label_info['y_massDisp_pix'] = corrected_weighted_centroid[-2] - labeled_obj["centroid"][-2]
-                if 'z_pos_weighted_pix' in label_info:
-                    label_info['z_pos_weighted_pix'] = corrected_weighted_centroid[-3]
-                    label_info['z_massDisp_pix'] = corrected_weighted_centroid[-3] - labeled_obj["centroid"][-3]
+            label_info.update(intensity_measurements)
 
         measurement_rows.append(label_info)
 
@@ -244,3 +129,138 @@ def get_regionprops_measurements(
     df_obs = pd.DataFrame(observation_rows)
 
     return df_well, df_obs
+
+
+def get_intensity_measurements(labeled_obj, channel_prefix, spacing, is_2D):
+    intensity_measurements = {
+        "mean_intensity": labeled_obj["mean_intensity"],
+        "max_intensity": labeled_obj["max_intensity"],
+        "min_intensity": labeled_obj["min_intensity"],
+        "percentile25": labeled_obj["fixed_percentiles"][0],
+        "percentile50": labeled_obj["fixed_percentiles"][1],
+        "percentile75": labeled_obj["fixed_percentiles"][2],
+        "percentile90": labeled_obj["fixed_percentiles"][3],
+        "percentile95": labeled_obj["fixed_percentiles"][4],
+        "percentile99": labeled_obj["fixed_percentiles"][5],
+        "stdev": labeled_obj["stdv"],
+        "skew": labeled_obj["skewness"],
+        "kurtosis": labeled_obj["kurtos"],
+        # "x_pos_weighted_pix": labeled_obj["weighted_centroid"][-1],
+        # "y_pos_weighted_pix": labeled_obj["weighted_centroid"][-2],
+        # "x_massDisp_pix": labeled_obj["weighted_centroid"][-1]
+        # - labeled_obj["centroid"][-1],
+        # "y_massDisp_pix": labeled_obj["weighted_centroid"][-2]
+        # - labeled_obj["centroid"][-2],
+    }
+
+    # add 3D-specific intensity measurements
+    # if not is_2D:
+    #     intensity_3D_only = {
+    #         "z_pos_weighted_pix": labeled_obj["weighted_centroid"][-3],
+    #         "z_massDisp_pix": labeled_obj["weighted_centroid"][-3]
+    #         - labeled_obj["centroid"][-3],
+    #     }
+    #     intensity_measurements.update(intensity_3D_only)
+
+    # New centroid weighting block
+    if True:
+        corrected_weighted_centroid = centroid_weighted_correct(labeled_obj, spacing)
+        intensity_measurements['x_pos_weighted_pix'] = corrected_weighted_centroid[-1]
+        intensity_measurements['y_pos_weighted_pix'] = corrected_weighted_centroid[-2]
+        intensity_measurements['x_massDisp_pix'] = corrected_weighted_centroid[-1] - labeled_obj["centroid"][-1]
+        intensity_measurements['y_massDisp_pix'] = corrected_weighted_centroid[-2] - labeled_obj["centroid"][-2]
+        if not is_2D:
+            intensity_measurements['z_pos_weighted_pix'] = corrected_weighted_centroid[-3]
+            intensity_measurements['z_massDisp_pix'] = corrected_weighted_centroid[-3] - labeled_obj["centroid"][-3]
+
+    # channel prefix addition is optional
+    if channel_prefix is not None:
+        intensity_measurements_pref = {
+            channel_prefix + "." + str(key): val
+            for key, val in intensity_measurements.items()
+        }
+    else:
+        intensity_measurements_pref = intensity_measurements
+    
+    return intensity_measurements_pref
+
+
+def get_morphology_measurements(labeled_obj, img_shape, spacing, is_2D, min_area_fraction):
+    morphology_measurements = {
+        "is_touching_border_xy": is_touching_border_xy(
+            labeled_obj, img_shape=img_shape
+        ),
+        "imgdim_x": img_shape[-1],
+        "imgdim_y": img_shape[-2],
+        "area_bbox": labeled_obj["area_bbox"],
+        "area_convhull": labeled_obj["area_convex"],
+        "equivDiam": labeled_obj["equivalent_diameter_area"],
+        "extent": labeled_obj["extent"],
+        "solidity": labeled_obj["solidity"],
+    }
+    # Sometimes, major & minor axis calculations fail with a
+    # ValueError: math domain error
+    try:
+        morphology_measurements["majorAxisLength"] = labeled_obj[
+            "major_axis_length"
+        ]
+        morphology_measurements["minorAxisLength"] = labeled_obj[
+            "minor_axis_length"
+        ]
+        morphology_measurements["minmajAxisRatio"] = minor_major_axis_ratio(
+            labeled_obj
+        )
+        morphology_measurements[
+            "aspectRatio_equivalentDiameter"
+        ] = aspect_ratio(labeled_obj)
+    except ValueError:
+        morphology_measurements["majorAxisLength"] = np.NaN
+        morphology_measurements["minorAxisLength"] = np.NaN
+        morphology_measurements["minmajAxisRatio"] = np.NaN
+        morphology_measurements["aspectRatio_equivalentDiameter"] = np.NaN
+
+    if is_2D:
+        spacing_2d = spacing_to2d(spacing)
+        morphology_2D_only = {
+            "area_pix": labeled_obj["area"],
+            "perimeter": labeled_obj["perimeter"],
+            "concavity": convex_hull_area_resid(labeled_obj),
+            "asymmetry": convex_hull_centroid_dif(labeled_obj, spacing_2d),
+            "eccentricity": labeled_obj["eccentricity"],
+            "circularity": circularity(labeled_obj),
+            "concavity_count": concavity_count(
+                labeled_obj, min_area_fraction=min_area_fraction
+            ),
+            "disconnected_components": disconnected_component(
+                labeled_obj.image
+            ),
+        }
+        morphology_measurements.update(morphology_2D_only)
+    else:
+        morphology_3d_only = {
+            "imgdim_z": img_shape[-3],
+            "is_touching_border_z": is_touching_border_z(
+                labeled_obj, img_shape=img_shape
+            ),
+            "volume_pix": labeled_obj["area"],
+            "surface_area": labeled_obj["surface_area_marchingcube"],
+        }
+        morphology_measurements.update(morphology_3d_only)
+
+    return morphology_measurements
+
+def get_coordinates(labeled_obj, spacing, is_2D):
+    coordinate_measurements = {
+        "x_pos_pix": labeled_obj["centroid"][-1],
+        "y_pos_pix": labeled_obj["centroid"][-2],
+    }
+
+    if not is_2D:
+        coordinate_measurements_3D = {
+            "z_pos_pix_scaled": labeled_obj["centroid"][-3],
+            "z_pos_pix_img": labeled_obj["centroid"][-3]
+            / spacing_anisotropy_scalar(spacing)
+        }
+        coordinate_measurements.update(coordinate_measurements_3D)
+
+    return coordinate_measurements
