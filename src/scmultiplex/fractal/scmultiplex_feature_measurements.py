@@ -360,13 +360,13 @@ if __name__ == "__main__":
         metadata: Dict[str, Any]
         component: str
         input_ROI_table: Optional[str]
-        input_channels: Dict[str, Dict[str, str]]
+        input_channels: Optional[Dict[str, Dict[str, str]]]
         label_image: str
         output_table_name: str
-        level: int
-        label_level: int
-        measure_morphology: bool
-        allow_duplicate_labels: bool
+        level: Optional[int]
+        label_level: Optional[int]
+        measure_morphology: Optional[bool]
+        allow_duplicate_labels: Optional[bool]
 
     run_fractal_task(
         task_function=scmultiplex_measurements,
