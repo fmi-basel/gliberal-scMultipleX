@@ -147,20 +147,20 @@ def get_intensity_measurements(labeled_obj, channel_prefix, spacing, is_2D):
         "kurtosis": labeled_obj["kurtos"],
         # "x_pos_weighted_pix": labeled_obj["weighted_centroid"][-1],
         # "y_pos_weighted_pix": labeled_obj["weighted_centroid"][-2],
-        "x_massDisp_pix": labeled_obj["weighted_centroid"][-1]
-        - labeled_obj["centroid"][-1],
-        "y_massDisp_pix": labeled_obj["weighted_centroid"][-2]
-        - labeled_obj["centroid"][-2],
+        # "x_massDisp_pix": labeled_obj["weighted_centroid"][-1]
+        # - labeled_obj["centroid"][-1],
+        # "y_massDisp_pix": labeled_obj["weighted_centroid"][-2]
+        # - labeled_obj["centroid"][-2],
     }
 
     # add 3D-specific intensity measurements
-    if not is_2D:
-        intensity_3D_only = {
-            # "z_pos_weighted_pix": labeled_obj["weighted_centroid"][-3],
-            "z_massDisp_pix": labeled_obj["weighted_centroid"][-3]
-            - labeled_obj["centroid"][-3],
-        }
-        intensity_measurements.update(intensity_3D_only)
+    # if not is_2D:
+    #     intensity_3D_only = {
+    #         "z_pos_weighted_pix": labeled_obj["weighted_centroid"][-3],
+    #         "z_massDisp_pix": labeled_obj["weighted_centroid"][-3]
+    #         - labeled_obj["centroid"][-3],
+    #     }
+    #     intensity_measurements.update(intensity_3D_only)
 
     # New centroid weighting block
     if True:
