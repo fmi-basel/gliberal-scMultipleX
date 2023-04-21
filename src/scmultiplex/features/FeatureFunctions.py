@@ -233,3 +233,7 @@ def centroid_weighted_correct(labeled_obj, spacing):
     bb_origin_scaled = bb_origin * spacing
     return bb_origin_scaled + centroid_local
 
+def centroid_weighted_correct(labeled_obj):
+    centroid_local = labeled_obj.centroid_weighted_local
+    return tuple(idx + slc.start * spc
+                     for idx, slc, spc in zip(centroid_local, labeled_obj.slice, labeled_obj._spacing))
