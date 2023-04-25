@@ -29,6 +29,7 @@ from scmultiplex.utils.accumulate_utils import (
     save_tidy_plate_well_org_mem
 )
 
+from scmultiplex.logging import setup_prefect_handlers
 from scmultiplex.utils import get_core_count
 
 @task()
@@ -102,8 +103,13 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required = True)
     parser.add_argument("--cpus", type=int, default=get_core_count())
+    parser.add_argument("--prefect-logfile", required = True)
+
     args = parser.parse_args()
     cpus = args.cpus
+    prefect_logfile = args.prefect_logfile
+    
+    setup_prefect_handlers(prefect.utilities.logging.get_logger(), prefect_logfile)
 
     r_params = get_config_params(args.config)
 

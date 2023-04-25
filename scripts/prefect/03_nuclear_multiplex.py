@@ -10,6 +10,7 @@
 
 import argparse
 import configparser
+import prefect
 import sys
 from typing import List
 
@@ -28,6 +29,7 @@ from scmultiplex.config import (
     spacing_anisotropy_scalar,
 )
 from scmultiplex.linking.NucleiLinking import link_nuclei
+from scmultiplex.logging import setup_prefect_handlers
 from scmultiplex.utils import get_core_count
 
 
@@ -181,8 +183,13 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required = True)
     parser.add_argument("--cpus", type=int, default=get_core_count())
+    parser.add_argument("--prefect-logfile", required = True)
+
     args = parser.parse_args()
     cpus = args.cpus
+    prefect_logfile = args.prefect_logfile
+    
+    setup_prefect_handlers(prefect.utilities.logging.get_logger(), prefect_logfile)
 
     r_params = get_config_params(args.config)
 
