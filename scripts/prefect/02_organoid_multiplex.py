@@ -19,6 +19,7 @@ from prefect import Flow, Parameter, task, unmapped
 from prefect.executors import LocalDaskExecutor
 from prefect.run_configs import LocalRun
 
+from scmultiplex import version
 from scmultiplex.config import (
     commasplit,
     compute_workflow_params,
@@ -183,9 +184,11 @@ def main():
     args = parser.parse_args()
     cpus = args.cpus
     prefect_logfile = args.prefect_logfile
-    
+
     setup_prefect_handlers(prefect.utilities.logging.get_logger(), prefect_logfile)
-    
+
+    print('Running scMultipleX version %s' % version)
+
     r_params = get_config_params(args.config)
 
     return run_flow(r_params, cpus)

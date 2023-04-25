@@ -135,9 +135,9 @@ def main(args):
 	logfile_name = 'scmultiplex-%s.log' % datetime.now().strftime(log_time_format)
 	logfile_path = os.path.join(save_dir, logfile_name)
 	prefect_logfile_path = os.path.join(save_dir, 'prefect-%s' % logfile_name)
-	print('scMultipleX version %s' % version)
+	print('Using scMultipleX version %s' % version)
 	with open(logfile_path, 'a') as logfile:
-		logfile.write('scMultipleX version %s' % version)
+		logfile.write('Using scMultipleX version %s' % version)
 	
 	for task in task_list:
 		run_task(task, config_path, logfile_path, prefect_logfile_path, cpus)
