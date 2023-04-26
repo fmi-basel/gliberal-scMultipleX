@@ -35,6 +35,8 @@ Afterwards, the wheel can be built using `python -m build` and collected by Frac
 fractal task collect /path/to/scmultiplex-version-details.whl --package-extras fractal
 ```
 
+(you may need to `pip install build` to run the wheel creation)
+
 **Working with a Fractal task in development**
 The above instructions work well to install the Fractal task as it is available in the package. If you want to run a task through Fractal server that you keep changing, it's not advisable to use the fractal task collection, but instead manually register your task.
 
