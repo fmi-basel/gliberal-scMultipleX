@@ -3,7 +3,7 @@
   "task_list": [
     {
       "name": "scMultipleX Measurements",
-      "executable": "scmultiplex_feature_measurements.py",
+      "executable": "fractal/scmultiplex_feature_measurements.py",
       "input_type": "zarr",
       "output_type": "zarr",
       "default_args": {
