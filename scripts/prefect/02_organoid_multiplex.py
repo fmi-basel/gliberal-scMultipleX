@@ -10,6 +10,7 @@
 
 import argparse
 import configparser
+import os
 import sys
 from typing import List
 
@@ -191,7 +192,10 @@ def main():
 
     r_params = get_config_params(args.config)
 
-    return run_flow(r_params, cpus)
+    ret = run_flow(r_params, cpus)
+    if ret == 0:
+        print('%s completed successfully' % os.path.basename(sys.argv[0]))
+    return ret
 
 
 if __name__ == "__main__":
