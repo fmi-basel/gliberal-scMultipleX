@@ -1,20 +1,26 @@
 import json
-from logging import Logger
 from os.path import join
 
 import pandas as pd
 from skimage.io import imread
 
+from scmultiplex.logging import get_faim_hcs_logger
+
 
 class DefaultRecord:
     def __init__(self, record_id: str):
-        self.logger = Logger(f"Record {record_id}")
         self.record_id = record_id
 
         self.raw_files = {}
         self.spacings = {}
         self.segmentations = {}
         self.measurements = {}
+
+    # for some reason setting this as a static public attribute gets reset
+    # when executed within Prefect... :/
+    @property
+    def logger(self):
+        return get_faim_hcs_logger()
 
     def add_raw_data(self, name: str, path: str, spacing: tuple):
         location = self._get_relative_location(path)

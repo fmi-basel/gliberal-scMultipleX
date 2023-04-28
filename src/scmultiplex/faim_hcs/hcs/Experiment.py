@@ -1,15 +1,14 @@
-from logging import Logger
 from os import mkdir
 from os.path import basename, dirname, exists, join
 
 import pandas as pd
 
 from ..records.PlateRecord import PlateRecord
+from scmultiplex.logging import get_faim_hcs_logger
 
 
 class Experiment:
     def __init__(self, name: str = None, root_dir: str = None, save_dir: str = None):
-        self.logger = Logger(f"HCS Experiment {name}")
         self.name = name
 
         if root_dir is not None:
@@ -29,6 +28,12 @@ class Experiment:
             assert exists(save_dir), "Save directory does not exist."
             if not exists(self.get_experiment_dir()):
                 mkdir(self.get_experiment_dir())
+
+    # for some reason setting this as a static public attribute gets reset
+    # when executed within Prefect... :/
+    @property
+    def logger(self):
+        return get_faim_hcs_logger()
 
     def register_plate(self, plate: PlateRecord):
         self.plates[plate.plate_id] = plate

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from logging import Logger
 from os import mkdir
 from os.path import exists, join
 from typing import TYPE_CHECKING
@@ -17,7 +16,6 @@ if TYPE_CHECKING:
 class WellRecord(DefaultRecord):
     def __init__(self, plate: PlateRecord, well_id: str, save_dir: str = "."):
         super().__init__(well_id)
-        self.logger = Logger(f"Well {well_id}")
         self.well_id = self.record_id
         self.plate = plate
 
