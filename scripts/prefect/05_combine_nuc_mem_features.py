@@ -32,7 +32,7 @@ from scmultiplex.utils.accumulate_utils import (
     write_nuc_to_mem_linking,
 )
 
-from scmultiplex.logging import setup_prefect_handlers
+from scmultiplex.logging import get_scmultiplex_logger,setup_prefect_handlers
 from scmultiplex.utils import get_core_count
 
 @task()
@@ -47,7 +47,7 @@ def write_nuc_to_mem_linking_task(exp):
     try:
         write_nuc_to_mem_linking(exp)
     except RuntimeWarning as e:
-        logger = prefect.context.get("logger")
+        logger = get_scmultiplex_logger()
         logger.info('%s' % str(e))
     else:
         write_merged_nuc_membrane_features(exp)

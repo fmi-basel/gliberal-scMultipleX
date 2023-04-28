@@ -31,7 +31,7 @@ from scmultiplex.config import (
     summary_csv_path,
 )
 from scmultiplex.linking.OrganoidLinking import get_linking_stats, link_organoids
-from scmultiplex.logging import setup_prefect_handlers
+from scmultiplex.logging import get_scmultiplex_logger, setup_prefect_handlers
 from scmultiplex.utils.exclude_utils import exclude_conditions
 from scmultiplex.utils.load_utils import load_experiment
 from scmultiplex.utils import get_core_count
@@ -66,7 +66,7 @@ def link_organoids_and_get_stats_task(well, org_seg_ch, folder_name, R0, RX, seg
         RX=RX,
         seg_name=seg_name,
         RX_name=RX_name,
-        logger=prefect.context.get("logger"),
+        logger=get_scmultiplex_logger(),
     )
     get_linking_stats(
         well=well,
@@ -75,7 +75,7 @@ def link_organoids_and_get_stats_task(well, org_seg_ch, folder_name, R0, RX, seg
         iou_cutoff=iou_cutoff,
         names=names,
         ovr_channel=org_seg_ch,
-        logger=prefect.context.get("logger"),
+        logger=get_scmultiplex_logger(),
     )
     return
 

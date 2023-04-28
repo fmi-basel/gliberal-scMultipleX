@@ -33,7 +33,7 @@ from scmultiplex.utils.accumulate_utils import (
     save_tidy_plate_well_org_mem
 )
 
-from scmultiplex.logging import setup_prefect_handlers
+from scmultiplex.logging import get_scmultiplex_logger,setup_prefect_handlers
 from scmultiplex.utils import get_core_count
 
 @task()
@@ -50,7 +50,7 @@ def save_tidy_task(exp, org_seg_ch, nuc_seg_ch, mem_seg_ch):
         try:
             tidy_task(exp, (org_seg_ch, nuc_seg_ch, mem_seg_ch))
         except RuntimeWarning as e:
-            logger = prefect.context.get("logger")
+            logger = get_scmultiplex_logger()
             logger.info('%s' % str(e))
 
 

@@ -28,7 +28,7 @@ from scmultiplex.config import (
     get_workflow_params,
     parse_spacing,
 )
-from scmultiplex.logging import setup_prefect_handlers
+from scmultiplex.logging import get_scmultiplex_logger, setup_prefect_handlers
 from scmultiplex.utils.parse_utils import create_experiment
 from scmultiplex.utils import get_core_count
 
@@ -71,7 +71,7 @@ def create_experiment_task(
         mask_regex=mask_regex,
         nuc_seg_regex=nuc_seg_regex,
         cell_seg_regex=cell_seg_regex,
-        logger=prefect.context.get("logger"),
+        logger=get_scmultiplex_logger(),
     )
 
 
