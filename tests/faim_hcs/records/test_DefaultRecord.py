@@ -5,7 +5,7 @@ from unittest import TestCase
 
 from pandas import DataFrame
 
-from faim_hcs.records.DefaultRecord import DefaultRecord
+from scmultiplex.faim_hcs.records.DefaultRecord import DefaultRecord
 
 
 class DefaultRecordTest(TestCase):

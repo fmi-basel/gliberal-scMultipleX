@@ -164,7 +164,7 @@ def get_intensity_measurements(labeled_obj, channel_prefix, spacing, is_2D):
 
     # New centroid weighting block
     if True:
-        corrected_weighted_centroid = centroid_weighted_correct(labeled_obj, spacing)
+        corrected_weighted_centroid = centroid_weighted_correct(labeled_obj)
         intensity_measurements['x_pos_weighted_pix'] = corrected_weighted_centroid[-1]
         intensity_measurements['y_pos_weighted_pix'] = corrected_weighted_centroid[-2]
         intensity_measurements['x_massDisp_pix'] = corrected_weighted_centroid[-1] - labeled_obj["centroid"][-1]
