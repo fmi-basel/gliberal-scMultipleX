@@ -33,6 +33,7 @@ membrane_seg_channel = ${00BuildExperiment.round_R0:membrane_seg_channel}
 excluded_plates = day2
 excluded_wells = C02
 iop_cutoff = 0.6
+measure_morphology = True
 
 [02OrganoidLinking]
 iou_cutoff = 0.2

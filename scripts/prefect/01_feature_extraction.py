@@ -32,6 +32,7 @@ from scmultiplex.config import (
     parse_spacing,
     summary_csv_path,
     spacing_anisotropy_tuple,
+    str2bool
 )
 from scmultiplex.features.FeatureExtraction import (
     extract_organoid_features,
@@ -92,7 +93,7 @@ def get_organoids(
 
 @task()
 def organoid_feature_extraction_and_linking_task(
-    organoid, nuc_ending: str, mem_ending: str, mask_ending: str, spacing: List[float],
+    organoid, nuc_ending: str, mem_ending: str, mask_ending: str, spacing: List[float], measure_morphology,
         org_seg_ch, nuc_seg_ch, mem_seg_ch, iop_cutoff):
 
     set_spacing(spacing)
@@ -102,7 +103,7 @@ def organoid_feature_extraction_and_linking_task(
         mem_ending=mem_ending,
         mask_ending=mask_ending,
         spacing=tuple(spacing),
-        measure_morphology=True,
+        measure_morphology=measure_morphology,
         organoid_seg_channel=org_seg_ch,
         nuclear_seg_channel=nuc_seg_ch,
         membrane_seg_channel=mem_seg_ch,
@@ -133,6 +134,7 @@ def run_flow(r_params, cpus):
         mem_ending = Parameter("mem_ending")
         iop_cutoff = Parameter("iop_cutoff")
         spacing = Parameter("spacing")
+        measure_morphology = Parameter("measure_morphology")
         org_seg_ch = Parameter("org_seg_ch")
         nuc_seg_ch = Parameter("nuc_seg_ch")
         mem_seg_ch = Parameter("mem_seg_ch")
@@ -151,6 +153,7 @@ def run_flow(r_params, cpus):
             unmapped(mem_ending),
             unmapped(mask_ending),
             unmapped(spacing),
+            unmapped(measure_morphology),
             unmapped(org_seg_ch),
             unmapped(nuc_seg_ch),
             unmapped(mem_seg_ch),
@@ -172,6 +175,7 @@ def get_config_params(config_file_path):
     round_names = get_round_names(config_file_path)
     config_params = {
         'mask_ending':     ('00BuildExperiment', 'mask_ending'),
+        'measure_morphology': ('01FeatureExtraction', 'measure_morphology'),
         }
     common_params = get_workflow_params(config_file_path, config_params)
 
@@ -191,11 +195,17 @@ def get_config_params(config_file_path):
                 ('01FeatureExtraction', 'iop_cutoff')
                 ]
             ),
+        'measure_morphology': (
+            str2bool,[
+                ('01FeatureExtraction', 'measure_morphology')
+            ]
+        ),
         'spacing': (
             parse_spacing,[
                 ('00BuildExperiment', 'spacing')
                 ]
             ),
+
         }
     common_params.update(compute_workflow_params(config_file_path, compute_param))
 

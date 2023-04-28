@@ -54,6 +54,10 @@ def commasplit(cstring):
     return cstring.split(',')
 
 
+def str2bool(bstring):
+    return bstring.lower() in ('true',)
+
+
 def parse_spacing(spacing):
     return tuple(float(v) for v in commasplit(spacing))
 
