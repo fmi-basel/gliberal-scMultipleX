@@ -58,7 +58,7 @@ def load_task(exp_path: str, excluded_plates: List[str], excluded_wells: List[st
 
 
 @task()
-def well_feature_extraction_ovr_task(well: WellRecord, org_seg_ch: str, name_ovr: str):
+def well_feature_extraction_ovr_task(well: WellRecord, org_seg_ch: str):
     extract_well_features(
         well=well,
         ovr_channel=org_seg_ch,
@@ -131,7 +131,6 @@ def run_flow(r_params, cpus):
         mask_ending = Parameter("mask_ending")
         nuc_ending = Parameter("nuc_ending")
         mem_ending = Parameter("mem_ending")
-        name_ovr = Parameter("name_ovr")
         iop_cutoff = Parameter("iop_cutoff")
         spacing = Parameter("spacing")
         org_seg_ch = Parameter("org_seg_ch")
@@ -141,7 +140,7 @@ def run_flow(r_params, cpus):
         exp, wells = load_task(exp_path, excluded_plates, excluded_wells)
 
         wfeo_t = well_feature_extraction_ovr_task.map(
-            wells, unmapped(org_seg_ch), unmapped(name_ovr)
+            wells, unmapped(org_seg_ch)
         )
 
         organoids = get_organoids(exp, mask_ending, excluded_plates, excluded_wells, upstream_tasks = [wfeo_t])
@@ -172,11 +171,10 @@ def get_config_params(config_file_path):
     
     round_names = get_round_names(config_file_path)
     config_params = {
-        'name_ovr':     ('01FeatureExtraction', 'name_ovr'),
         'mask_ending':     ('00BuildExperiment', 'mask_ending'),
         }
     common_params = get_workflow_params(config_file_path, config_params)
-    
+
     compute_param = {
         'excluded_plates': (
             commasplit,[
