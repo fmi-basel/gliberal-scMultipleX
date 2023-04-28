@@ -29,7 +29,7 @@ def load_linking_data(organoid: OrganoidRecord, rx_name: str, org_seg_ch):
     return link_org, link_org_dict
 
 
-def link_nuclei(organoid, ovr_channel, segname, rx_name, RX, z_anisotropy, org_seg_ch, nuc_seg_ch):
+def link_nuclei(organoid, segname, rx_name, RX, z_anisotropy, org_seg_ch, nuc_seg_ch):
     R0_obj = organoid.organoid_id
     R0_id = int(R0_obj.rpartition("_")[2])
     well_id = organoid.well.well_id
@@ -45,7 +45,7 @@ def link_nuclei(organoid, ovr_channel, segname, rx_name, RX, z_anisotropy, org_s
             if R0_df_org["abs_min"][0] != 0:
                 try:
                     R0_df = organoid.get_measurement("regionprops_nuc_{}".format(nuc_seg_ch))
-                    R0_raw = organoid.get_raw_data(ovr_channel)
+                    R0_raw = organoid.get_raw_data(org_seg_ch)
                     R0_seg = organoid.get_segmentation(segname)
                 except Exception as e:
                     print(e)
@@ -64,7 +64,7 @@ def link_nuclei(organoid, ovr_channel, segname, rx_name, RX, z_anisotropy, org_s
                     RX.plates[plate_id]
                     .wells[well_id]
                     .organoids[RX_obj]
-                    .get_raw_data(ovr_channel)
+                    .get_raw_data(org_seg_ch)
                 )
                 RX_seg = (
                     RX.plates[plate_id]

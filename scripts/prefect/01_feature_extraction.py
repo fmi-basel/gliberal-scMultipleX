@@ -58,10 +58,10 @@ def load_task(exp_path: str, excluded_plates: List[str], excluded_wells: List[st
 
 
 @task()
-def well_feature_extraction_ovr_task(well: WellRecord, ovr_channel: str, name_ovr: str):
+def well_feature_extraction_ovr_task(well: WellRecord, org_seg_ch: str, name_ovr: str):
     extract_well_features(
         well=well,
-        ovr_channel=ovr_channel,
+        ovr_channel=org_seg_ch,
     )
     return
 
@@ -93,7 +93,7 @@ def get_organoids(
 @task()
 def organoid_feature_extraction_and_linking_task(
     organoid, nuc_ending: str, mem_ending: str, mask_ending: str, spacing: List[float],
-        org_seg_ch, nuc_seg_ch, mem_seg_ch, ovr_channel, iop_cutoff):
+        org_seg_ch, nuc_seg_ch, mem_seg_ch, iop_cutoff):
 
     set_spacing(spacing)
     extract_organoid_features(
@@ -109,7 +109,7 @@ def organoid_feature_extraction_and_linking_task(
     )
     link_nuc_to_membrane(
         organoid=organoid,
-        ovr_channel=ovr_channel,
+        ovr_channel=org_seg_ch,
         nuc_ending=nuc_ending,
         mask_ending=mask_ending,
         mem_ending=mem_ending,
@@ -128,7 +128,6 @@ def run_flow(r_params, cpus):
         exp_path = Parameter("exp_path")
         excluded_plates = Parameter("excluded_plates")
         excluded_wells = Parameter("excluded_wells")
-        ovr_channel = Parameter("ovr_channel")
         mask_ending = Parameter("mask_ending")
         nuc_ending = Parameter("nuc_ending")
         mem_ending = Parameter("mem_ending")
@@ -142,7 +141,7 @@ def run_flow(r_params, cpus):
         exp, wells = load_task(exp_path, excluded_plates, excluded_wells)
 
         wfeo_t = well_feature_extraction_ovr_task.map(
-            wells, unmapped(ovr_channel), unmapped(name_ovr)
+            wells, unmapped(org_seg_ch), unmapped(name_ovr)
         )
 
         organoids = get_organoids(exp, mask_ending, excluded_plates, excluded_wells, upstream_tasks = [wfeo_t])
@@ -156,7 +155,6 @@ def run_flow(r_params, cpus):
             unmapped(org_seg_ch),
             unmapped(nuc_seg_ch),
             unmapped(mem_seg_ch),
-            unmapped(ovr_channel),
             unmapped(iop_cutoff),
             upstream_tasks = [organoids],
         )
@@ -174,7 +172,6 @@ def get_config_params(config_file_path):
     
     round_names = get_round_names(config_file_path)
     config_params = {
-        'ovr_channel':     ('01FeatureExtraction', 'ovr_channel'),
         'name_ovr':     ('01FeatureExtraction', 'name_ovr'),
         'mask_ending':     ('00BuildExperiment', 'mask_ending'),
         }

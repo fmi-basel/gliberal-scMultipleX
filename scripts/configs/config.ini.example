@@ -32,7 +32,6 @@ membrane_seg_channel = ${00BuildExperiment.round_R0:membrane_seg_channel}
 [01FeatureExtraction]
 excluded_plates = day2
 excluded_wells = C02
-ovr_channel = C01
 name_ovr = regionprops_ovr_
 iop_cutoff = 0.6
 
