@@ -27,9 +27,15 @@ def setup_prefect_handlers(logger, logfile_name, clear = True):
 	if clear:
 		logger.handlers.clear()
 	logger.setLevel(defaultlvl)
+	# add a logfile with more verbose settings
 	logfile_handler = logging.FileHandler(logfile_name, mode='a')
 	logfile_handler.setFormatter(format_with_date)
 	logger.addHandler(logfile_handler)
+	# and a Stream to stdout just to handle WARNINGS and ERRORS
+	stdout_handler = logging.StreamHandler(sys.stdout)
+	stdout_handler.setFormatter(format_without_date)
+	stdout_handler.setLevel(logging.WARNING)
+	logger.addHandler(stdout_handler)
 	return
 
 def get_scmultiplex_logger():
