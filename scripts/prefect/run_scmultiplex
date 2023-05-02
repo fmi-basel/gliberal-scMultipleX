@@ -184,6 +184,9 @@ if __name__ == '__main__':
 		main(args)
 	except KeyboardInterrupt:
 		returncode = 1
+	except subprocess.CalledProcessError as e:
+		print(e)
+		returncode = 2
 	except Exception as e:
 		print('Terminating with unexpected exception: %s' % str(e))
 		print(format_exc())
