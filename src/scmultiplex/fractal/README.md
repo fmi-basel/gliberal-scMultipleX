@@ -31,11 +31,14 @@ For local creation of a Python whl, it means that the setup.cfg contains the fol
 scmultiplex = __FRACTAL_MANIFEST__.json
 ```
 Afterwards, the wheel can be built using `python -m build` and collected by Fractal using the command line client:
+(you may need to `pip install build` to run the wheel creation)
+
 ```
 fractal task collect /path/to/scmultiplex-version-details.whl --package-extras fractal
 ```
 
 The installation of optional dependencies with fractal task collection doesn't appear to work yet with this command, even though it should. We'll work on this bug. In the meantime, one needs to manually activate the newly created task environment and `pip install fractal-tasks-core`.
+
 
 **Working with a Fractal task in development**
 The above instructions work well to install the Fractal task as it is available in the package. If you want to run a task through Fractal server that you keep changing, it's not advisable to use the fractal task collection, but instead manually register your task.
