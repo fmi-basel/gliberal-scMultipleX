@@ -242,12 +242,12 @@ def get_morphology_measurements(labeled_obj, img_shape, spacing, is_2D, min_area
             "is_touching_border_z": is_touching_border_z(
                 labeled_obj, img_shape=img_shape
             ),
-            "volume_pix": labeled_obj["area"],
             "surface_area": labeled_obj["surface_area_marchingcube"],
         }
         morphology_measurements.update(morphology_3d_only)
 
     return morphology_measurements
+
 
 def get_coordinates(labeled_obj, spacing, is_2D):
     coordinate_measurements = {
@@ -259,7 +259,8 @@ def get_coordinates(labeled_obj, spacing, is_2D):
         coordinate_measurements_3D = {
             "z_pos_pix_scaled": labeled_obj["centroid"][-3],
             "z_pos_pix_img": labeled_obj["centroid"][-3]
-            / spacing_anisotropy_scalar(spacing)
+            / spacing_anisotropy_scalar(spacing),
+            "volume_pix": labeled_obj["area"]
         }
         coordinate_measurements.update(coordinate_measurements_3D)
 

@@ -60,10 +60,9 @@ def get_organoids_task(exp: Experiment, exlude_plates: List[str]):
 
 
 @task()
-def link_nuclei_task(organoid, ovr_channel, segname, rx_name, RX, z_anisotropy, org_seg_ch, nuc_seg_ch):
+def link_nuclei_task(organoid, segname, rx_name, RX, z_anisotropy, org_seg_ch, nuc_seg_ch):
     link_nuclei(
         organoid=organoid,
-        ovr_channel=ovr_channel,
         segname=segname,
         rx_name=rx_name,
         RX=RX,
@@ -83,7 +82,6 @@ def run_flow(r_params, cpus):
         excluded_plates = Parameter("excluded_plates")
         excluded_wells = Parameter("excluded_wells")
         nuc_ending = Parameter("nuc_ending")
-        ovr_channel = Parameter("ovr_channel")
         spacing = Parameter("spacing")
         org_seg_ch = Parameter("org_seg_ch")
         nuc_seg_ch = Parameter("nuc_seg_ch")
@@ -95,7 +93,6 @@ def run_flow(r_params, cpus):
 
         link_nuclei_task.map(
             r0_organoids,
-            unmapped(ovr_channel),
             unmapped(nuc_ending),
             unmapped(rx_name),
             unmapped(RX),
@@ -119,10 +116,6 @@ def get_config_params(config_file_path):
     if len(round_names) < 2:
         raise RuntimeError('At least two rounds are required to perform organoid linking')
     rounds_tobelinked = round_names[1:]
-    config_params = {
-        'ovr_channel':     ('01FeatureExtraction', 'ovr_channel'),
-        }
-    common_params = get_workflow_params(config_file_path, config_params)
     
     compute_param = {
         'excluded_plates': (
@@ -147,7 +140,7 @@ def get_config_params(config_file_path):
                     ]
                 ),
         }
-    common_params.update(compute_workflow_params(config_file_path, compute_param))
+    common_params = compute_workflow_params(config_file_path, compute_param)
 
     # use same z-anisotropy as used during feature extraction
     parsed_spacing = common_params['spacing']

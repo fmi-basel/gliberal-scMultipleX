@@ -52,10 +52,10 @@ def get_wells(exp: Experiment, excluded_plates: List[str], excluded_wells: List[
     return exclude_conditions(exp, excluded_plates, excluded_wells)
 
 @task()
-def link_organoids_and_get_stats_task(well, ovr_channel, folder_name, R0, RX, seg_name, RX_name, iou_cutoff, names):
+def link_organoids_and_get_stats_task(well, org_seg_ch, folder_name, R0, RX, seg_name, RX_name, iou_cutoff, names):
     link_organoids(
         well=well,
-        ovr_channel=ovr_channel,
+        ovr_channel=org_seg_ch,
         folder_name=folder_name,
         R0=R0,
         RX=RX,
@@ -69,7 +69,7 @@ def link_organoids_and_get_stats_task(well, ovr_channel, folder_name, R0, RX, se
         RX=RX,
         iou_cutoff=iou_cutoff,
         names=names,
-        ovr_channel=ovr_channel,
+        ovr_channel=org_seg_ch,
         logger=prefect.context.get("logger"),
     )
     return
@@ -87,7 +87,7 @@ def run_flow(r_params, cpus):
         excluded_plates = Parameter("excluded_plates")
         excluded_wells = Parameter("excluded_wells")
         iou_cutoff = Parameter("iou_cutoff")
-        ovr_channel = Parameter("ovr_channel")
+        org_seg_ch = Parameter("org_seg_ch")
 
         R0, RX = load_exps(R0_path, RX_path)
         names = get_names(RX_name)
@@ -100,7 +100,7 @@ def run_flow(r_params, cpus):
         
         link_organoids_and_get_stats_task.map(
             wells,
-            unmapped(ovr_channel),
+            unmapped(org_seg_ch),
             unmapped(folder_name),
             unmapped(R0),
             unmapped(RX),
@@ -125,10 +125,6 @@ def get_config_params(config_file_path):
     if len(round_names) < 2:
         raise RuntimeError('At least two rounds are required to perform organoid linking')
     rounds_tobelinked = round_names[1:]
-    config_params = {
-        'ovr_channel':     ('01FeatureExtraction', 'ovr_channel'),
-        }
-    common_params = get_workflow_params(config_file_path, config_params)
     
     compute_param = {
         'excluded_plates': (
@@ -153,11 +149,16 @@ def get_config_params(config_file_path):
                     ]
                 ),
         }
-    common_params.update(compute_workflow_params(config_file_path, compute_param))
+    common_params = compute_workflow_params(config_file_path, compute_param)
     
     round_tobelinked_params = {}
     for ro in rounds_tobelinked:
+        config_params = {
+            'org_seg_ch':           ('00BuildExperiment.round_%s' % ro, 'organoid_seg_channel'),
+            }
         rp = common_params.copy()
+        rp.update(get_workflow_params(config_file_path, config_params))
+
         rp['RX_name'] = ro
         compute_param = {
             'RX_path': (
