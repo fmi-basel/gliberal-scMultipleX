@@ -205,7 +205,7 @@ def get_linking_stats(
     )
     df_filt = df[df["iou"] > iou_cutoff]
     logger.info(
-        f"removed {len(df) - len(df_filt)} our of {len(df)} RX "
+        f"removed {len(df) - len(df_filt)} out of {len(df)} RX "
         f"organoids that are not matched to R0."
     )
 
