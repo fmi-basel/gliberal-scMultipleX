@@ -516,12 +516,14 @@ def runAffine(moving_pc, fixed_pc, ransac_iterations, icp_iterations):
 
 
 def runFFD(
+    moving_pc,
     fixed_pc,
     moving_raw_image,
     fixed_raw_image,
     moving_label_image,
     fixed_label_image,
     transform_matrix_combined,
+    confidence,
 ):
     # Generate Free Form Deformation Image (based on Intensity Correlation) --> Note this may take some time (~5 min) [OPTIONAL]
 
@@ -568,14 +570,15 @@ def runFFD(
     ).astype(fixed_label_image.dtype)
 
     # obtain accuracy after performing FFD
-    ids = np.unique(transformed_ffd_label_image)
-    ids = ids[ids != 0]
+    ids = moving_pc[:, 0].transpose() # same as moving_ids in the above runPM and runAffine functions
     moving_ffd_ids = []
     transformed_moving_ffd_detections = []
 
     for id in ids:
         z, y, x = np.where(transformed_ffd_label_image == id)
         zm, ym, xm = np.mean(z), np.mean(y), np.mean(x)
+        if len(z) == 0:
+            zm = ym = xm = 0.0 # TODO - in future, save `confidence` as a dictionary of id tuples)
         transformed_moving_ffd_detections.append(np.array([zm, ym, xm]))  # N x 3
         moving_ffd_ids.append(id)
     cost_matrix = cdist(transformed_moving_ffd_detections, fixed_detections.transpose())
@@ -587,7 +590,11 @@ def runFFD(
     # Save matching ids to text file
 
     results_ffd = np.column_stack(
-        (moving_ffd_ids[row_indices].transpose(), fixed_ids[col_indices].transpose())
+        (
+            moving_ffd_ids[row_indices].transpose(),
+            fixed_ids[col_indices].transpose(),
+            confidence[row_indices, col_indices],
+        )
     )
 
     return results_ffd
