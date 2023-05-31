@@ -14,13 +14,11 @@ from os.path import basename, join
 from typing import List
 
 import numpy as np
-import pandas as pd
 from scmultiplex.faim_hcs.hcs.Experiment import Experiment
 from scmultiplex.faim_hcs.records.WellRecord import WellRecord
 from skimage.io import imsave
 
-from scmultiplex.linking.OrganoidLinkingFunctions import calculate_shift, apply_shift
-from scmultiplex.linking.matching import matching
+from scmultiplex.linking.OrganoidLinkingFunctions import calculate_shift, apply_shift, calculate_matching
 
 
 def link_organoids(
@@ -121,32 +119,25 @@ def get_linking_stats(
     except Exception as e:
         logger.error(e)
 
-    stat = matching(
-        R0_ovr_seg, RX_ovr_seg, criterion="iou", thresh=iou_cutoff, report_matches=True
-    )
-    # print(stat)
+    # run matching
+    stat, df, df_filt = calculate_matching(R0_ovr_seg, RX_ovr_seg, iou_cutoff)
+
+    # log matching output
     logger.info(f"{stat[2]} out of {stat[10]} RX_org are not matched to an " "R0_org.")
     logger.info(f"{stat[4]} out of {stat[9]} R0_org are not matched to an " "RX_org.")
-
-    df = pd.DataFrame(
-        list(zip([x[0] for x in stat[14]], [x[1] for x in stat[14]], stat[15])),
-        columns=["R0_label", "RX_label", "iou"],
-    )
-    df_filt = df[df["iou"] > iou_cutoff]
     logger.info(
         f"removed {len(df) - len(df_filt)} out of {len(df)} RX "
         f"organoids that are not matched to R0."
     )
 
+    # format output df
     df_filt = df_filt.sort_values(by=["R0_label"])
-
     df_filt["hcs_experiment_" + names[0]] = well.plate.experiment.name
     df_filt["root_dir_" + names[0]] = well.plate.experiment.root_dir
     df_filt["segmentation_ovr_" + names[0]] = well.segmentations[ovr_channel]
     df_filt["well_id"] = well_id
     df_filt["plate_id"] = plate_id
     df_filt["channel_id"] = ovr_channel
-
     df_filt["hcs_experiment_" + names[1]] = RX.name
     df_filt["root_dir_" + names[1]] = RX.root_dir
     df_filt["segmentation_ovr_" + names[1]] = (

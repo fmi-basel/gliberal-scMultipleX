@@ -8,8 +8,10 @@
 ##############################################################################
 
 import numpy as np
+import pandas as pd
 from skimage.registration import phase_cross_correlation
 from scipy.ndimage import shift
+from scmultiplex.linking.matching import matching
 
 
 def pad_img_set(img1, img2):
@@ -109,6 +111,16 @@ def apply_shift(img, shifts):
     return img_shifted
 
 
+def calculate_matching(img0, imgX, iou_cutoff):
+    stat = matching(img0, imgX, criterion="iou", thresh=iou_cutoff, report_matches=True)
+
+    df = pd.DataFrame(
+        list(zip([x[0] for x in stat[14]], [x[1] for x in stat[14]], stat[15])),
+        columns=["R0_label", "RX_label", "iou"],
+    )
+    df_filt = df[df["iou"] > iou_cutoff]
+
+    return stat, df, df_filt
 
 
 
