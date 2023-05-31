@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 # Copyright (C) 2023 Friedrich Miescher Institute for Biomedical Research
 
 ##############################################################################
@@ -9,6 +11,7 @@
 ##############################################################################
 
 import argparse
+import os
 import prefect
 import sys
 
@@ -17,6 +20,7 @@ from prefect import Flow, Parameter, task
 from prefect.executors import LocalDaskExecutor
 from prefect.run_configs import LocalRun
 
+from scmultiplex import version
 from scmultiplex.config import (
     compute_workflow_params,
     get_round_names,
@@ -29,6 +33,7 @@ from scmultiplex.utils.accumulate_utils import (
     save_tidy_plate_well_org_mem
 )
 
+from scmultiplex.logging import get_scmultiplex_logger,setup_prefect_handlers
 from scmultiplex.utils import get_core_count
 
 @task()
@@ -45,7 +50,7 @@ def save_tidy_task(exp, org_seg_ch, nuc_seg_ch, mem_seg_ch):
         try:
             tidy_task(exp, (org_seg_ch, nuc_seg_ch, mem_seg_ch))
         except RuntimeWarning as e:
-            logger = prefect.context.get("logger")
+            logger = get_scmultiplex_logger()
             logger.info('%s' % str(e))
 
 
@@ -102,12 +107,22 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required = True)
     parser.add_argument("--cpus", type=int, default=get_core_count())
+    parser.add_argument("--prefect-logfile", required = True)
+
     args = parser.parse_args()
     cpus = args.cpus
+    prefect_logfile = args.prefect_logfile
+
+    setup_prefect_handlers(prefect.utilities.logging.get_logger(), prefect_logfile)
+
+    print('Running scMultipleX version %s' % version)
 
     r_params = get_config_params(args.config)
 
-    return run_flow(r_params, cpus)
+    ret = run_flow(r_params, cpus)
+    if ret == 0:
+        print('%s completed successfully' % os.path.basename(sys.argv[0]))
+    return ret
 
 
 if __name__ == "__main__":

@@ -84,8 +84,8 @@ def tee(stream, logfile):
 			raise e from None
 	return
 
-def run_task_fork_pty(task, config_file_path, logfile_path, cpus):
-	cmd = 'python3 "%s" --config "%s" --cpus %d' % (task, config_file_path, cpus)
+def run_task_fork_pty(task, config_file_path, logfile_path, prefect_logfile_path, cpus):
+	cmd = 'python3 "%s" --config "%s" --cpus %d --prefect-logfile %s' % (task, config_file_path, cpus, prefect_logfile_path)
 	cmd = shlex.split(cmd)
 	pid, controlt_fd = pty.fork()
 	if pid == 0:
@@ -111,8 +111,8 @@ def run_task_fork_pty(task, config_file_path, logfile_path, cpus):
 			)
 	return
 
-def run_task_shell_run(task, config_file_path, logfile_path, cpus):
-	cmd = 'python3 "%s" --config "%s" --cpus %d |& tee -a "%s"' % (task, config_file_path, cpus, logfile_path)
+def run_task_shell_run(task, config_file_path, logfile_path, prefect_logfile_path, cpus):
+	cmd = 'python3 "%s" --config "%s" --cpus %d --prefect-logfile %s |& tee -a "%s"' % (task, config_file_path, cpus, logfile_path, prefect_logfile_path)
 	executing_msg = '\n\nExecuting: %s' % cmd
 	print(executing_msg)
 	with open(logfile_path, 'a') as logfile:
@@ -134,12 +134,13 @@ def main(args):
 	save_dir = get_config_params(config_path)['save_dir']
 	logfile_name = 'scmultiplex-%s.log' % datetime.now().strftime(log_time_format)
 	logfile_path = os.path.join(save_dir, logfile_name)
-	print('scMultipleX version %s' % version)
+	prefect_logfile_path = os.path.join(save_dir, 'prefect-%s' % logfile_name)
+	print('Using scMultipleX version %s' % version)
 	with open(logfile_path, 'a') as logfile:
-		logfile.write('scMultipleX version %s' % version)
+		logfile.write('Using scMultipleX version %s' % version)
 	
 	for task in task_list:
-		run_task(task, config_path, logfile_path, cpus)
+		run_task(task, config_path, logfile_path, prefect_logfile_path, cpus)
 
 if __name__ == '__main__':
 	# workaround terminal width detection bug
@@ -183,6 +184,9 @@ if __name__ == '__main__':
 		main(args)
 	except KeyboardInterrupt:
 		returncode = 1
+	except subprocess.CalledProcessError as e:
+		print(e)
+		returncode = 2
 	except Exception as e:
 		print('Terminating with unexpected exception: %s' % str(e))
 		print(format_exc())

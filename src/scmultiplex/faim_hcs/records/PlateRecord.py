@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from logging import Logger
 from os import mkdir
 from os.path import exists, join
 from typing import TYPE_CHECKING
@@ -8,6 +7,7 @@ from typing import TYPE_CHECKING
 import pandas as pd
 
 from ..records.WellRecord import WellRecord
+from scmultiplex.logging import get_faim_hcs_logger
 
 if TYPE_CHECKING:
     from ..hcs.Experiment import Experiment
@@ -15,7 +15,6 @@ if TYPE_CHECKING:
 
 class PlateRecord:
     def __init__(self, experiment: Experiment, plate_id: str, save_dir: str = "."):
-        self.logger = Logger(f"Plate {plate_id}")
         self.experiment = experiment
         self.plate_id = plate_id
 
@@ -31,6 +30,12 @@ class PlateRecord:
 
         if self.experiment is not None:
             self.experiment.register_plate(self)
+
+    # for some reason setting this as a static public attribute gets reset
+    # when executed within Prefect... :/
+    @property
+    def logger(self):
+        return get_faim_hcs_logger()
 
     def register_well(self, well: WellRecord):
         self.wells[well.record_id] = well

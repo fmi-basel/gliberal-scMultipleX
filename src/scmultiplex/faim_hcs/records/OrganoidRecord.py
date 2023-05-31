@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from logging import Logger
 from os import mkdir
 from os.path import exists, join
 from typing import TYPE_CHECKING
@@ -16,7 +15,6 @@ if TYPE_CHECKING:
 class OrganoidRecord(DefaultRecord):
     def __init__(self, well: WellRecord, organoid_id: str, save_dir: str = "."):
         super().__init__(organoid_id)
-        self.logger = Logger(f"Organoid {organoid_id}")
         self.organoid_id = self.record_id
         self.well = well
 

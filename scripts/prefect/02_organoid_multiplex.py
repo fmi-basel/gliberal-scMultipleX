@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 # Copyright (C) 2023 Friedrich Miescher Institute for Biomedical Research
 
 ##############################################################################
@@ -10,6 +12,7 @@
 
 import argparse
 import configparser
+import os
 import sys
 from typing import List
 
@@ -19,6 +22,7 @@ from prefect import Flow, Parameter, task, unmapped
 from prefect.executors import LocalDaskExecutor
 from prefect.run_configs import LocalRun
 
+from scmultiplex import version
 from scmultiplex.config import (
     commasplit,
     compute_workflow_params,
@@ -27,6 +31,7 @@ from scmultiplex.config import (
     summary_csv_path,
 )
 from scmultiplex.linking.OrganoidLinking import get_linking_stats, link_organoids
+from scmultiplex.logging import get_scmultiplex_logger, setup_prefect_handlers
 from scmultiplex.utils.exclude_utils import exclude_conditions
 from scmultiplex.utils.load_utils import load_experiment
 from scmultiplex.utils import get_core_count
@@ -61,7 +66,7 @@ def link_organoids_and_get_stats_task(well, org_seg_ch, folder_name, R0, RX, seg
         RX=RX,
         seg_name=seg_name,
         RX_name=RX_name,
-        logger=prefect.context.get("logger"),
+        logger=get_scmultiplex_logger(),
     )
     get_linking_stats(
         well=well,
@@ -70,7 +75,7 @@ def link_organoids_and_get_stats_task(well, org_seg_ch, folder_name, R0, RX, seg
         iou_cutoff=iou_cutoff,
         names=names,
         ovr_channel=org_seg_ch,
-        logger=prefect.context.get("logger"),
+        logger=get_scmultiplex_logger(),
     )
     return
 
@@ -177,12 +182,22 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required = True)
     parser.add_argument("--cpus", type=int, default=get_core_count())
+    parser.add_argument("--prefect-logfile", required = True)
+
     args = parser.parse_args()
     cpus = args.cpus
-    
+    prefect_logfile = args.prefect_logfile
+
+    setup_prefect_handlers(prefect.utilities.logging.get_logger(), prefect_logfile)
+
+    print('Running scMultipleX version %s' % version)
+
     r_params = get_config_params(args.config)
 
-    return run_flow(r_params, cpus)
+    ret = run_flow(r_params, cpus)
+    if ret == 0:
+        print('%s completed successfully' % os.path.basename(sys.argv[0]))
+    return ret
 
 
 if __name__ == "__main__":

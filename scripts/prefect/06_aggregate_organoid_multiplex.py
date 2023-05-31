@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 # Copyright (C) 2023 Friedrich Miescher Institute for Biomedical Research
 
 ##############################################################################
@@ -10,6 +12,8 @@
 
 import argparse
 import configparser
+import os
+import prefect
 import sys
 
 from scmultiplex.faim_hcs.hcs.Experiment import Experiment
@@ -17,6 +21,7 @@ from prefect import Flow, Parameter, task
 from prefect.executors import LocalDaskExecutor
 from prefect.run_configs import LocalRun
 
+from scmultiplex import version
 from scmultiplex.config import (
     compute_workflow_params,
     get_round_names,
@@ -27,6 +32,7 @@ from scmultiplex.utils.accumulate_utils import (
     write_organoid_linking_over_multiplexing_rounds
 )
 
+from scmultiplex.logging import setup_prefect_handlers
 from scmultiplex.utils import get_core_count
 
 @task()
@@ -95,12 +101,22 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required = True)
     parser.add_argument("--cpus", type=int, default=get_core_count())
+    parser.add_argument("--prefect-logfile", required = True)
+
     args = parser.parse_args()
     cpus = args.cpus
+    prefect_logfile = args.prefect_logfile
+
+    setup_prefect_handlers(prefect.utilities.logging.get_logger(), prefect_logfile)
+
+    print('Running scMultipleX version %s' % version)
 
     r_params = get_config_params(args.config)
 
-    return run_flow(r_params, cpus)
+    ret = run_flow(r_params, cpus)
+    if ret == 0:
+        print('%s completed successfully' % os.path.basename(sys.argv[0]))
+    return ret
 
 
 if __name__ == "__main__":
