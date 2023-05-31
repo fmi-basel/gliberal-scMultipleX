@@ -13,7 +13,7 @@ from os.path import join
 import pandas as pd
 from scmultiplex.faim_hcs.records.OrganoidRecord import OrganoidRecord
 
-from scmultiplex.platymatch.run_platymatch import runAffine, runFFD
+from scmultiplex.utils.run_platymatch import runAffine, runFFD
 
 
 def load_organoid_measurement(organoid: OrganoidRecord, org_seg_ch):
