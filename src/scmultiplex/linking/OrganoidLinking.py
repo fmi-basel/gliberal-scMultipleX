@@ -8,22 +8,17 @@
 #                                                                            #
 ##############################################################################
 
-import copy
 import logging
 import os
 from os.path import basename, join
 from typing import List
 
-import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 from scmultiplex.faim_hcs.hcs.Experiment import Experiment
 from scmultiplex.faim_hcs.records.WellRecord import WellRecord
-from scipy.ndimage import shift
 from skimage.io import imsave
-from skimage.registration import phase_cross_correlation
 
-from scmultiplex.linking.matching import matching
+from scmultiplex.linking.OrganoidLinkingFunctions import calculate_shift, apply_shift, calculate_matching
 
 
 def link_organoids(
@@ -33,14 +28,10 @@ def link_organoids(
     R0: Experiment,
     RX: Experiment,
     seg_name: str,
-    RX_name: str,
     logger=logging,
 ):
     well_id = well.well_id
     plate_id = well.plate.plate_id
-
-    #     if well.plate.plate_id not in ["day2"]:
-    #         continue #skip these timepoints
 
     R0_fname = basename(well.segmentations[ovr_channel])
     R0_savedir = os.path.join(
@@ -64,51 +55,13 @@ def link_organoids(
     R0_ovr = well.get_segmentation(ovr_channel)[0, :, :]
     RX_ovr = RX.plates[plate_id].wells[well_id].get_segmentation(ovr_channel)[0, :, :]
 
-    # pad to make same shape
-    R0_pad = np.pad(
-        R0_ovr,
-        [
-            (0, max(0, RX_ovr.shape[0] - R0_ovr.shape[0])),
-            (0, max(0, RX_ovr.shape[1] - R0_ovr.shape[1])),
-        ],
-        mode="constant",
-        constant_values=0,
-    )
-    RX_pad = np.pad(
-        RX_ovr,
-        [
-            (0, max(0, R0_ovr.shape[0] - RX_ovr.shape[0])),
-            (0, max(0, R0_ovr.shape[1] - RX_ovr.shape[1])),
-        ],
-        mode="constant",
-        constant_values=0,
-    )
-
-    if (R0_pad.shape[0] != RX_pad.shape[0]) | (R0_pad.shape[1] != RX_pad.shape[1]):
-        logger.error("Check zero-padding")
-
-    # binarize padded overviews
-    R0_pad_binary = copy.deepcopy(R0_pad)
-    R0_pad_binary[R0_pad_binary > 0] = 1  # binarize image
-
-    RX_pad_binary = copy.deepcopy(RX_pad)
-    RX_pad_binary[RX_pad_binary > 0] = 1  # binarize image
-
-    # bin so that registration runs faster
-    R0_pad_binary_bin = R0_pad_binary[::4, ::4]
-    RX_pad_binary_bin = RX_pad_binary[::4, ::4]
-
     # calculate shifts
-    # returns shift vector (in pixels) required to register moving_image (RX) with reference_image (R0)
-    shifts = phase_cross_correlation(R0_pad_binary_bin, RX_pad_binary_bin)  # (y,x)
+    shifts, R0_pad, RX_pad = calculate_shift(R0_ovr, RX_ovr, bin=4)
 
     # apply correction to RX overview
-    RX_pad_binary_bin_shifted = shift(
-        RX_pad_binary_bin, shifts[0], mode="constant", cval=0
-    )
-    RX_pad_shifted = shift(
-        RX_pad, 4 * shifts[0], mode="constant", cval=0
-    )  # use only for visualization to check alignment
+    RX_pad_shifted = apply_shift(RX_pad, shifts)
+
+    logger.info(f"{plate_id}, {well_id}, shifts: {shifts}")
 
     # save
     if not os.path.exists(R0_savedir):
@@ -116,39 +69,13 @@ def link_organoids(
     if not os.path.exists(RX_savedir):
         os.makedirs(RX_savedir)
 
-    # plot
-    logger.info(f"{plate_id}, {well_id}, shifts: {4 * shifts[0]}")
-    plt.imsave(
-        join(
-            RX_savedir, f"Plate_{plate_id}_{well_id}_R0_" f"" f"{RX_name}_corrected.png"
-        ),
-        R0_pad_binary_bin + RX_pad_binary_bin_shifted,
-    )
-
     R0_seg_file = os.path.join(R0_savedir, R0_fname)
-    imsave(
-        R0_seg_file,
-        R0_pad.astype(np.int16),
-        check_contrast=False,
-    )
+    imsave(R0_seg_file, R0_pad.astype(np.int16), check_contrast=False)
+
     RX_seg_file = os.path.join(RX_savedir, RX_fname)
-    imsave(
-        RX_seg_file,
-        RX_pad_shifted.astype(np.int16),
-        check_contrast=False,
-    )
+    imsave(RX_seg_file, RX_pad_shifted.astype(np.int16), check_contrast=False)
 
     # add to hcs experiments (R0 and RX)
-    # R0_seg_file = os.path.join(
-    #     well.plate.plate_id, "TIF_OVR_MIP_SEG", folder_name, R0_fname
-    # )
-    # RX_seg_file = os.path.join(
-    #     well.plate.plate_id, "TIF_OVR_MIP_SEG", folder_name, RX_fname
-    # )
-
-    #     well.add_segmentation(seg_name, R0_seg_file) #add to R0
-    #     RX.plates[plate_id].wells[well_id].add_segmentation(seg_name, RX_seg_file) #add to RX
-
     try:
         # Add the measurement to the faim-hcs datastructure
         well.add_segmentation(seg_name, R0_seg_file)  # add to R0
@@ -192,32 +119,25 @@ def get_linking_stats(
     except Exception as e:
         logger.error(e)
 
-    stat = matching(
-        R0_ovr_seg, RX_ovr_seg, criterion="iou", thresh=iou_cutoff, report_matches=True
-    )
-    # print(stat)
+    # run matching
+    stat, df, df_filt = calculate_matching(R0_ovr_seg, RX_ovr_seg, iou_cutoff)
+
+    # log matching output
     logger.info(f"{stat[2]} out of {stat[10]} RX_org are not matched to an " "R0_org.")
     logger.info(f"{stat[4]} out of {stat[9]} R0_org are not matched to an " "RX_org.")
-
-    df = pd.DataFrame(
-        list(zip([x[0] for x in stat[14]], [x[1] for x in stat[14]], stat[15])),
-        columns=["R0_label", "RX_label", "iou"],
-    )
-    df_filt = df[df["iou"] > iou_cutoff]
     logger.info(
         f"removed {len(df) - len(df_filt)} out of {len(df)} RX "
         f"organoids that are not matched to R0."
     )
 
+    # format output df
     df_filt = df_filt.sort_values(by=["R0_label"])
-
     df_filt["hcs_experiment_" + names[0]] = well.plate.experiment.name
     df_filt["root_dir_" + names[0]] = well.plate.experiment.root_dir
     df_filt["segmentation_ovr_" + names[0]] = well.segmentations[ovr_channel]
     df_filt["well_id"] = well_id
     df_filt["plate_id"] = plate_id
     df_filt["channel_id"] = ovr_channel
-
     df_filt["hcs_experiment_" + names[1]] = RX.name
     df_filt["root_dir_" + names[1]] = RX.root_dir
     df_filt["segmentation_ovr_" + names[1]] = (
