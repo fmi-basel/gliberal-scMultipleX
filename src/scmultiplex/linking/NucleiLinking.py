@@ -13,7 +13,7 @@ from os.path import join
 import pandas as pd
 from scmultiplex.faim_hcs.records.OrganoidRecord import OrganoidRecord
 
-from scmultiplex.platymatch.run_platymatch import runAffine, runFFD
+from scmultiplex.utils.platymatch_utils import runAffine, runFFD
 
 
 def load_organoid_measurement(organoid: OrganoidRecord, org_seg_ch):
@@ -129,18 +129,20 @@ def link_nuclei(organoid, segname, rx_name, RX, z_anisotropy, org_seg_ch, nuc_se
 
                     try:
                         ffd_matches = runFFD(
+                            RX_numpy,
                             R0_numpy,
                             RX_raw,
                             R0_raw,
                             RX_seg,
                             R0_seg,
                             transform_matrix_combined,
+                            confidence,
                         )
 
-                        ffd_matches = pd.DataFrame(
-                            ffd_matches, columns=["R0_nuc_id", "RX_nuc_id"]
-                        )
-                        # ffd_matches = pd.DataFrame(ffd_matches, columns=['R0_nuc_id', 'RX_nuc_id', 'confidence'])
+                        # ffd_matches = pd.DataFrame(
+                        #    ffd_matches, columns=["R0_nuc_id", "RX_nuc_id"]
+                        # )
+                        ffd_matches = pd.DataFrame(ffd_matches, columns=['R0_nuc_id', 'RX_nuc_id', 'confidence'])
                         ffd_matches["R0_organoid_id"] = R0_obj
                         ffd_matches["RX_organoid_id"] = RX_obj
                         ffd_matches["plate_id"] = plate_id

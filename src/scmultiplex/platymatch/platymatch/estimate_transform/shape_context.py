@@ -1,24 +1,18 @@
 from multiprocessing import Pool
 
-import numpy as np
 from scipy.optimize import linear_sum_assignment
 from skimage.measure import ransac
 from skimage.transform import AffineTransform
 from sklearn.decomposition import PCA
 from tqdm import tqdm
 
-from scmultiplex.platymatch.estimate_transform.apply_transform import (
-    apply_affine_transform,
-)
-from scmultiplex.platymatch.estimate_transform.find_transform import (
-    get_affine_transform,
-    get_similar_transform,
-)
+from platymatch.estimate_transform.apply_transform import *
+from platymatch.estimate_transform.find_transform import get_affine_transform, get_similar_transform
 
 
 class AffineTransform3D(AffineTransform):
     def __init__(self):
-        super().__init__(dimensionality=3)
+        super(AffineTransform3D, self).__init__(dimensionality=3)
 
 
 def get_Y(z, x):
@@ -26,15 +20,7 @@ def get_Y(z, x):
     return y / np.linalg.norm(y)
 
 
-def get_shape_context(
-    neighbors,
-    mean_dist,
-    r_inner=1 / 8,
-    r_outer=2,
-    n_rbins=5,
-    n_thetabins=6,
-    n_phibins=12,
-):
+def get_shape_context(neighbors, mean_dist, r_inner=1 / 8, r_outer=2, n_rbins=5, n_thetabins=6, n_phibins=12):
     """
     :param neighbors:  N-1 x 3
     :param mean_dist: 1
@@ -53,7 +39,7 @@ def get_shape_context(
     r_edges = np.logspace(np.log10(r_inner), np.log10(r_outer), n_rbins)
     index = get_bin_index(r, theta, phi, r_edges, n_rbins, n_thetabins, n_phibins)
 
-    sc = np.zeros(n_rbins * n_thetabins * n_phibins)
+    sc = np.zeros((n_rbins * n_thetabins * n_phibins))
     u, c = np.unique(index.astype(np.int32), return_counts=True)
     sc[u] = c
     sc = sc / np.linalg.norm(sc)
@@ -66,17 +52,14 @@ def get_bin_index(r, theta, phi, r_edges, n_rbins, n_thetabins, n_phibins):
     phi_index = phi // (2 * np.pi / n_phibins)
 
     r_, e_ = np.meshgrid(r, r_edges)
-    binIndex = (
-        np.argmin(r_ < e_, axis=0) * n_thetabins * n_phibins
-        + theta_index * n_phibins
-        + phi_index
-    )
+    binIndex = np.argmin(r_ < e_, axis=0) * n_thetabins * n_phibins + theta_index * n_phibins + phi_index
 
     return binIndex
 
 
 def transform(detection, x_vector, y_vector, z_vector, neighbors):
     """
+
     :param detection: 1 x 3
     :param x_vector: 1 x 3
     :param y_vector: 1 x 3
@@ -111,10 +94,9 @@ def get_unary_distance(sc1, sc2):
     return dists.sum() * 0.5
 
 
-def do_ransac(
-    moving_all, fixed_all, min_samples=4, trials=500, error=5, transform="Affine"
-):
+def do_ransac(moving_all, fixed_all, min_samples=4, trials=500, error=5, transform='Affine'):
     """
+
     :param moving_all: 4 x N
     :param fixed_all: 4 x N
     :param min_samples:
@@ -135,69 +117,44 @@ def do_ransac(
         target_chosen = fixed_all[:, indices]  # 3 x min_samples
         source_chosen = moving_all[:, indices]  # 3 x min_samples
 
-        if transform == "Affine":
+        if transform == 'Affine':
             transform_matrix = get_affine_transform(source_chosen, target_chosen)
-        elif transform == "Similar":
+        elif transform == 'Similar':
             transform_matrix = get_similar_transform(source_chosen, target_chosen)
         predicted_all = apply_affine_transform(moving_all, transform_matrix)  # 3 x N
         inliers = 0
         for index in range(fixed_all.shape[1]):
             d = np.linalg.norm(fixed_all[:, index] - predicted_all[:, index])
-            if d <= error:
+            if (d <= error):
                 inliers += 1
-        if inliers > inliers_best:
+        if (inliers > inliers_best):
             inliers_best = inliers
             A_best = transform_matrix
     return A_best, inliers_best
 
 
+
 def fun(args):
-    return ransac(
-        data=args["data"],
-        min_samples=args["min_samples"],
-        max_trials=args["max_trials"],
-        residual_threshold=args["residual_threshold"],
-        model_class=args["model_class"],
-    )
+    return ransac(data=args["data"],
+                  min_samples=args["min_samples"],
+                  max_trials=args["max_trials"],
+                  residual_threshold=args["residual_threshold"],
+                  model_class=args["model_class"])
 
 
-def do_ransac_complete(
-    U11,
-    U12,
-    U13,
-    U14,
-    U21,
-    U22,
-    U23,
-    U24,
-    moving_detections,
-    fixed_detections,
-    ransac_samples,
-    ransac_iterations,
-    ransac_error,
-    processes=8,
-):
+def do_ransac_complete(U11, U12, U13, U14, U21, U22, U23, U24, moving_detections, fixed_detections, ransac_samples,
+                       ransac_iterations, ransac_error,
+                       processes=8):
     indices = list(map(linear_sum_assignment, [U11, U12, U13, U14, U21, U22, U23, U24]))
 
     with Pool(processes=processes) as pool:
-        results = [
-            pool.apply_async(
-                fun,
-                [
-                    {
-                        "data": (
-                            moving_detections[:, row_indices].T,
-                            fixed_detections[:, col_indices].T,
-                        ),
-                        "min_samples": ransac_samples,
-                        "max_trials": ransac_iterations,
-                        "residual_threshold": ransac_error,
-                        "model_class": AffineTransform3D,
-                    }
-                ],
-            )
-            for row_indices, col_indices in indices
-        ]
+        results = [pool.apply_async(fun, [{
+            "data": (moving_detections[:, row_indices].T, fixed_detections[:, col_indices].T),
+            "min_samples": ransac_samples,
+            "max_trials": ransac_iterations,
+            "residual_threshold": ransac_error,
+            "model_class": AffineTransform3D
+        }]) for row_indices, col_indices in indices]
 
         transformations = []
         inliers = []
@@ -209,16 +166,7 @@ def do_ransac_complete(
     return transformations[np.argmax(inliers)], inliers
 
 
-def get_unary(
-    centroid,
-    mean_distance,
-    detections,
-    type,
-    n_rbins=5,
-    n_thetabins=6,
-    n_phibins=12,
-    transposed=False,
-):
+def get_unary(centroid, mean_distance, detections, type, n_rbins=5, n_thetabins=6, n_phibins=12, transposed=False, ):
 
     """
     :param centroid: N x 3 or 3 x N (transposed = False)
@@ -226,7 +174,7 @@ def get_unary(
     :param detections: N x 4
     :return:
     """
-    if transposed:  # N x 3
+    if (transposed):  # N x 3
         pass
     else:  # 3 x N
         detections = detections.transpose()
@@ -247,56 +195,26 @@ def get_unary(
     for queried_index, detection in enumerate(tqdm(detections, total=len(detections))):
         neighbors = np.delete(detections, queried_index, 0)  # (N-1) x 3
         z_vector = (detection - centroid) / np.linalg.norm(detection - centroid)
-        x_vector = x0_vector - z_vector * np.dot(
-            x0_vector[0, :], z_vector[0, :]
-        )  # convert to 1D vectors
+        x_vector = x0_vector - z_vector * np.dot(x0_vector[0, :], z_vector[0, :])  # convert to 1D vectors
         x_vector = x_vector / np.linalg.norm(x_vector)  # vector 2 --> X
         x_vector2 = x0_vector2 - z_vector * np.dot(x0_vector2[0, :], z_vector[0, :])
         x_vector2 = x_vector2 / np.linalg.norm(x_vector2)
         y_vector = get_Y(z_vector, x_vector)
         y_vector2 = get_Y(z_vector, x_vector2)
 
-        neighbors_transformed = transform(
-            detection, x_vector, y_vector, z_vector, neighbors
-        )  # (N-1) x 3
-        neighbors_transformed2 = transform(
-            detection, x_vector2, y_vector2, z_vector, neighbors
-        )  # (N-1) x 3
-        if type == "fixed":
+        neighbors_transformed = transform(detection, x_vector, y_vector, z_vector, neighbors)  # (N-1) x 3
+        neighbors_transformed2 = transform(detection, x_vector2, y_vector2, z_vector, neighbors)  # (N-1) x 3
+        if type == 'fixed':
             y_vector3 = -y_vector
             y_vector4 = -y_vector2
-            neighbors_transformed3 = transform(
-                detection, x_vector, y_vector3, z_vector, neighbors
-            )  # (N-1) x 3
-            neighbors_transformed4 = transform(
-                detection, x_vector2, y_vector4, z_vector, neighbors
-            )  # (N-1) x 3
-            sc3[queried_index] = get_shape_context(
-                neighbors_transformed3,
-                mean_distance,
-                n_rbins=n_rbins,
-                n_thetabins=n_thetabins,
-                n_phibins=n_phibins,
-            )
-            sc4[queried_index] = get_shape_context(
-                neighbors_transformed4,
-                mean_distance,
-                n_rbins=n_rbins,
-                n_thetabins=n_thetabins,
-                n_phibins=n_phibins,
-            )
-        sc[queried_index] = get_shape_context(
-            neighbors_transformed,
-            mean_distance,
-            n_rbins=n_rbins,
-            n_thetabins=n_thetabins,
-            n_phibins=n_phibins,
-        )
-        sc2[queried_index] = get_shape_context(
-            neighbors_transformed2,
-            mean_distance,
-            n_rbins=n_rbins,
-            n_thetabins=n_thetabins,
-            n_phibins=n_phibins,
-        )
+            neighbors_transformed3 = transform(detection, x_vector, y_vector3, z_vector, neighbors)  # (N-1) x 3
+            neighbors_transformed4 = transform(detection, x_vector2, y_vector4, z_vector, neighbors)  # (N-1) x 3
+            sc3[queried_index] = get_shape_context(neighbors_transformed3, mean_distance, n_rbins=n_rbins,
+                                                   n_thetabins=n_thetabins, n_phibins=n_phibins)
+            sc4[queried_index] = get_shape_context(neighbors_transformed4, mean_distance, n_rbins=n_rbins,
+                                                   n_thetabins=n_thetabins, n_phibins=n_phibins)
+        sc[queried_index] = get_shape_context(neighbors_transformed, mean_distance, n_rbins=n_rbins,
+                                              n_thetabins=n_thetabins, n_phibins=n_phibins)
+        sc2[queried_index] = get_shape_context(neighbors_transformed2, mean_distance, n_rbins=n_rbins,
+                                               n_thetabins=n_thetabins, n_phibins=n_phibins)
     return sc, sc2, sc3, sc4
