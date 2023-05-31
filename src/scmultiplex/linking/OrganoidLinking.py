@@ -30,7 +30,6 @@ def link_organoids(
     R0: Experiment,
     RX: Experiment,
     seg_name: str,
-    RX_name: str,
     logger=logging,
 ):
     well_id = well.well_id

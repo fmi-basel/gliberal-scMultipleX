@@ -57,7 +57,7 @@ def get_wells(exp: Experiment, excluded_plates: List[str], excluded_wells: List[
     return exclude_conditions(exp, excluded_plates, excluded_wells)
 
 @task()
-def link_organoids_and_get_stats_task(well, org_seg_ch, folder_name, R0, RX, seg_name, RX_name, iou_cutoff, names):
+def link_organoids_and_get_stats_task(well, org_seg_ch, folder_name, R0, RX, seg_name, iou_cutoff, names):
     link_organoids(
         well=well,
         ovr_channel=org_seg_ch,
@@ -65,7 +65,6 @@ def link_organoids_and_get_stats_task(well, org_seg_ch, folder_name, R0, RX, seg
         R0=R0,
         RX=RX,
         seg_name=seg_name,
-        RX_name=RX_name,
         logger=get_scmultiplex_logger(),
     )
     get_linking_stats(
@@ -110,7 +109,6 @@ def run_flow(r_params, cpus):
             unmapped(R0),
             unmapped(RX),
             unmapped(seg_name),
-            unmapped(RX_name),
             unmapped(iou_cutoff),
             unmapped(names),
         )
