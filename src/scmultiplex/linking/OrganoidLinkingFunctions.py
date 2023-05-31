@@ -16,10 +16,10 @@ from scmultiplex.linking.matching import matching
 
 def pad_img_set(img1, img2):
     """
-    Pad two images (numpy arrays) to be the same size
-    :param img1: typically R0
-    :param img2: typically RX
-    :return: two padded images
+    Zero-pad two images to be the same size
+    :param img1: 2D numpy array, typically R0
+    :param img2: 2D numpy array, typically RX
+    :return: padded img1 and img2
     """
     img1_padded = np.pad(
         img1,
@@ -47,20 +47,20 @@ def pad_img_set(img1, img2):
 def binarize_img(img):
     """
     Binarize image, any values above 0 are set to 1
-    :param img: numpy array
-    :return: binarized image (0 or 1)
+    :param img: 2D numpy array
+    :return: binarized 2D numpy array (values 0 or 1)
     """
-    img = img.copy() # copy to not change original variable
+    img = img.copy()  # copy to not change original variable
     img[img > 0] = 1
     return img
 
 
 def subsample_image(img, bin):
     """
-    Subsample 2D image by indicated bin spacing.
-    :param img: 2D numpy array image
+    Subsample image by indicated bin spacing
+    :param img: 2D numpy array of labeled objects
     :bin: integer value for subsampling, ex. bin = 4 means every 4th pixel is sampled
-    :return: subsampled image with image dimensions reduced by bin^2
+    :return: subsampled 2D numpy array with size reduced by bin^2
     """
     img_bin = img[::bin, ::bin]
     return img_bin
@@ -68,15 +68,15 @@ def subsample_image(img, bin):
 
 def calculate_shift(img0, imgX, bin):
     """
-    Calculate xy shift between a set of 2D images based on phase cross correlation
-    :param img0: 2D numpy array image, reference image ex. R0
-    :param imgX: 2D numpy array image, moving image ex. RX
+    Calculate xy shift between a set of 2D images based on phase cross correlation for image registration
+    :param img0: 2D numpy array of labeled objects, reference image ex. R0
+    :param imgX: 2D numpy array of labeled objects, moving image ex. RX
     :bin: integer value for subsampling, ex. bin = 4 means every 4th pixel is sampled
     :return:
         shifts: ndarray shift vector (y,x) in pixels required to shift moving image (imgX) relative to reference image (img0)
-        pixel shift is relative to input imgX scaling (i.e. before subsampling)
-        img0_pad: 2D numpy array image, padded to be same size as imgX_pad
-        imgX_pad: 2D numpy array image, padded to be same size as img0_pad
+            pixel shift is relative to input imgX scaling (i.e. before subsampling)
+        img0_pad: img0 padded to be same dimensions as imgX_pad
+        imgX_pad: imgX padded to be same dimensions as img0_pad
     """
 
     # pad so that images have same shape
@@ -100,10 +100,10 @@ def calculate_shift(img0, imgX, bin):
 
 def apply_shift(img, shifts):
     """
-    Apply shift from image registration to image
-    :param img: 2D numpy array image
-    :shifts: ndarray shift vector (y,x) in pixels
-    :return: shifted 2D numpy array image
+    Apply xy shift to image to perform registration, typically applied to moving image RX
+    :param img: 2D numpy array
+    :shifts: ndarray shift vector (y,x) in pixel units
+    :return: shifted 2D numpy array, with empty regions from shift filled with 0
     """
 
     img_shifted = shift(img, shifts, mode="constant", cval=0)
@@ -112,6 +112,17 @@ def apply_shift(img, shifts):
 
 
 def calculate_matching(img0, imgX, iou_cutoff):
+    """
+    Calculate matching between two label images based on intersection over union score
+    :param img0: 2D numpy array of labeled objects, reference image ex. R0
+    :param imgX: 2D numpy array of labeled objects, moving image ex. RX
+    :iou_cutoff: float between 0 and 1 to specify intersection over union cutoff.
+        Linked organoid pairs that have an iou below this value are filtered out
+    :return:
+        stat: Matching object (tuple of named tuples) that includes various accuracy and confidence metrics
+        df: Pandas DataFrame of all detected organoid matches
+        df_filt: Pandas DataFrame of organoid matches filtered by iou_cutoff, typically used for downstream linking.
+    """
     stat = matching(img0, imgX, criterion="iou", thresh=iou_cutoff, report_matches=True)
 
     df = pd.DataFrame(
