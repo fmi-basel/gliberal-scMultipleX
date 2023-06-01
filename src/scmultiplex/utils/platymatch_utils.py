@@ -389,6 +389,22 @@ def runPM(
 
 
 def runAffine(moving_pc, fixed_pc, ransac_iterations, icp_iterations):
+    """
+    Run affine linking of two point clouds
+    :moving_pc: numpy array of label centroids and volume of moving point cloud, e.g. RX
+        rows are unique label ID and columns are in order:
+            "nuc_id", "x_centroid", "y_centroid", "z_centroid", "volume"
+        all units are in pixels
+        scaling must match label image, i.e. z_centroid and volume do not take into account pixel anisotropy
+    :fixed_pc: numpy array of label centroids and volume of fixed point cloud, e.g. R0
+        same specifications as for moving_pc
+    :ransac_iterations: integer number of RANSAC iterations
+    :icp_iterations: integer number of ICP iterations
+    :return:
+        results_affine: numpy array of results, with column order: "fixed_label_id", "moving_label_id", "confidence"
+        transform_matrix_combined: affine transformation matrix, for use in FFD linking or applying image transformation
+        confidence: confidence measurement of matches for use in FFD linking
+    """
     # Obtain ids
     moving_ids = moving_pc[:, 0].transpose()  # 1 x N
     moving_detections = np.flip(moving_pc[:, 1:-1], 1).transpose()  # z y x, 3 x N
@@ -409,7 +425,6 @@ def runAffine(moving_pc, fixed_pc, ransac_iterations, icp_iterations):
     fixed_mean_distance = get_mean_distance(fixed_detections, transposed=False)
 
     # Generate Unaries
-
     unary_11, unary_12, _, _ = get_unary(
         moving_centroid,
         mean_distance=moving_mean_distance,
@@ -436,7 +451,6 @@ def runAffine(moving_pc, fixed_pc, ransac_iterations, icp_iterations):
     U24 = -np.matmul(unary_12, unary_24.transpose())
 
     # Perform RANSAC
-
     transform_matrix_shape_context, inliers = do_ransac_complete(
         U11,
         U12,
@@ -452,8 +466,6 @@ def runAffine(moving_pc, fixed_pc, ransac_iterations, icp_iterations):
         ransac_iterations=ransac_iterations,
         ransac_error=ransac_error,
     )
-    #     print("RANSAC # Inliers 11 = {} and # Inliers 12 = {} and # Inliers 13 = {} and # Inliers 14 = {} "
-    #           "and # Inliers 21 = {} and # Inliers 22 = {} and # Inliers 23 = {} and # Inliers 24 = {}".format(*inliers))
 
     sign_id = np.argmax(inliers)
 
@@ -475,7 +487,6 @@ def runAffine(moving_pc, fixed_pc, ransac_iterations, icp_iterations):
         transformed_moving_detections.transpose(), fixed_detections.transpose()
     )
 
-    # `row_ids` and `col_ids` are the actual ids
     row_indices, col_indices = linear_sum_assignment(cost_matrix)
 
     # Save to csv file, the predicted matches ids and confidence
@@ -504,8 +515,6 @@ def runAffine(moving_pc, fixed_pc, ransac_iterations, icp_iterations):
         )
     )
 
-    #     print("Total Time to Run Code for Affine step is {:.3f} seconds".format(time.time() - start_time))
-
     return results_affine, transform_matrix_combined, confidence
 
 
@@ -520,7 +529,6 @@ def runFFD(
     confidence,
 ):
     # Generate Free Form Deformation Image (based on Intensity Correlation) --> Note this may take some time (~5 min) [OPTIONAL]
-
     fixed_ids = fixed_pc[:, 0].transpose()
     fixed_detections = np.flip(fixed_pc[:, 1:-1], 1).transpose()
 
