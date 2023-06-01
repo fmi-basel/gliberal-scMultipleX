@@ -44,22 +44,30 @@ from platymatch.utils.utils import (
 
 warnings.filterwarnings("ignore")
 
-def calculate_nucleus_size(moving_pc, fixed_pc):
-    moving_nuclei_size_mean = np.mean(moving_pc[:, -1].transpose())
-    moving_nuclei_size_std = np.std(moving_pc[:, -1].transpose())
-    moving_nuclei_size = (
-        moving_nuclei_size_mean - 3 * moving_nuclei_size_std
-        if (moving_nuclei_size_mean - 3 * moving_nuclei_size_std) > 0
-        else (moving_nuclei_size_mean - 2 * moving_nuclei_size_std)
-    )
-    fixed_nuclei_size_mean = np.mean(fixed_pc[:, -1].transpose())
-    fixed_nuclei_size_std = np.std(fixed_pc[:, -1].transpose())
-    if (fixed_nuclei_size_mean - 3 * fixed_nuclei_size_std) > 0:
-        fixed_nuclei_size = fixed_nuclei_size_mean - 3 * fixed_nuclei_size_std
+
+def calculate_stats(pc, column=-1):
+    mean = np.mean(pc[:, column].transpose())
+    std = np.std(pc[:, column].transpose())
+    return mean, std
+
+
+def calculate_size(mean, std):
+    if (mean - 3 * std) > 0:
+        size = mean - 3 * std
     else:
-        fixed_nuclei_size = fixed_nuclei_size_mean - 2 * fixed_nuclei_size_std
+        size = mean - 2 * std
+    return size
+
+
+def calculate_nucleus_size(moving_pc, fixed_pc):
+    moving_nuclei_size_mean, moving_nuclei_size_std = calculate_stats(moving_pc, column=-1)
+    moving_nuclei_size = calculate_size(moving_nuclei_size_mean, moving_nuclei_size_std)
+
+    fixed_nuclei_size_mean, fixed_nuclei_size_std = calculate_stats(fixed_pc, column=-1)
+    fixed_nuclei_size = calculate_size(fixed_nuclei_size_mean, fixed_nuclei_size_std)
 
     return moving_nuclei_size, fixed_nuclei_size
+
 
 def runPM(
     moving_pc,
@@ -389,21 +397,7 @@ def runAffine(moving_pc, fixed_pc, ransac_iterations, icp_iterations):
     fixed_detections = np.flip(fixed_pc[:, 1:-1], 1).transpose()
 
     # Calculate nucleus size
-    moving_nuclei_size_mean = np.mean(moving_pc[:, -1].transpose())
-    moving_nuclei_size_std = np.std(moving_pc[:, -1].transpose())
-    moving_nuclei_size = (
-        moving_nuclei_size_mean - 3 * moving_nuclei_size_std
-        if (moving_nuclei_size_mean - 3 * moving_nuclei_size_std) > 0
-        else (moving_nuclei_size_mean - 2 * moving_nuclei_size_std)
-    )
-    fixed_nuclei_size_mean = np.mean(fixed_pc[:, -1].transpose())
-    fixed_nuclei_size_std = np.std(fixed_pc[:, -1].transpose())
-    fixed_nuclei_size = (
-        fixed_nuclei_size_mean - 3 * fixed_nuclei_size_std
-        if (fixed_nuclei_size_mean - 3 * fixed_nuclei_size_std) > 0
-        else (fixed_nuclei_size_mean - 2 * fixed_nuclei_size_std)
-    )
-
+    moving_nuclei_size, fixed_nuclei_size = calculate_nucleus_size(moving_pc, fixed_pc)
     ransac_error = 0.5 * (moving_nuclei_size ** (1 / 3) + fixed_nuclei_size ** (1 / 3))
 
     # Determine centroids
