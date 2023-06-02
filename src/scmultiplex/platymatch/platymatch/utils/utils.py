@@ -161,7 +161,7 @@ def generate_ffd_transformed_image(fixed_image, moving_image, fixed_image_mask=N
     # generated inside that region. Also, this implicitly speeds things up as the mask is smaller than the
     # whole image.
     registration_method.SetMetricSamplingStrategy(registration_method.RANDOM)
-    registration_method.SetMetricSamplingPercentage(0.01)
+    registration_method.SetMetricSamplingPercentage(0.01, seed=1234)
     if fixed_image_mask:
         registration_method.SetMetricFixedMask(fixed_image_mask)
 
