@@ -35,7 +35,7 @@ def link_affine(RX_numpy, R0_numpy, RX_obj, R0_obj, plate_id, well_id, ransac_it
     (affine_matches, transform_affine) = run_affine(
         RX_numpy, R0_numpy, ransac_iterations, icp_iterations
     )
-    affine_matches = pd.DataFrame(affine_matches, columns=["R0_nuc_id", "RX_nuc_id", "confidence"],)
+    affine_matches = pd.DataFrame(affine_matches, columns=["R0_nuc_id", "RX_nuc_id", 'R0RX_pixdist_affine', "confidence"],)
     affine_matches["R0_organoid_id"] = R0_obj
     affine_matches["RX_organoid_id"] = RX_obj
     affine_matches["plate_id"] = plate_id
@@ -64,7 +64,7 @@ def link_ffd(RX_numpy, R0_numpy, RX_raw, R0_raw, R0_seg, RX_seg, RX_obj, R0_obj,
         R0_seg,
     )
 
-    ffd_matches = pd.DataFrame(ffd_matches, columns=['R0_nuc_id', 'RX_nuc_id', 'R0RX_distance_pix'])
+    ffd_matches = pd.DataFrame(ffd_matches, columns=['R0_nuc_id', 'RX_nuc_id', 'R0RX_pixdist_ffd'])
     ffd_matches["R0_organoid_id"] = R0_obj
     ffd_matches["RX_organoid_id"] = RX_obj
     ffd_matches["plate_id"] = plate_id
