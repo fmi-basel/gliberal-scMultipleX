@@ -198,64 +198,41 @@ def run_affine(moving_pc, fixed_pc, ransac_iterations, icp_iterations):
 
     return results_affine, transform_affine
 
-#transformed_affine_raw_image, transformed_affine_label_image
 
 def run_ffd(
     moving_pc,
     fixed_pc,
-    moving_raw_image,
+    moving_transformed_affine_raw_image,
+    moving_transformed_affine_label_image,
     fixed_raw_image,
-    moving_label_image,
     fixed_label_image,
-    transform_affine,
 ):
 
     fixed_ids = fixed_pc[:, 0].transpose()
     fixed_detections = np.flip(fixed_pc[:, 1:-1], 1).transpose()
 
-    # Generate Transformed Affine Image
-    (
-        transformed_affine_raw_image,
-        transformed_affine_label_image,
-    ) = generate_affine_transformed_image(
-        transform_matrix=transform_affine,
-        fixed_raw_image=fixed_raw_image,
-        moving_raw_image=moving_raw_image,
-        moving_label_image=moving_label_image,
-    )
-
     # Normalize fixed and moving-affine image
     fixed_raw_image_normalized = normalize_min_max_percentile(
         fixed_raw_image, 1, 99.8, axis=(0, 1, 2)
     )
-    transformed_affine_raw_image_normalized = normalize_min_max_percentile(
-        transformed_affine_raw_image, 1, 99.8, axis=(0, 1, 2)
+    moving_transformed_affine_raw_image_normalized = normalize_min_max_percentile(
+        moving_transformed_affine_raw_image, 1, 99.8, axis=(0, 1, 2)
     )
 
     # Generate Free Form Deformation transform (based on Intensity Correlation) --> Note this may take some time
     transform_ffd = generate_ffd_transformed_image(
         fixed_image=sitk.GetImageFromArray(fixed_raw_image_normalized.astype(np.float32)),
         moving_image=sitk.GetImageFromArray(
-            transformed_affine_raw_image_normalized.astype(np.float32)))
-
-    # Generate FFD-transformed raw image
-    # transformed_ffd_raw_image_sitk = sitk.Resample(sitk.GetImageFromArray(transformed_affine_raw_image),
-    #                                                sitk.GetImageFromArray(fixed_raw_image),
-    #                                                transform_ffd,
-    #                                                sitk.sitkLinear,
-    #                                                compute_average_bg_intensity(fixed_raw_image, fixed_label_image),
-    #                                                sitk.GetImageFromArray(transformed_affine_raw_image).GetPixelID())
-    #
-    # transformed_ffd_raw_image = sitk.GetArrayFromImage(transformed_ffd_raw_image_sitk).astype(fixed_raw_image.dtype)
+            moving_transformed_affine_raw_image_normalized.astype(np.float32)))
 
     # Generate FFD-transformed label image
-    transformed_ffd_label_image_sitk = sitk.Resample(sitk.GetImageFromArray(transformed_affine_label_image),
+    transformed_ffd_label_image_sitk = sitk.Resample(sitk.GetImageFromArray(moving_transformed_affine_label_image),
                                                      sitk.GetImageFromArray(fixed_raw_image),
                                                      transform_ffd,
                                                      sitk.sitkNearestNeighbor,
                                                      0.0,
                                                      sitk.GetImageFromArray(
-                                                         transformed_affine_label_image).GetPixelID())
+                                                         moving_transformed_affine_label_image).GetPixelID())
     transformed_ffd_label_image = sitk.GetArrayFromImage(transformed_ffd_label_image_sitk).astype(
         fixed_label_image.dtype)
 
@@ -289,3 +266,22 @@ def run_ffd(
     )
 
     return results_ffd, transform_ffd, transformed_ffd_label_image
+
+
+def generate_ffd_rawimage_from_affine(moving_transformed_affine_raw_image,
+                                      fixed_raw_image,
+                                      fixed_label_image,
+                                      transform_ffd):
+    # might do some intensity normalization internally - ask Manan
+    transformed_ffd_raw_image_sitk = sitk.Resample(sitk.GetImageFromArray(moving_transformed_affine_raw_image),
+                                                   sitk.GetImageFromArray(fixed_raw_image),
+                                                   transform_ffd,
+                                                   sitk.sitkLinear,
+                                                   compute_average_bg_intensity(fixed_raw_image, fixed_label_image),
+                                                   sitk.GetImageFromArray(moving_transformed_affine_raw_image).GetPixelID())
+
+    moving_transformed_ffd_raw_image = sitk.GetArrayFromImage(transformed_ffd_raw_image_sitk).astype(fixed_raw_image.dtype)
+
+    return moving_transformed_ffd_raw_image
+
+

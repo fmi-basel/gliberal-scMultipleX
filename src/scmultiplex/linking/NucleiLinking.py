@@ -12,8 +12,10 @@ from os.path import join
 
 import pandas as pd
 from scmultiplex.faim_hcs.records.OrganoidRecord import OrganoidRecord
-
 from scmultiplex.utils.platymatch_utils import run_affine, run_ffd
+
+
+from platymatch.utils.utils import generate_affine_transformed_image
 
 
 def load_organoid_measurement(organoid: OrganoidRecord, org_seg_ch):
@@ -97,7 +99,6 @@ def link_nuclei(organoid, segname, rx_name, RX, z_anisotropy, org_seg_ch, nuc_se
                     print("matching of", R0_obj, "and", RX_obj, "in", plate_id, well_id)
 
                     try:
-                        # affine_matches, ffd_matches = runPM(RX_numpy, R0_numpy, ransac_iterations, icp_iterations, RX_raw, R0_raw, RX_seg, R0_seg, "savename")
                         (
                             affine_matches,
                             transform_affine,
@@ -127,19 +128,26 @@ def link_nuclei(organoid, segname, rx_name, RX, z_anisotropy, org_seg_ch, nuc_se
                         print(R0_obj, RX_obj, e)
 
                     try:
+
+                        # generate transformed affine image
+                        (moving_transformed_affine_raw_image, moving_transformed_affine_label_image) = \
+                            generate_affine_transformed_image(
+                            transform_matrix=transform_affine,
+                            fixed_raw_image=R0_raw,
+                            moving_raw_image=RX_raw,
+                            moving_label_image=RX_seg,
+                        )
+                        # run ffd matching
+                        # for now only use ffd_matches result, do not save transform or transformed image
                         (ffd_matches, transform_ffd, transformed_ffd_label_image) = run_ffd(
                             RX_numpy,
                             R0_numpy,
-                            RX_raw,
+                            moving_transformed_affine_raw_image,
+                            moving_transformed_affine_label_image,
                             R0_raw,
-                            RX_seg,
                             R0_seg,
-                            transform_affine,
                         )
 
-                        # ffd_matches = pd.DataFrame(
-                        #    ffd_matches, columns=["R0_nuc_id", "RX_nuc_id"]
-                        # )
                         ffd_matches = pd.DataFrame(ffd_matches, columns=['R0_nuc_id', 'RX_nuc_id', 'R0RX_distance_pix'])
                         ffd_matches["R0_organoid_id"] = R0_obj
                         ffd_matches["RX_organoid_id"] = RX_obj
