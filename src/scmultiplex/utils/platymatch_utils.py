@@ -192,6 +192,7 @@ def run_affine(moving_pc, fixed_pc, ransac_iterations, icp_iterations):
         (
             moving_ids[row_indices].transpose(),
             fixed_ids[col_indices].transpose(),
+            cost_matrix[row_indices, col_indices],
             confidence[row_indices, col_indices],
         )
     )
