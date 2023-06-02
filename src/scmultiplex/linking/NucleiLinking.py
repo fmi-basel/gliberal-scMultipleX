@@ -12,7 +12,7 @@ from os.path import join
 
 import pandas as pd
 from scmultiplex.faim_hcs.records.OrganoidRecord import OrganoidRecord
-from scmultiplex.utils.platymatch_utils import run_affine, run_ffd
+from scmultiplex.linking.NucleiLinkingFunctions import run_affine, run_ffd
 
 
 from platymatch.utils.utils import generate_affine_transformed_image
