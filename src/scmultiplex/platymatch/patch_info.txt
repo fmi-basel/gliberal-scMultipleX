@@ -1,0 +1,4 @@
+Original version of PlatyMatch uses random sampling during FFD transform matrix calculation without setting a seed,
+so repeated runs have slightly different transformation matrices. Set seed to fix this issue.
+
+patch -p3 < fix_random_seed.patch

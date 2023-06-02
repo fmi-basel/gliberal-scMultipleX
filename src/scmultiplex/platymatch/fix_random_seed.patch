@@ -1,0 +1,12 @@
+--- src/scmultiplex/platymatch/platymatch/utils/utils.py.orig	2023-05-31 17:33:30
++++ src/scmultiplex/platymatch/platymatch/utils/utils.py	2023-06-02 16:09:41
+@@ -161,7 +161,7 @@
+     # generated inside that region. Also, this implicitly speeds things up as the mask is smaller than the
+     # whole image.
+     registration_method.SetMetricSamplingStrategy(registration_method.RANDOM)
+-    registration_method.SetMetricSamplingPercentage(0.01)
++    registration_method.SetMetricSamplingPercentage(0.01, seed=1234)
+     if fixed_image_mask:
+         registration_method.SetMetricFixedMask(fixed_image_mask)
+ 
+\ No newline at end of file
