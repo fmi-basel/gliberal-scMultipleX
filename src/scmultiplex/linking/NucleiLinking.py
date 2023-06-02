@@ -32,6 +32,9 @@ def load_linking_data(organoid: OrganoidRecord, rx_name: str, org_seg_ch):
 
 
 def link_affine(RX_numpy, R0_numpy, RX_obj, R0_obj, plate_id, well_id, ransac_iterations=4000, icp_iterations=50):
+    """
+    Run affine transformation using PlatyMatch and format result to pandas df
+    """
     (affine_matches, transform_affine) = run_affine(
         RX_numpy, R0_numpy, ransac_iterations, icp_iterations
     )
@@ -45,6 +48,9 @@ def link_affine(RX_numpy, R0_numpy, RX_obj, R0_obj, plate_id, well_id, ransac_it
 
 
 def link_ffd(RX_numpy, R0_numpy, RX_raw, R0_raw, R0_seg, RX_seg, RX_obj, R0_obj, plate_id, well_id, transform_affine):
+    """
+    Apply affine transformation, run ffd transformation using PlatyMatch, and format result to pandas df
+    """
     # generate transformed affine image
     (moving_transformed_affine_raw_image, moving_transformed_affine_label_image) = \
         generate_affine_transformed_image(
@@ -74,6 +80,9 @@ def link_ffd(RX_numpy, R0_numpy, RX_raw, R0_raw, R0_seg, RX_seg, RX_obj, R0_obj,
 
 
 def link_nuclei(organoid, segname, rx_name, RX, z_anisotropy, org_seg_ch, nuc_seg_ch):
+    """
+    Run PlatyMatch linking using Prefect/FAIM-HCS data structure
+    """
     R0_obj = organoid.organoid_id
     R0_id = int(R0_obj.rpartition("_")[2])
     well_id = organoid.well.well_id

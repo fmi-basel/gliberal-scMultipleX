@@ -46,12 +46,20 @@ warnings.filterwarnings("ignore")
 
 
 def calculate_stats(pc, column=-1):
+    """
+    Calculate mean and standard deviation of nuclear volumes in organoid
+    Helper function used during affine linking
+    """
     mean = np.mean(pc[:, column].transpose())
     std = np.std(pc[:, column].transpose())
     return mean, std
 
 
 def calculate_size(mean, std):
+    """
+    Calculate lower size cutoff of distribution
+    Helper function used during affine linking
+    """
     if (mean - 3 * std) > 0:
         size = mean - 3 * std
     else:
@@ -60,6 +68,10 @@ def calculate_size(mean, std):
 
 
 def calculate_nucleus_size(moving_pc, fixed_pc):
+    """
+    Calculate lower size cutoff of nuclear volumes in organoid in fixed and moving image
+    Helper function used during affine linking
+    """
     moving_nuclei_size_mean, moving_nuclei_size_std = calculate_stats(moving_pc, column=-1)
     moving_nuclei_size = calculate_size(moving_nuclei_size_mean, moving_nuclei_size_std)
 
@@ -74,7 +86,7 @@ def run_affine(moving_pc, fixed_pc, ransac_iterations, icp_iterations):
     Run affine linking of two point clouds
     :moving_pc: numpy array of label centroids and volume of moving point cloud, e.g. RX
         rows are unique label ID and columns are in order:
-            "nuc_id", "x_centroid", "y_centroid", "z_centroid", "volume"
+            "label_id", "x_centroid", "y_centroid", "z_centroid", "volume"
         all units are in pixels
         scaling must match label image, i.e. z_centroid and volume do not take into account pixel anisotropy
     :fixed_pc: numpy array of label centroids and volume of fixed point cloud, e.g. R0
@@ -82,9 +94,11 @@ def run_affine(moving_pc, fixed_pc, ransac_iterations, icp_iterations):
     :ransac_iterations: integer number of RANSAC iterations
     :icp_iterations: integer number of ICP iterations
     :return:
-        results_affine: numpy array of results, with column order: "fixed_label_id", "moving_label_id", "confidence"
-        transform_affine: affine transformation matrix, for use in FFD linking or applying image transformation
-        confidence: confidence measurement of matches for use in FFD linking
+        results_affine: numpy array of results, with column order:
+            "fixed_label_id", "moving_label_id", "euclidian_distance_pix_fixed_to_affine", "confidence"
+            euclidian_distance_pix_fixed_to_affine measures the distance between centroids for each matched pair of
+            nuclei in affine-transformed moving and untransformed fixed labels.
+        transform_affine: affine transformation matrix, for use in FFD linking or for applying image transformation
     """
     # Obtain ids
     moving_ids = moving_pc[:, 0].transpose()  # 1 x N
@@ -208,9 +222,32 @@ def run_ffd(
     fixed_raw_image,
     fixed_label_image,
 ):
+    """
+    Run free form deformation of affine-transformed images to calculate FFD transformation matrix and linking
+    Moving images should be pre-aligned with fixed image via affine transform e.g. with generate_affine_transformed_image
+    :moving_pc: numpy array of label ids in moving point cloud, e.g. RX
+        rows are unique label id and first column must correspond to the label_id
+        note in this function only label_id column is used and centroids and volume are irrelevant
+    :fixed_pc: numpy array of label centroids and volume of fixed point cloud, e.g. R0
+        rows are unique label id and columns are in order:
+            "label_id", "x_centroid", "y_centroid", "z_centroid", "volume"
+        all units are in pixels
+        scaling must match label image, i.e. z_centroid and volume do not take into account pixel anisotropy
+    :moving_transformed_affine_raw_image: numpy array of moving raw intensity image that has been affine-transformed, e.g. RX raw affine
+    :moving_transformed_affine_label_image: numpy array of moving label map image that has been affine-transformed, e.g. RX seg affine
+    :fixed_raw_image: numpy array of fixed raw image, e.g. R0 raw
+    :fixed_label_image: numpy array of fixed label map image, e.g. R0 seg
+    :return:
+        results_ffd: numpy array of results, with column order:
+            "fixed_label_id", "moving_label_id", "euclidian_distance_pix_fixed_to_ffd"
+            euclidian_distance_pix_fixed_to_ffd measures the distance between centroids for each matched pair of
+            nuclei in ffd-transformed moving and untransformed fixed labels.
+        transform_ffd: ffd transformation matrix, for use in applying image transformation to raw image
+        transformed_ffd_label_image: numpy array, result of ffd transformation of input moving affine image
+    """
 
     fixed_ids = fixed_pc[:, 0].transpose()
-    fixed_detections = np.flip(fixed_pc[:, 1:-1], 1).transpose()
+    fixed_detections = np.flip(fixed_pc[:, 1:-1], 1)
 
     # Normalize fixed and moving-affine image
     fixed_raw_image_normalized = normalize_min_max_percentile(
@@ -238,7 +275,7 @@ def run_ffd(
         fixed_label_image.dtype)
 
     # obtain accuracy after performing FFD
-    ids = moving_pc[:, 0].transpose() # same as moving_ids in the above runPM and runAffine functions
+    ids = moving_pc[:, 0].transpose() # same as moving_ids in run_affine functions
     moving_ffd_ids = []
     transformed_moving_ffd_detections = []
 
@@ -251,7 +288,7 @@ def run_ffd(
         transformed_moving_ffd_detections.append(np.array([zm, ym, xm]))  # N x 3
         moving_ffd_ids.append(id)
     # calculate euclidian distance btw centroids of FFD-transformed label image and centroids of original fixed image
-    cost_matrix = cdist(transformed_moving_ffd_detections, fixed_detections.transpose())
+    cost_matrix = cdist(transformed_moving_ffd_detections, fixed_detections)
 
     moving_ffd_ids = np.array(moving_ffd_ids)
     # assign pairs of nuclei by minimizing total cost of distance matrix with LSAP
@@ -273,7 +310,16 @@ def generate_ffd_rawimage_from_affine(moving_transformed_affine_raw_image,
                                       fixed_raw_image,
                                       fixed_label_image,
                                       transform_ffd):
-    # might do some intensity normalization internally - ask Manan
+    """
+    Apply ffd transform to intensity image. Intended to be applied to moving image that has been affine-transformed.
+    :moving_transformed_affine_raw_image: numpy array of moving raw intensity image that has been affine-transformed, e.g. RX raw affine
+    :fixed_raw_image: numpy array of fixed raw image, e.g. R0 raw
+    :fixed_label_image: numpy array of fixed label map image, e.g. R0 seg
+    :transform_ffd: ffd transformation matrix e.g. from output of run_ffd
+    :return:
+        moving_transformed_ffd_raw_image: numpy array, result of ffd transformation of input moving affine image
+        Note: image has some intensity normalization internally - ask Manan, TO-DO
+    """
     transformed_ffd_raw_image_sitk = sitk.Resample(sitk.GetImageFromArray(moving_transformed_affine_raw_image),
                                                    sitk.GetImageFromArray(fixed_raw_image),
                                                    transform_ffd,
