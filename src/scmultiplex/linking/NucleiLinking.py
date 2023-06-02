@@ -31,6 +31,48 @@ def load_linking_data(organoid: OrganoidRecord, rx_name: str, org_seg_ch):
     return link_org, link_org_dict
 
 
+def link_affine(RX_numpy, R0_numpy, RX_obj, R0_obj, plate_id, well_id, ransac_iterations=4000, icp_iterations=50):
+    (affine_matches, transform_affine) = run_affine(
+        RX_numpy, R0_numpy, ransac_iterations, icp_iterations
+    )
+    affine_matches = pd.DataFrame(affine_matches, columns=["R0_nuc_id", "RX_nuc_id", "confidence"],)
+    affine_matches["R0_organoid_id"] = R0_obj
+    affine_matches["RX_organoid_id"] = RX_obj
+    affine_matches["plate_id"] = plate_id
+    affine_matches["well_id"] = well_id
+
+    return affine_matches, transform_affine
+
+
+def link_ffd(RX_numpy, R0_numpy, RX_raw, R0_raw, R0_seg, RX_seg, RX_obj, R0_obj, plate_id, well_id, transform_affine):
+    # generate transformed affine image
+    (moving_transformed_affine_raw_image, moving_transformed_affine_label_image) = \
+        generate_affine_transformed_image(
+            transform_matrix=transform_affine,
+            fixed_raw_image=R0_raw,
+            moving_raw_image=RX_raw,
+            moving_label_image=RX_seg,
+        )
+    # run ffd matching
+    # for now only use ffd_matches result, do not save transform or transformed image
+    (ffd_matches, transform_ffd, transformed_ffd_label_image) = run_ffd(
+        RX_numpy,
+        R0_numpy,
+        moving_transformed_affine_raw_image,
+        moving_transformed_affine_label_image,
+        R0_raw,
+        R0_seg,
+    )
+
+    ffd_matches = pd.DataFrame(ffd_matches, columns=['R0_nuc_id', 'RX_nuc_id', 'R0RX_distance_pix'])
+    ffd_matches["R0_organoid_id"] = R0_obj
+    ffd_matches["RX_organoid_id"] = RX_obj
+    ffd_matches["plate_id"] = plate_id
+    ffd_matches["well_id"] = well_id
+
+    return ffd_matches
+
+
 def link_nuclei(organoid, segname, rx_name, RX, z_anisotropy, org_seg_ch, nuc_seg_ch):
     R0_obj = organoid.organoid_id
     R0_id = int(R0_obj.rpartition("_")[2])
@@ -93,27 +135,19 @@ def link_nuclei(organoid, segname, rx_name, RX, z_anisotropy, org_seg_ch, nuc_se
                 RX_numpy[:, 4] /= z_anisotropy
 
                 if (R0_numpy.shape[0] > 4) and (RX_numpy.shape[0] > 4):
-                    ransac_iterations = 4000
-                    icp_iterations = 50
-
                     print("matching of", R0_obj, "and", RX_obj, "in", plate_id, well_id)
 
+                    # affine linking
                     try:
-                        (
-                            affine_matches,
-                            transform_affine,
-                        ) = run_affine(
-                            RX_numpy, R0_numpy, ransac_iterations, icp_iterations
-                        )
-
-                        affine_matches = pd.DataFrame(
-                            affine_matches,
-                            columns=["R0_nuc_id", "RX_nuc_id", "confidence"],
-                        )
-                        affine_matches["R0_organoid_id"] = R0_obj
-                        affine_matches["RX_organoid_id"] = RX_obj
-                        affine_matches["plate_id"] = plate_id
-                        affine_matches["well_id"] = well_id
+                        (affine_matches, transform_affine) = link_affine(
+                            RX_numpy,
+                            R0_numpy,
+                            RX_obj,
+                            R0_obj,
+                            plate_id,
+                            well_id,
+                            ransac_iterations=4000,
+                            icp_iterations=50)
 
                         # Save measurement into the organoid directory.
                         name = "linking_nuc_affine_" + names[1] + "to" + names[0]
@@ -127,32 +161,19 @@ def link_nuclei(organoid, segname, rx_name, RX, z_anisotropy, org_seg_ch, nuc_se
                     except Exception as e:
                         print(R0_obj, RX_obj, e)
 
+                    # ffd linking
                     try:
-
-                        # generate transformed affine image
-                        (moving_transformed_affine_raw_image, moving_transformed_affine_label_image) = \
-                            generate_affine_transformed_image(
-                            transform_matrix=transform_affine,
-                            fixed_raw_image=R0_raw,
-                            moving_raw_image=RX_raw,
-                            moving_label_image=RX_seg,
-                        )
-                        # run ffd matching
-                        # for now only use ffd_matches result, do not save transform or transformed image
-                        (ffd_matches, transform_ffd, transformed_ffd_label_image) = run_ffd(
-                            RX_numpy,
-                            R0_numpy,
-                            moving_transformed_affine_raw_image,
-                            moving_transformed_affine_label_image,
-                            R0_raw,
-                            R0_seg,
-                        )
-
-                        ffd_matches = pd.DataFrame(ffd_matches, columns=['R0_nuc_id', 'RX_nuc_id', 'R0RX_distance_pix'])
-                        ffd_matches["R0_organoid_id"] = R0_obj
-                        ffd_matches["RX_organoid_id"] = RX_obj
-                        ffd_matches["plate_id"] = plate_id
-                        ffd_matches["well_id"] = well_id
+                        ffd_matches = link_ffd(RX_numpy,
+                                               R0_numpy,
+                                               RX_raw,
+                                               R0_raw,
+                                               R0_seg,
+                                               RX_seg,
+                                               RX_obj,
+                                               R0_obj,
+                                               plate_id,
+                                               well_id,
+                                               transform_affine)
 
                         # Save measurement into the organoid directory.
                         name = "linking_nuc_ffd_" + names[1] + "to" + names[0]
