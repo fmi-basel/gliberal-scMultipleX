@@ -26,7 +26,6 @@ import dask.array as da
 import numpy as np
 import pandas as pd
 import zarr
-from anndata.experimental import write_elem
 from scmultiplex.features.feature_wrapper import get_regionprops_measurements
 
 import fractal_tasks_core
@@ -343,7 +342,7 @@ def scmultiplex_measurements(
     measurement_table.obs = df_info_well
 
     # Write to zarr group
-    write_elem(group_tables, output_table_name, measurement_table)
+    ad._io.specs.write_elem(group_tables, output_table_name, measurement_table)
     # Update OME-NGFF metadata
     new_tables = current_tables + [output_table_name]
     group_tables.attrs["tables"] = new_tables
