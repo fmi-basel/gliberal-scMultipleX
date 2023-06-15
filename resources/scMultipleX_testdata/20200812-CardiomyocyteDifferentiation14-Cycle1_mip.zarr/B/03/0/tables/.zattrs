@@ -1,0 +1,8 @@
+{
+    "tables": [
+        "expected_well_ROI_table_True_0_0",
+        "expected_well_ROI_table_False_0_0",
+        "expected_FOV_ROI_table_False_0_0",
+        "expected_table_FOV_ROI_table_True_0_0"
+    ]
+}
