@@ -27,12 +27,14 @@ import numpy as np
 import pandas as pd
 import zarr
 from scmultiplex.features.feature_wrapper import get_regionprops_measurements
+from fractal_tasks_core.lib_ROI_overlaps import find_overlaps_in_ROI_indices
 
 import fractal_tasks_core
 from fractal_tasks_core.lib_channels import get_channel_from_image_zarr
 from fractal_tasks_core.lib_regions_of_interest import (
     convert_ROI_table_to_indices,
 )
+from fractal_tasks_core.lib_regions_of_interest import is_ROI_table_valid
 from fractal_tasks_core.lib_upscale_array import upscale_array
 from fractal_tasks_core.lib_zattrs_utils import extract_zyx_pixel_sizes
 
@@ -136,10 +138,16 @@ def scmultiplex_measurements(
         )
 
     # Read ROI table
-    ROI_table = ad.read_zarr(f"{in_path}/{component}/tables/{input_ROI_table}")
+    roi_table_path = f"{in_path}/{component}/tables/{input_ROI_table}"
+    ROI_table = ad.read_zarr(roi_table_path)
 
     # Read pixel sizes from zattrs file
-    full_res_pxl_sizes_zyx = extract_zyx_pixel_sizes(zattrs_file, level=0)
+    if input_channels:
+        full_res_pxl_sizes_zyx = extract_zyx_pixel_sizes(zattrs_file, level=0)
+    else:
+        # The label image may be lower resolution than the intensity images
+        zattrs_file_label = f"{in_path}/{component}/labels/{label_image}/.zattrs"
+        full_res_pxl_sizes_zyx = extract_zyx_pixel_sizes(zattrs_file_label, level=0)
 
     # Create list of indices for 3D FOVs spanning the entire Z direction
     list_indices = convert_ROI_table_to_indices(
@@ -152,6 +160,18 @@ def scmultiplex_measurements(
     logger.info(
         f"Completed reading ROI table {input_ROI_table}," f" found {num_ROIs} ROIs."
     )
+    ### Whether to use masking with ROIs
+    use_ROI_masks = is_ROI_table_valid(
+        table_path=f"{in_path}/{component}/tables/{input_ROI_table}", 
+        use_masks=True
+    )
+    if not use_ROI_masks:
+        overlap = find_overlaps_in_ROI_indices(list_indices)
+        if overlap:
+            raise ValueError(
+                f"ROI indices created from {input_ROI_table} table have "
+                "overlaps, but we are not using masked loading."
+            )
 
     input_image_arrays = {}
     img_array = da.from_zarr(f"{in_path}/{component}/{level}")
@@ -212,10 +232,21 @@ def scmultiplex_measurements(
 
         logger.info(f"ROI {i_ROI+1}/{num_ROIs}: {region=}")
 
+        # Define some constant values to be added as a separat column to
+        # the obs table
+        extra_values = {
+            "ROI_table_name": input_ROI_table,
+            "ROI_name": ROI_table.obs.index[i_ROI],
+        }
+
         # Load the label image
-        # TODO: Add option to mask with a ROI label mask. Actually only
-        # needs input masking here, as the return value is a table
         label_img = input_label_image[region].compute()
+        if use_ROI_masks:
+            current_label = int(ROI_table.obs.iloc[i_ROI]["label"])
+            background = label_img != current_label
+            label_img[background] = 0
+            extra_values["ROI_label"] = current_label
+
         if label_img.shape[0] == 1:
             logger.info("Label image is 2D only, processing with 2D options")
             label_img = np.squeeze(label_img, axis=0)
@@ -232,14 +263,6 @@ def scmultiplex_measurements(
                 f"Loaded an image of shape {label_img.shape}. "
                 "Processing is only supported for 2D & 3D images"
             )
-        
-        # Define some constant values to be added as a separat column to
-        # the obs table
-        # TODO: Add ROI label once we allow for masked ROIs
-        extra_values = {
-            "ROI_table_name": input_ROI_table,
-            "ROI_name": ROI_table.obs.index[i_ROI],
-        }
 
         # Set inputs
         df_roi = pd.DataFrame()
@@ -248,9 +271,6 @@ def scmultiplex_measurements(
         if input_channels:
             for input_name in input_channels.keys():
                 img = input_image_arrays[input_name][region].compute()
-                # TODO: Add option to mask with a ROI label mask. Actually only
-                # needs input masking here, as the return value is a table
-
                 # Check whether the input is 2D or 3D & matches the label_img
                 if img.shape[0] == 1 and is_2D:
                     img = np.squeeze(img, axis=0)
@@ -277,19 +297,12 @@ def scmultiplex_measurements(
                     channel_prefix=input_name,
                     extra_values=extra_values,
                 )
-                # print(new_df)
-                # print(new_info_df)
 
                 # Only measure morphology for the first intensity channel provided
                 # => just once per label image
                 first_channel = False
                 
                 if "label" in df_roi.columns:
-                    # TODO: Make merging columns more general => merge on all shared columns
-                    # df_roi = df_roi.merge(right=new_df, how="outer", on=["label", "x_pos_pix", "y_pos_pix"])
-                    # df_info_roi = df_info_roi.merge(
-                    #     right=new_info_df, how="outer", on=["label", "ROI_table_name", "ROI_name"]
-                    # )
                     df_roi = df_roi.merge(right=new_df, how="inner")
                     df_info_roi = df_info_roi.merge(
                         right=new_info_df, how="inner"
@@ -320,8 +333,6 @@ def scmultiplex_measurements(
             else:
                 df_roi = pd.concat([df_roi, new_df], axis=1)
                 df_info_roi = pd.concat([df_info_roi, new_info_df], axis=1)
-        # df_well = df_well.merge(right=df_roi, how="outer", on=["label"])
-        # print(df_well)
         df_well = pd.concat([df_well, df_roi], axis=0, ignore_index=True)
         df_info_well = pd.concat([df_info_well, df_info_roi], axis=0, ignore_index=True)
 

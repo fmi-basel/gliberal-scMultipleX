@@ -27,39 +27,13 @@
                         {
                             "scale": [
                                 1.0,
-                                0.1625,
-                                0.1625
-                            ],
-                            "type": "scale"
-                        }
-                    ],
-                    "path": "0"
-                },
-                {
-                    "coordinateTransformations": [
-                        {
-                            "scale": [
-                                1.0,
-                                0.325,
-                                0.325
-                            ],
-                            "type": "scale"
-                        }
-                    ],
-                    "path": "1"
-                },
-                {
-                    "coordinateTransformations": [
-                        {
-                            "scale": [
-                                1.0,
                                 0.65,
                                 0.65
                             ],
                             "type": "scale"
                         }
                     ],
-                    "path": "2"
+                    "path": "0"
                 },
                 {
                     "coordinateTransformations": [
@@ -72,7 +46,7 @@
                             "type": "scale"
                         }
                     ],
-                    "path": "3"
+                    "path": "1"
                 },
                 {
                     "coordinateTransformations": [
@@ -81,6 +55,32 @@
                                 1.0,
                                 2.6,
                                 2.6
+                            ],
+                            "type": "scale"
+                        }
+                    ],
+                    "path": "2"
+                },
+                {
+                    "coordinateTransformations": [
+                        {
+                            "scale": [
+                                1.0,
+                                5.2,
+                                5.2
+                            ],
+                            "type": "scale"
+                        }
+                    ],
+                    "path": "3"
+                },
+                {
+                    "coordinateTransformations": [
+                        {
+                            "scale": [
+                                1.0,
+                                10.4,
+                                10.4
                             ],
                             "type": "scale"
                         }

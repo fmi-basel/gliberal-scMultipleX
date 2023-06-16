@@ -95,11 +95,7 @@
     "omero": {
         "channels": [
             {
-                "active": true,
-                "coefficient": 1,
                 "color": "00FFFF",
-                "family": "linear",
-                "inverted": false,
                 "label": "DAPI",
                 "wavelength_id": "A01_C01",
                 "window": {
