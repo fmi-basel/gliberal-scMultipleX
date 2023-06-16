@@ -3,17 +3,17 @@
 Fractal comes with extra dependencies. We're currently working on separating the helper functions into its own library, so that one doesn't need to depend on the full fractal-tasks-core package. In the meantime, the extra dependencies are optional. Thus, to install them, one needs to specify them:
 ```
 cd scmultiplex
-pip install ".[fracta]"
+pip install ".[fractal-tasks]"
 ```
 
 Or, once this package is on pypi:
 ```
-pip install "scmultiplex[fracta]"
+pip install "scmultiplex[fractal-tasks]"
 ```
 
 To collect the task in Fractal, one can load the Python wheel (see instructions below):
 ```
-fractal task collect /path/to/scmultiplex-version-details.whl --package-extras fractal
+fractal task collect /path/to/scmultiplex-version-details.whl --package-extras fractal-tasks
 ```
 
 After that, it's available in Fractal as "scMultipleX Measurements".
@@ -34,7 +34,7 @@ Afterwards, the wheel can be built using `python -m build` and collected by Frac
 (you may need to `pip install build` to run the wheel creation)
 
 ```
-fractal task collect /path/to/scmultiplex-version-details.whl --package-extras fractal
+fractal task collect /path/to/scmultiplex-version-details.whl --package-extras fractal-tasks
 ```
 
 The installation of optional dependencies with fractal task collection doesn't appear to work yet with this command, even though it should. We'll work on this bug. In the meantime, one needs to manually activate the newly created task environment and `pip install fractal-tasks-core`.
