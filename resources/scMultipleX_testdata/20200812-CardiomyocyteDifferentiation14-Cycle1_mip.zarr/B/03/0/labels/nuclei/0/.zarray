@@ -1,8 +1,8 @@
 {
     "chunks": [
         1,
-        2160,
-        2560
+        540,
+        1280
     ],
     "compressor": {
         "blocksize": 0,
@@ -18,8 +18,8 @@
     "order": "C",
     "shape": [
         1,
-        2160,
-        5120
+        540,
+        1280
     ],
     "zarr_format": 2
 }
