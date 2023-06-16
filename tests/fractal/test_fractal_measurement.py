@@ -351,3 +351,44 @@ def test_masked_measurements(input_channels):
     expected_table_path = Path(input_paths[0]) / component / "tables" / f"expected_{output_table_name}"
     df_expected = load_features_for_well(expected_table_path)
     assert_frame_equal(df, df_expected)
+
+
+inputs_empty = [
+    ({}, True),
+    ({}, False),
+    (single_input_channels, True),
+    (single_input_channels, False),
+]
+
+@pytest.mark.parametrize("input_channels,measure_morphology", inputs_empty)
+def test_empty_label(
+        input_channels, measure_morphology, 
+    ):
+    input_ROI_table = "well_ROI_table"
+    component = component_2D
+    output_table_name = f'empty_{input_ROI_table}_{len(input_channels)}_{measure_morphology}_{level}_{label_level}'
+    # Clear prior runs
+    clear_tables_prior_run(output_table_name, component = component)
+
+    # Prepare fractal task
+    label_image = 'empty'
+
+    scmultiplex_measurements(
+        input_paths=input_paths,
+        output_path=input_paths[0],
+        metadata=metadata_2D,
+        component=component,
+        input_ROI_table = input_ROI_table, 
+        input_channels = input_channels,
+        label_image = label_image,
+        label_level = label_level,
+        level = level,
+        output_table_name = output_table_name,
+        measure_morphology = measure_morphology,
+    )
+
+    # Check & verify the output_table
+    ad_path = Path(input_paths[0]) / component / "tables" / output_table_name
+    adata = ad.read_zarr(ad_path)
+    assert len(adata) == 0
+    assert adata.shape == (0, 0)
