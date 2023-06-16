@@ -322,10 +322,6 @@ def scmultiplex_measurements(
                 extra_values=extra_values,
             )    
             if "label" in df_roi.columns:
-                # df_roi = df_roi.merge(right=new_df, how="outer", on=["label"])
-                # df_info_roi = df_info_roi.merge(
-                #     right=new_info_df, how="outer", on=["label"]
-                # )
                 df_roi = df_roi.merge(right=new_df, how="inner")
                 df_info_roi = df_info_roi.merge(
                     right=new_info_df, how="inner"
@@ -336,33 +332,38 @@ def scmultiplex_measurements(
         df_well = pd.concat([df_well, df_roi], axis=0, ignore_index=True)
         df_info_well = pd.concat([df_info_well, df_info_roi], axis=0, ignore_index=True)
 
-    # Ensure that the label column in df_well & df_info_well match
-    if not (df_well["label"] == df_info_well["label"]).all():
-        raise ValueError(
-            "Label column in df_well and df_info_well do not match. "
-            f"{df_well['label']} != {df_info_well['label']}"
-        )
-
-    # Check that labels are unique
-    # Typical issue: Ran segmentation per well, but measurement per FOV
-    # => splits labels into multiple measurements
-    if not allow_duplicate_labels:
-        total_measurements = len(df_well["label"])
-        unique_labels = len(df_well["label"].unique())
-        if not total_measurements == unique_labels:
+    if not df_well.empty and not df_info_well.empty:
+        # Ensure that the label column in df_well & df_info_well match
+        if not (df_well["label"] == df_info_well["label"]).all():
             raise ValueError(
-                "Measurement contains non-unique labels: \n"
-                f"{total_measurements =}, {unique_labels =}, "
+                "Label column in df_well and df_info_well do not match. "
+                f"{df_well['label']} != {df_info_well['label']}"
             )
 
-    df_well.drop(labels=["label"], axis=1, inplace=True)
-    # Convert all to float (warning: some would be int, in principle)
-    measurement_dtype = np.float32
-    df_well = df_well.astype(measurement_dtype)
-    df_well.index = df_well.index.map(str)
-    # Convert to anndata
-    measurement_table = ad.AnnData(df_well, dtype=measurement_dtype)
-    measurement_table.obs = df_info_well
+        # Check that labels are unique
+        # Typical issue: Ran segmentation per well, but measurement per FOV
+        # => splits labels into multiple measurements
+        if not allow_duplicate_labels:
+            total_measurements = len(df_well["label"])
+            unique_labels = len(df_well["label"].unique())
+            if not total_measurements == unique_labels:
+                raise ValueError(
+                    "Measurement contains non-unique labels: \n"
+                    f"{total_measurements =}, {unique_labels =}, "
+                )
+
+        df_well.drop(labels=["label"], axis=1, inplace=True)
+
+        # Convert all to float (warning: some would be int, in principle)
+        measurement_dtype = np.float32
+        df_well = df_well.astype(measurement_dtype)
+        df_well.index = df_well.index.map(str)
+        # Convert to anndata
+        measurement_table = ad.AnnData(df_well, dtype=measurement_dtype)
+        measurement_table.obs = df_info_well
+    else:
+        # Create empty anndata table
+        measurement_table = ad.AnnData()
 
     # Write to zarr group
     ad._io.specs.write_elem(group_tables, output_table_name, measurement_table)
