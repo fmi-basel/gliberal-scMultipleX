@@ -277,15 +277,22 @@ def scmultiplex_measurements(
                     channel_prefix=input_name,
                     extra_values=extra_values,
                 )
+                # print(new_df)
+                # print(new_info_df)
 
                 # Only measure morphology for the first intensity channel provided
                 # => just once per label image
                 first_channel = False
-
+                
                 if "label" in df_roi.columns:
-                    df_roi = df_roi.merge(right=new_df, how="outer", on="label")
+                    # TODO: Make merging columns more general => merge on all shared columns
+                    # df_roi = df_roi.merge(right=new_df, how="outer", on=["label", "x_pos_pix", "y_pos_pix"])
+                    # df_info_roi = df_info_roi.merge(
+                    #     right=new_info_df, how="outer", on=["label", "ROI_table_name", "ROI_name"]
+                    # )
+                    df_roi = df_roi.merge(right=new_df, how="inner")
                     df_info_roi = df_info_roi.merge(
-                        right=new_info_df, how="outer", on="label"
+                        right=new_info_df, how="inner"
                     )
                 else:
                     df_roi = pd.concat([df_roi, new_df], axis=1)
@@ -302,14 +309,19 @@ def scmultiplex_measurements(
                 extra_values=extra_values,
             )    
             if "label" in df_roi.columns:
-                df_roi = df_roi.merge(right=new_df, how="outer", on="label")
+                # df_roi = df_roi.merge(right=new_df, how="outer", on=["label"])
+                # df_info_roi = df_info_roi.merge(
+                #     right=new_info_df, how="outer", on=["label"]
+                # )
+                df_roi = df_roi.merge(right=new_df, how="inner")
                 df_info_roi = df_info_roi.merge(
-                    right=new_info_df, how="outer", on="label"
+                    right=new_info_df, how="inner"
                 )
             else:
                 df_roi = pd.concat([df_roi, new_df], axis=1)
                 df_info_roi = pd.concat([df_info_roi, new_info_df], axis=1)
-
+        # df_well = df_well.merge(right=df_roi, how="outer", on=["label"])
+        # print(df_well)
         df_well = pd.concat([df_well, df_roi], axis=0, ignore_index=True)
         df_info_well = pd.concat([df_info_well, df_info_roi], axis=0, ignore_index=True)
 
