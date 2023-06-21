@@ -1,0 +1,9 @@
+{
+    "encoding-type": "anndata",
+    "encoding-version": "0.1.0",
+    "instance_key": "label",
+    "region": {
+        "path": "../labels/nuclei"
+    },
+    "type": "ngff:region_table"
+}
