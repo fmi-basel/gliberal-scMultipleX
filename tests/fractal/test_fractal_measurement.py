@@ -8,7 +8,8 @@ import json
 import pytest
 import warnings
 
-from scmultiplex.fractal.scmultiplex_feature_measurements import scmultiplex_measurements
+from fractal_tasks_core.lib_input_models import Channel
+from scmultiplex.fractal.scmultiplex_feature_measurements import scmultiplex_feature_measurements
 
 input_paths = ["resources/scMultipleX_testdata/"]
 metadata_2D ={
@@ -83,12 +84,12 @@ columns_3D_intensity = [
 ]
 
 multi_input_channels = {
-    "C01": {"wavelength_id": "A01_C01"}, 
-    "C02": {"wavelength_id": "A01_C01"}, 
-    "C03": {"wavelength_id": "A01_C01"} 
+    "C01": Channel(wavelength_id =  "A01_C01"), 
+    "C02": Channel(wavelength_id =  "A01_C01"), 
+    "C03": Channel(wavelength_id =  "A01_C01") 
 }
 single_input_channels = {
-    "C01": {"wavelength_id": "A01_C01"}
+    "C01": Channel(wavelength_id =  "A01_C01")
 }
 
 # TODO: Test measurements for level != 0? Not well supported yet
@@ -151,7 +152,7 @@ def test_2D_fractal_measurements(
     label_image = 'nuclei'
     if not expected_to_run:
         with pytest.raises(ValueError):
-            scmultiplex_measurements(
+            scmultiplex_feature_measurements(
                 input_paths=input_paths,
                 output_path=input_paths[0],
                 metadata=metadata_2D,
@@ -166,7 +167,7 @@ def test_2D_fractal_measurements(
                 allow_duplicate_labels = allow_duplicate_labels,
             )
     else:
-        scmultiplex_measurements(
+        scmultiplex_feature_measurements(
             input_paths=input_paths,
             output_path=input_paths[0],
             metadata=metadata_2D,
@@ -236,7 +237,7 @@ def test_3D_fractal_measurements(
     label_image = 'nuclei'
     if not expected_to_run:
         with pytest.raises(ValueError):
-            scmultiplex_measurements(
+            scmultiplex_feature_measurements(
                 input_paths=input_paths,
                 output_path=input_paths[0],
                 metadata=metadata_3D,
@@ -252,7 +253,7 @@ def test_3D_fractal_measurements(
             )
     else:
         
-        scmultiplex_measurements(
+        scmultiplex_feature_measurements(
             input_paths=input_paths,
             output_path=input_paths[0],
             metadata=metadata_3D,
@@ -312,7 +313,7 @@ def test_masked_measurements(input_channels):
     # Prepare fractal task
     label_image = 'nuclei'
 
-    scmultiplex_measurements(
+    scmultiplex_feature_measurements(
         input_paths=input_paths,
         output_path=input_paths[0],
         metadata=metadata_2D,
@@ -373,7 +374,7 @@ def test_empty_label(
     # Prepare fractal task
     label_image = 'empty'
 
-    scmultiplex_measurements(
+    scmultiplex_feature_measurements(
         input_paths=input_paths,
         output_path=input_paths[0],
         metadata=metadata_2D,
