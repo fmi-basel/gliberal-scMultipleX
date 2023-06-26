@@ -254,14 +254,14 @@ def scmultiplex_feature_measurements(
         if label_img.shape[0] == 1:
             logger.info("Label image is 2D only, processing with 2D options")
             label_img = np.squeeze(label_img, axis=0)
-            real_spacing = spacing[1:]
+            real_spacing = spacing[-2:]
             is_2D = True
         elif len(label_img.shape) == 2:
             is_2D = True
-            real_spacing = spacing
+            real_spacing = spacing[-2:]
         elif len(label_img.shape) == 3:
             is_2D = False
-            real_spacing = spacing
+            real_spacing = spacing[-3:]
         else:
             raise NotImplementedError(
                 f"Loaded an image of shape {label_img.shape}. "
