@@ -26,11 +26,14 @@ import dask.array as da
 import numpy as np
 import pandas as pd
 import zarr
+from pydantic.decorator import validate_arguments
 from scmultiplex.features.feature_wrapper import get_regionprops_measurements
 from fractal_tasks_core.lib_ROI_overlaps import find_overlaps_in_ROI_indices
 
 import fractal_tasks_core
+from fractal_tasks_core.lib_channels import ChannelNotFoundError
 from fractal_tasks_core.lib_channels import get_channel_from_image_zarr
+from fractal_tasks_core.lib_input_models import Channel
 from fractal_tasks_core.lib_regions_of_interest import (
     convert_ROI_table_to_indices,
 )
@@ -45,7 +48,8 @@ __OME_NGFF_VERSION__ = fractal_tasks_core.__OME_NGFF_VERSION__
 logger = logging.getLogger(__name__)
 
 
-def scmultiplex_measurements(
+@validate_arguments
+def scmultiplex_feature_measurements(
     *,
     # Default arguments for fractal tasks:
     input_paths: Sequence[str],
@@ -53,10 +57,10 @@ def scmultiplex_measurements(
     component: str,
     metadata: Dict[str, Any],
     # Task-specific arguments:
-    input_ROI_table: str = "FOV_ROI_table",
-    input_channels: Dict[str, Dict[str, str]] = {},
     label_image: str,
     output_table_name: str,
+    input_channels: Dict[str, Channel] = None,
+    input_ROI_table: str = "FOV_ROI_table",
     level: int = 0,
     label_level: int = 0,
     measure_morphology: bool = True,
@@ -70,21 +74,21 @@ def scmultiplex_measurements(
     :param output_path: TBD (default arg for Fractal tasks)
     :param metadata: TBD (default arg for Fractal tasks)
     :param component: TBD (default arg for Fractal tasks)
-    :param input_ROI_table: Name of the ROI table to loop over. Needs to exists
-                            as a ROI table in the OME-Zarr file
+    :param label_image: Name of the label image to use for measurements.
+                        Needs to exist in OME-Zarr file
+    :param output_table_name: Name of the output AnnData table to save the
+                              measurements in. A table of this name can't exist
+                              yet in the OME-Zarr file
     :param input_channels: Dictionary of channels to measure. Keys are the
                            names that will be added as prefixes to the
                            measurements, values are another dictionary
                            containing either wavelength_id or channel_label
                            information to allow Fractal to find the correct
                            channel (but not both). Example:
-                            {"C01": {"wavelength_id": "A01_C01"}
-                            To only measure morphology, provide an empty dict
-    :param label_image: Name of the label image to use for measurements.
-                        Needs to exist in OME-Zarr file
-    :param output_table_name: Name of the output AnnData table to save the
-                              measurements in. A table of this name can't exist
-                              yet in the OME-Zarr file
+                           {"C01": {"wavelength_id": "A01_C01"}
+                           To only measure morphology, provide an empty dict
+    :param input_ROI_table: Name of the ROI table to loop over. Needs to exists
+                            as a ROI table in the OME-Zarr file
     :param level: Resolution of the intensity image to load for measurements.
                   Only tested for level 0
     :param label_level: Resolution of the label image to load for measurements.
@@ -177,22 +181,22 @@ def scmultiplex_measurements(
     img_array = da.from_zarr(f"{in_path}/{component}/{level}")
     # Loop over image inputs and assign corresponding channel of the image
     for name in input_channels.keys():
-        params = input_channels[name]
-        if "wavelength_id" in params and "channel_label" in params:
-            raise ValueError(
-                "One and only one among channel_label and wavelength_id"
-                f" attributes must be provided, but input {name} in "
-                f"input_channels has {params=}."
+        try:
+            channel = get_channel_from_image_zarr(
+                image_zarr_path=f"{in_path}/{component}",
+                wavelength_id=input_channels[name].wavelength_id,
+                label=input_channels[name].label,
             )
-        channel = get_channel_from_image_zarr(
-            image_zarr_path=f"{in_path}/{component}",
-            wavelength_id=params.get("wavelength_id", None),
-            label=params.get("channel_label", None),
-        )
-        channel_index = channel["index"]
+        except ChannelNotFoundError as e:
+            logger.warning(
+                "Channel not found, exit from the task.\n"
+                f"Original error: {str(e)}"
+            )
+            return {}
+        channel_index = channel.index
         input_image_arrays[name] = img_array[channel_index]
 
-        logger.info(f"Prepared input with {name=} and {params=}")
+        logger.info(f"Prepared input with {name=} and {input_channels[name]=}")
         logger.info(f"{input_image_arrays=}")
 
     # FIXME: Add check whether label exists?
@@ -212,7 +216,7 @@ def scmultiplex_measurements(
         # FIXME: More reliable way to get the correct scale? => switch to ome-zarr-py?
         # Would not work well with multiple different coordinateTransformations
         spacing = multiscales[0]["datasets"][level]["coordinateTransformations"][0]["scale"]
-        logger.info(f"Loaded {label_image=} and {params=}")
+        logger.info(f"Loaded {label_image=}")
     else:
         logger.info(
             "No intensity images provided, only calculating measurement for "
@@ -373,26 +377,9 @@ def scmultiplex_measurements(
 
 
 if __name__ == "__main__":
-    from pydantic import BaseModel
-    from pydantic import Extra
-    from fractal_tasks_core._utils import run_fractal_task
-
-    class TaskArguments(BaseModel, extra=Extra.forbid):
-        input_paths: Sequence[str]
-        output_path: str
-        metadata: Dict[str, Any]
-        component: str
-        input_ROI_table: Optional[str]
-        input_channels: Optional[Dict[str, Dict[str, str]]]
-        label_image: str
-        output_table_name: str
-        level: Optional[int]
-        label_level: Optional[int]
-        measure_morphology: Optional[bool]
-        allow_duplicate_labels: Optional[bool]
+    from fractal_tasks_core.tasks._utils import run_fractal_task
 
     run_fractal_task(
-        task_function=scmultiplex_measurements,
-        TaskArgsModel=TaskArguments,
+        task_function=scmultiplex_feature_measurements,
         logger_name=logger.name,
     )
