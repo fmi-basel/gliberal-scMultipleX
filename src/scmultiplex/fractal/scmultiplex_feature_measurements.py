@@ -100,6 +100,9 @@ def scmultiplex_feature_measurements(
                                    (e.g. segment per well, but measure per FOV)
     """
 
+    # 2D intensity image vs. 3D label image
+    handle_2D_edge_case = False
+
     # Level-related constraint
     logger.info(f"This workflow acts at {level=}")
     if level != 0 or label_level != 0:
@@ -207,10 +210,18 @@ def scmultiplex_feature_measurements(
     if input_channels:
         # Upsample the label image to match the intensity image
         target_shape = list(input_image_arrays.values())[0].shape
+        # 2D vs 3D check: Handles the case of 2D images with 3D labels
+        if len(target_shape) == 2 and len(input_label_image.shape)==3:
+            handle_2D_edge_case = True
+            input_label_image = np.squeeze(input_label_image)
+            axis = [0, 1]
+        else:
+            axis = [1, 2]
+
         input_label_image = upscale_array(
             array=input_label_image,
             target_shape=target_shape,
-            axis=[1, 2],
+            axis=axis,
             pad_with_zeros=True,
         )
         # FIXME: More reliable way to get the correct scale? => switch to ome-zarr-py?
@@ -244,6 +255,9 @@ def scmultiplex_feature_measurements(
         }
 
         # Load the label image
+        if handle_2D_edge_case:
+            region = region[1:]
+        
         label_img = input_label_image[region].compute()
         if use_ROI_masks:
             current_label = int(ROI_table.obs.iloc[i_ROI]["label"])
