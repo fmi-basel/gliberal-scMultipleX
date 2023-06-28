@@ -2,8 +2,8 @@
 well_pattern = _[A-Z]{1}[0-9]{2}_
 raw_ch_pattern = C[0-9]{2}O.*_TIF-OVR.tif
 mask_ending = MASK
-base_dir_raw = /tungstenfs/scratch/gliberal/Code/Common/Repositories/gliberal-scMultipleX/resources/scMultipleX_testdata
-base_dir_save = /tungstenfs/nobackup/gliberal/taglenri/nicole/scmultiplex
+base_dir_raw = /path/to/gliberal-scMultipleX/resources/scMultipleX_testdata
+base_dir_save = /path/to/scmultiplex
 spacing = 0.6,0.216,0.216
 overview_spacing = 0.216,0.216
 
