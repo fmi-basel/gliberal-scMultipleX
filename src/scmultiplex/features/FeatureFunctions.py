@@ -105,6 +105,7 @@ def convex_hull_centroid_dif(prop_2D, spacing):
 
 def circularity(prop_2D):
     """Return the circularity of object
+    Perfect circle has a circularity of 1; lower circularity means deviates from perfect circle
     """
     return 4 * math.pi * (prop_2D.area / np.square(prop_2D.perimeter))
 
