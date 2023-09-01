@@ -2,13 +2,13 @@ import pandas as pd
 import numpy as np
 import math
 from skimage.exposure import rescale_intensity
-from scipy.stats import zscore
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-
+from .functions_io import load_imgs_from_object_dict, make_filtered_dict, make_object_dict, randomize_object_dict
 
 ### Functions: heatmap plotting of plate data
+
 
 # mask missing values; if input data has Nan values will be displayed black
 def plot_heatmap(df_hm, cmap, vmin, vmax, annot = True):
@@ -28,6 +28,7 @@ def plot_heatmap(df_hm, cmap, vmin, vmax, annot = True):
     f1.xaxis.set_ticks_position("top")
     f1.tick_params(left=False, top=False, bottom=False, right=False)
     return f1
+
 
 # Function modified from Maurice
 def build_heatmap_df(plate_size):
@@ -55,6 +56,7 @@ def build_heatmap_df(plate_size):
     return df_plot_HM
 
 
+
 # TODO: set colorscale limits to max across all plates so that scaling is the same between plates
 def plot_heatmap_means(df, feature = 'C03.mean_intensity', plate_size = 96, vmax_multiplier = 1):
     vmin = df[feature].min()
@@ -72,8 +74,9 @@ def plot_heatmap_means(df, feature = 'C03.mean_intensity', plate_size = 96, vmax
 
         hm.set_title(plate + "\n", loc = 'left')
         plt.subplots_adjust(top = 0.6)
-        
-        
+
+
+
  ### Functions: gridded image plotting across conditions (RGB and single-channel)
 
 
@@ -320,6 +323,7 @@ def plot_single_image(c01_npimg_dict, cond = 'd3-P1.04', plate_id = '20230712-d3
     plt.imshow(im, cmap='gray')
     plt.colorbar(shrink=0.8)
     
+
 def plot_single_rgb(r_dict, g_dict, b_dict, cond = 'd3-P1.04', plate_id = '20230712-d3-P1', well_id = 'B04', org_id = '12'):
     b = b_dict[cond][(plate_id, well_id, org_id)][0]
     g = g_dict[cond][(plate_id, well_id, org_id)][0]
@@ -328,10 +332,12 @@ def plot_single_rgb(r_dict, g_dict, b_dict, cond = 'd3-P1.04', plate_id = '20230
     plt.figure(figsize=(5,5))
     plt.imshow(rgb_uint8)
     
+
 #extract np array images from nested dictionary, into list of np arrays
 def extract_imgs(img_dict):
     imgs = [img_dict[cond][obj][0] for cond in sorted(set(img_dict.keys())) for obj in sorted(set(img_dict[cond].keys()))]
     return imgs
+
 
 # grouped is output of count_positive_fraction
 #r/g/b_ch_idx are channel indeces (usually 0,1,2,3) to be used for r,g,b, channels resp.

@@ -1,12 +1,7 @@
 import anndata as ad
-import pandas as pd
 from pathlib import Path
-import os
 import numpy as np
-import warnings
 from typing import Iterable, List
-import matplotlib.pyplot as plt
-import math
 import zarr
 import dask.array as da
 
@@ -15,15 +10,18 @@ import dask.array as da
 # Functions from Joel's ROI loader Napari plugin
 # https://github.com/jluethi/napari-ome-zarr-roi-loader/blob/main/src/napari_ome_zarr_roi_loader
 
+
 def read_table(zarr_url: Path, roi_table):
     # FIXME: Make this work for cloud-based files => different paths
     table_url = zarr_url / f"tables/{roi_table}"
     return ad.read_zarr(table_url)
 
+
 def get_metadata(zarr_url):
     with zarr.open(zarr_url) as metadata:
         return metadata
     
+
 def convert_ROI_table_to_indices(
     ROI: ad.AnnData,
     pxl_sizes_zyx: Iterable[float] = None,
@@ -89,6 +87,7 @@ def convert_ROI_table_to_indices(
 
     return indices_dict
     
+
 def load_intensity_roi(
     zarr_url,
     roi_of_interest,

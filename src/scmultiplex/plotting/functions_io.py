@@ -3,12 +3,12 @@ import pandas as pd
 import anndata as ad
 import numpy as np
 import warnings
-import zarr
 from pathlib import Path
 
 from .functions_roi_loading import read_table, get_metadata, convert_ROI_table_to_indices, load_intensity_roi
 
 # Functions: Zarr reading / Anndata writing utils
+
 
 def listdir(path, only_dirs=False):
     file_list = os.listdir(path)
@@ -71,8 +71,7 @@ def append_table_to_zarr_url(zarr_url_dict, table_name):
         path = zarr_url_dict[key]
         zarr_url_tables_dict[key] = os.path.join(path, "tables", table_name)
     return zarr_url_tables_dict
-
-        
+   
                 
 def load_features_for_well(path):
 # function modified from Clara & Joel's Fractal_Feature_loading notebook 
@@ -87,6 +86,7 @@ def load_features_for_well(path):
         df = None
         warnings.warn('empty feature table in %s' %path)
     return df
+
 
 def make_anndata(df, org_numerics_list, org_obs_list):
     X_tidy_regex = '|'.join(org_numerics_list)
@@ -117,8 +117,8 @@ def make_anndata(df, org_numerics_list, org_obs_list):
                        dtype = np.float32)
     return adata
 
-### Functions: Prep Zarr data for plotting
 
+### Functions: Prep Zarr data for plotting
 # invert dictionary of conditions so that each condition is key, set of wells is value
 def invert_conditions_dict(conditions):
     inv_cond = {}
