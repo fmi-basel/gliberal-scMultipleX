@@ -6,7 +6,7 @@ import warnings
 import zarr
 from pathlib import Path
 
-from functions_roi_loading import read_table, get_metadata, convert_ROI_table_to_indices, load_intensity_roi
+from .functions_roi_loading import read_table, get_metadata, convert_ROI_table_to_indices, load_intensity_roi
 
 # Functions: Zarr reading / Anndata writing utils
 
