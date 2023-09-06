@@ -58,6 +58,8 @@ def create_experiment_task(
     mask_regex,
     nuc_seg_regex,
     cell_seg_regex,
+    mip_ovr_name,
+    org_seg_name,
 ):
     create_experiment(
         name=name,
@@ -71,6 +73,8 @@ def create_experiment_task(
         mask_regex=mask_regex,
         nuc_seg_regex=nuc_seg_regex,
         cell_seg_regex=cell_seg_regex,
+        mip_ovr_name=mip_ovr_name,
+        org_seg_name=org_seg_name,
         logger=get_scmultiplex_logger(),
     )
 
@@ -86,6 +90,8 @@ def run_flow(r_params, cpus):
         mask_ending = Parameter("mask_ending")
         nuc_ending = Parameter("nuc_ending")
         mem_ending = Parameter("mem_ending")
+        mip_ovr_name = Parameter("mip_ovr_name")
+        org_seg_name = Parameter("org_seg_name")
 
         name = Parameter("name")
         root_dir = Parameter("root_dir")
@@ -107,6 +113,8 @@ def run_flow(r_params, cpus):
             name=name,
             root_dir=root_dir,
             save_dir=save_dir,
+            mip_ovr_name=mip_ovr_name,
+            org_seg_name=org_seg_name,
             overview_spacing=overview_spacing,
             spacing=spacing,
             fname_barcode_index=fname_barcode_index,
@@ -156,6 +164,8 @@ def get_config_params(config_file_path):
             'name':                 ('00BuildExperiment.round_%s' % ro, 'name'),
             'nuc_ending':           ('00BuildExperiment.round_%s' % ro, 'nuc_ending'),
             'mem_ending':           ('00BuildExperiment.round_%s' % ro, 'mem_ending'),
+            'mip_ovr_name':         ('00BuildExperiment.round_%s' % ro, 'mip_ovr_name'),
+            'org_seg_name':         ('00BuildExperiment.round_%s' % ro, 'org_seg_name'),
             'root_dir':             ('00BuildExperiment.round_%s' % ro, 'root_dir'),
             }
         rp = common_params.copy()

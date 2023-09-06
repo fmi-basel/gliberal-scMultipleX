@@ -19,6 +19,7 @@ from scmultiplex.faim_hcs.records.WellRecord import WellRecord
 from skimage.io import imsave
 
 from scmultiplex.linking.OrganoidLinkingFunctions import calculate_shift, apply_shift, calculate_matching
+from scmultiplex.utils.load_utils import load_ovr
 
 
 def link_organoids(
@@ -28,6 +29,8 @@ def link_organoids(
     R0: Experiment,
     RX: Experiment,
     seg_name: str,
+    mip_ovr_name_R0: str,
+    mip_ovr_name_RX: str,
     logger=logging,
 ):
     well_id = well.well_id
@@ -38,7 +41,7 @@ def link_organoids(
         R0.get_experiment_dir(),
         well.plate.plate_id,
         well.well_id,
-        "TIF_OVR_MIP_SEG",
+        mip_ovr_name_R0 + "_SEG",
         folder_name,
     )
 
@@ -47,13 +50,14 @@ def link_organoids(
         RX.get_experiment_dir(),
         well.plate.plate_id,
         well.well_id,
-        "TIF_OVR_MIP_SEG",
+        mip_ovr_name_RX + "_SEG",
         folder_name,
     )
 
     # load overviews
     R0_ovr = well.get_segmentation(ovr_channel)[0, :, :]
     RX_ovr = RX.plates[plate_id].wells[well_id].get_segmentation(ovr_channel)[0, :, :]
+
 
     # calculate shifts
     shifts, R0_pad, RX_pad = calculate_shift(R0_ovr, RX_ovr, bin=4)

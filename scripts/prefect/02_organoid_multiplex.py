@@ -48,8 +48,8 @@ def get_names(RX_name: str):
 
 
 @task(nout=2)
-def get_seg_and_folder_name(RX_name):
-    return RX_name + "_linked", "obj_v0.3_registered_" + RX_name
+def get_seg_and_folder_name(RX_name, org_seg_name_RX):
+    return RX_name + "_linked", org_seg_name_RX + "_registered_" + RX_name
 
 
 @task()
@@ -57,7 +57,7 @@ def get_wells(exp: Experiment, excluded_plates: List[str], excluded_wells: List[
     return exclude_conditions(exp, excluded_plates, excluded_wells)
 
 @task()
-def link_organoids_and_get_stats_task(well, org_seg_ch, folder_name, R0, RX, seg_name, iou_cutoff, names):
+def link_organoids_and_get_stats_task(well, org_seg_ch, folder_name, R0, RX, seg_name,  mip_ovr_name_R0,  mip_ovr_name_RX, iou_cutoff, names):
     link_organoids(
         well=well,
         ovr_channel=org_seg_ch,
@@ -65,6 +65,8 @@ def link_organoids_and_get_stats_task(well, org_seg_ch, folder_name, R0, RX, seg
         R0=R0,
         RX=RX,
         seg_name=seg_name,
+        mip_ovr_name_R0= mip_ovr_name_R0,
+        mip_ovr_name_RX= mip_ovr_name_RX,
         logger=get_scmultiplex_logger(),
     )
     get_linking_stats(
@@ -92,11 +94,14 @@ def run_flow(r_params, cpus):
         excluded_wells = Parameter("excluded_wells")
         iou_cutoff = Parameter("iou_cutoff")
         org_seg_ch = Parameter("org_seg_ch")
+        mip_ovr_name_R0 = Parameter("mip_ovr_name_R0")
+        mip_ovr_name_RX = Parameter("mip_ovr_name_RX")
+        org_seg_name_RX = Parameter("org_seg_name_RX")
 
         R0, RX = load_exps(R0_path, RX_path)
         names = get_names(RX_name)
 
-        seg_name, folder_name = get_seg_and_folder_name(RX_name)
+        seg_name, folder_name = get_seg_and_folder_name(RX_name, org_seg_name_RX)
 
         wells = get_wells(
             R0, excluded_plates=excluded_plates, excluded_wells=excluded_wells
@@ -109,6 +114,8 @@ def run_flow(r_params, cpus):
             unmapped(R0),
             unmapped(RX),
             unmapped(seg_name),
+            unmapped(mip_ovr_name_R0),
+            unmapped(mip_ovr_name_RX),
             unmapped(iou_cutoff),
             unmapped(names),
         )
@@ -128,6 +135,12 @@ def get_config_params(config_file_path):
     if len(round_names) < 2:
         raise RuntimeError('At least two rounds are required to perform organoid linking')
     rounds_tobelinked = round_names[1:]
+    
+    config_params = {
+        'mip_ovr_name_R0':         ('00BuildExperiment.round_%s' % round_names[0],  'mip_ovr_name'),
+        }
+    
+    common_params = get_workflow_params(config_file_path, config_params)
     
     compute_param = {
         'excluded_plates': (
@@ -152,12 +165,14 @@ def get_config_params(config_file_path):
                     ]
                 ),
         }
-    common_params = compute_workflow_params(config_file_path, compute_param)
+    common_params.update(compute_workflow_params(config_file_path, compute_param))
     
     round_tobelinked_params = {}
     for ro in rounds_tobelinked:
         config_params = {
             'org_seg_ch':           ('00BuildExperiment.round_%s' % ro, 'organoid_seg_channel'),
+            'mip_ovr_name_RX':      ('00BuildExperiment.round_%s' % ro,  'mip_ovr_name'),
+            'org_seg_name_RX':      ('00BuildExperiment.round_%s' % ro,  'org_seg_name'),
             }
         rp = common_params.copy()
         rp.update(get_workflow_params(config_file_path, config_params))
