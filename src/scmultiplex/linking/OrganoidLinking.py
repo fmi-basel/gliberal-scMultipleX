@@ -55,8 +55,8 @@ def link_organoids(
     )
 
     # load overviews
-    R0_ovr = well.get_segmentation(ovr_channel)[0, :, :]
-    RX_ovr = RX.plates[plate_id].wells[well_id].get_segmentation(ovr_channel)[0, :, :]
+    R0_ovr = load_ovr(well=well, ovr_channel=ovr_channel)[0]
+    RX_ovr = load_ovr(well=RX.plates[plate_id].wells[well_id], ovr_channel=ovr_channel)[0]
 
 
     # calculate shifts
