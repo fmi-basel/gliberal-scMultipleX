@@ -81,6 +81,23 @@ def link_ffd(RX_numpy, R0_numpy, RX_raw, R0_raw, R0_seg, RX_seg, RX_obj, R0_obj,
     return ffd_matches
 
 
+def apply_transform(transform_affine, organoid_R0, organoid_RX, RX_seg, RX_savepath, nuc_seg_ch):
+
+    for channel in organoid_RX.raw_files:
+        R0_raw = organoid_R0.get_raw_data(nuc_seg_ch) # doesn't matter which channel; can load seg channel here
+        RX_raw = organoid_RX.get_raw_data(channel)
+
+        transformed_affine_raw_image = generate_affine_transformed_image(transform_affine, R0_raw, RX_raw, RX_seg)[0]
+
+        print(transformed_affine_raw_image.dtype, np.amin(transformed_affine_raw_image), np.amax(transformed_affine_raw_image))
+
+        # Save transformed RX image
+        path = join(RX_savepath, channel+"_affine_transformed.tif")
+        imsave(path, transformed_affine_raw_image.astype(np.uint16), check_contrast=False)
+
+    return transformed_affine_raw_image
+
+
 def link_nuclei(organoid, segname, rx_name, RX, z_anisotropy, org_seg_ch, nuc_seg_ch):
     """
     Run PlatyMatch linking using Prefect/FAIM-HCS data structure
@@ -210,3 +227,5 @@ def link_nuclei(organoid, segname, rx_name, RX, z_anisotropy, org_seg_ch, nuc_se
 
                     except Exception as e:
                         print(R0_obj, RX_obj, e)
+
+    return transform_affine, organoid, RX.plates[plate_id].wells[well_id].organoids[RX_obj], RX_seg, RX_savepath

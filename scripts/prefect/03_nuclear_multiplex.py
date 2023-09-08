@@ -32,7 +32,7 @@ from scmultiplex.config import (
     summary_csv_path,
     spacing_anisotropy_scalar,
 )
-from scmultiplex.linking.NucleiLinking import link_nuclei
+from scmultiplex.linking.NucleiLinking import apply_transform, link_nuclei
 from scmultiplex.logging import setup_prefect_handlers
 from scmultiplex.utils import get_core_count
 
@@ -67,7 +67,7 @@ def get_organoids_task(exp: Experiment, exlude_plates: List[str]):
 
 @task()
 def link_nuclei_task(organoid, segname, rx_name, RX, z_anisotropy, org_seg_ch, nuc_seg_ch):
-    link_nuclei(
+    transform_affine, organoid_R0, organoid_RX, RX_seg, RX_savepath = link_nuclei(
         organoid=organoid,
         segname=segname,
         rx_name=rx_name,
@@ -76,6 +76,10 @@ def link_nuclei_task(organoid, segname, rx_name, RX, z_anisotropy, org_seg_ch, n
         org_seg_ch=org_seg_ch,
         nuc_seg_ch=nuc_seg_ch,
     )
+
+    apply_transform(transform_affine, organoid_R0, organoid_RX, RX_seg, RX_savepath, nuc_seg_ch)
+    return
+
 
 
 def run_flow(r_params, cpus):
