@@ -84,7 +84,7 @@ def link_nuclei_task(organoid, segname, rx_name, RX, z_anisotropy, org_seg_ch, n
 
 def run_flow(r_params, cpus):
     with Flow(
-        "Nuclei-Linking", executor=LocalDaskExecutor(scheduler="processes", num_workers=cpus), run_config=LocalRun()
+        "Nuclei-Linking", executor=LocalDaskExecutor(scheduler="threads", num_workers=cpus), run_config=LocalRun()
     ) as flow:
         rx_name = Parameter("RX_name")
         r0_csv = Parameter("R0_path")
