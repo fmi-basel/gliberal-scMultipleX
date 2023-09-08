@@ -204,8 +204,8 @@ def run_affine(moving_pc, fixed_pc, ransac_iterations, icp_iterations):
 
     results_affine = np.column_stack(
         (
-            moving_ids[row_indices].transpose(),
             fixed_ids[col_indices].transpose(),
+            moving_ids[row_indices].transpose(),
             cost_matrix[row_indices, col_indices],
             confidence[row_indices, col_indices],
         )
@@ -296,9 +296,9 @@ def run_ffd(
 
     # Return matching ids
     results_ffd = np.column_stack(
-        (
-            moving_ffd_ids[row_indices].transpose(),
+        (   
             fixed_ids[col_indices].transpose(),
+            moving_ffd_ids[row_indices].transpose(),
             cost_matrix[row_indices, col_indices],
         )
     )
