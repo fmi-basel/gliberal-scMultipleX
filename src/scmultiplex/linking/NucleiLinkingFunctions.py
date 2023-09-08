@@ -332,3 +332,19 @@ def generate_ffd_rawimage_from_affine(moving_transformed_affine_raw_image,
     return moving_transformed_ffd_raw_image
 
 
+def relabel_RX_numpy(RX_seg, matches):
+    """
+    Relabel RX label map to match R0 labels based on linking. Matches is affine or ffd pandas df after platymatch matching
+    """
+    #key is moving_label, value is fixed_label
+    matching_dict = matches.set_index('RX_nuc_id').T.to_dict('index')['R0_nuc_id']
+    
+    RX_numpy_matched = np.zeros_like(RX_seg)
+
+    # for each nuclear label in RX...
+    for l in filter(None, np.unique(matches['RX_nuc_id'])):
+        # set to r0 label
+        RX_numpy_matched[RX_seg == l] = matching_dict[l]
+        
+    return RX_numpy_matched
+

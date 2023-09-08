@@ -9,10 +9,12 @@
 ##############################################################################
 
 from os.path import join
+import numpy as np
 
 import pandas as pd
 from scmultiplex.faim_hcs.records.OrganoidRecord import OrganoidRecord
-from scmultiplex.linking.NucleiLinkingFunctions import run_affine, run_ffd
+from scmultiplex.linking.NucleiLinkingFunctions import relabel_RX_numpy, run_affine, run_ffd
+from skimage.io import imsave
 
 
 from platymatch.utils.utils import generate_affine_transformed_image
@@ -126,6 +128,12 @@ def link_nuclei(organoid, segname, rx_name, RX, z_anisotropy, org_seg_ch, nuc_se
                     .get_segmentation(segname)
                 )
 
+                RX_savepath = (
+                    RX.plates[plate_id]
+                    .wells[well_id]
+                    .organoids[RX_obj].organoid_dir
+                )
+
                 # N x 5 (first column is ids, last column is size)
                 R0_numpy = R0_df[
                     ["nuc_id", "x_pos_pix", "y_pos_pix", "z_pos_pix_scaled", "volume_pix"]
@@ -166,6 +174,13 @@ def link_nuclei(organoid, segname, rx_name, RX, z_anisotropy, org_seg_ch, nuc_se
                         # Add the measurement to the faim-hcs datastructure and save.
                         organoid.add_measurement(name, path)
                         organoid.save()  # updates json file
+
+                        # Relabel RX segmentation images to match R0 labeling
+                        RX_numpy_matched = relabel_RX_numpy(RX_seg, affine_matches)
+                        
+                        # Save relabelled RX image
+                        path = join(RX_savepath, "relabelled.tif")
+                        imsave(path, RX_numpy_matched.astype(np.int16), check_contrast=False)
 
                     except Exception as e:
                         print(R0_obj, RX_obj, e)
