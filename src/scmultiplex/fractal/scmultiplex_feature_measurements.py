@@ -67,37 +67,48 @@ def scmultiplex_feature_measurements(
     allow_duplicate_labels: bool = False,
 ):
     """
+    Measurements of intensities and morphologies
+
     Wrapper task for scmultiplex measurements for Fractal to generate
     measurements of intensities and morphologies
 
-    :param input_paths: TBD (default arg for Fractal tasks)
-    :param output_path: TBD (default arg for Fractal tasks)
-    :param metadata: TBD (default arg for Fractal tasks)
-    :param component: TBD (default arg for Fractal tasks)
-    :param label_image: Name of the label image to use for measurements.
-                        Needs to exist in OME-Zarr file
-    :param output_table_name: Name of the output AnnData table to save the
-                              measurements in. A table of this name can't exist
-                              yet in the OME-Zarr file
-    :param input_channels: Dictionary of channels to measure. Keys are the
-                           names that will be added as prefixes to the
-                           measurements, values are another dictionary
-                           containing either wavelength_id or channel_label
-                           information to allow Fractal to find the correct
-                           channel (but not both). Example:
-                           {"C01": {"wavelength_id": "A01_C01"}
-                           To only measure morphology, provide an empty dict
-    :param input_ROI_table: Name of the ROI table to loop over. Needs to exists
-                            as a ROI table in the OME-Zarr file
-    :param level: Resolution of the intensity image to load for measurements.
-                  Only tested for level 0
-    :param label_level: Resolution of the label image to load for measurements.
-    :param measure_morphology: Set to True to measure morphology features
-    :param allow_duplicate_labels: Set to True to allow saving measurement
-                                   tables with non-unique label values. Can
-                                   happen when segmentation is run on a
-                                   different ROI than the measurements
-                                   (e.g. segment per well, but measure per FOV)
+    Args:
+        input_paths: List of input paths where the image data is stored as
+            OME-Zarrs. Should point to the parent folder containing one or many
+            OME-Zarr files, not the actual OME-Zarr file. Example:
+            `["/some/path/"]`. This task only supports a single input path.
+            (standard argument for Fractal tasks, managed by Fractal server).
+        output_path: This parameter is not used by this task.
+            (standard argument for Fractal tasks, managed by Fractal server).
+        component: Path to the OME-Zarr image in the OME-Zarr plate that is
+            processed. Example: `"some_plate.zarr/B/03/0"`.
+            (standard argument for Fractal tasks, managed by Fractal server).
+        metadata: dictionary containing metadata about the OME-Zarr. This task
+            requires the following elements to be present in the metadata.
+            `coarsening_xy (int)`: coarsening factor in XY of the downsampling
+            when building the pyramid. (standard argument for Fractal tasks,
+            managed by Fractal server).
+        label_image: Name of the label image to use for measurements.
+            Needs to exist in OME-Zarr file
+        output_table_name: Name of the output AnnData table to save the
+            measurements in. A table of this name can't exist yet in the 
+            OME-Zarr file
+        input_channels: Dictionary of channels to measure. Keys are the
+            names that will be added as prefixes to the measurements, 
+            values are another dictionary containing either wavelength_id 
+            or channel_label information to allow Fractal to find the correct
+            channel (but not both). Example: {"C01": {"wavelength_id": 
+            "A01_C01"}. To only measure morphology, provide an empty dict
+        input_ROI_table: Name of the ROI table to loop over. Needs to exists
+            as a ROI table in the OME-Zarr file
+        level: Resolution of the intensity image to load for measurements.
+            Only tested for level 0
+        label_level: Resolution of the label image to load for measurements.
+        measure_morphology: Set to True to measure morphology features
+        allow_duplicate_labels: Set to True to allow saving measurement
+            tables with non-unique label values. Can happen when segmentation 
+            is run on a different ROI than the measurements (e.g. segment 
+            per well, but measure per FOV)
     """
 
     # 2D intensity image vs. 3D label image
@@ -116,7 +127,6 @@ def scmultiplex_feature_measurements(
     if len(input_paths) > 1:
         raise NotImplementedError("We currently only support a single in_path")
     in_path = Path(input_paths[0]).as_posix()
-    # num_levels = metadata["num_levels"]
     coarsening_xy = metadata["coarsening_xy"]
 
     # Check output tables
