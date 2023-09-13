@@ -91,6 +91,12 @@
             "default": false,
             "type": "boolean",
             "description": "Set to True to allow saving measurement tables with non-unique label values. Can happen when segmentation is run on a different ROI than the measurements (e.g. segment per well, but measure per FOV)"
+          },
+          "overwrite": {
+            "title": "Overwrite",
+            "default": true,
+            "type": "boolean",
+            "description": "If `True`, overwrite the task output."
           }
         },
         "required": [

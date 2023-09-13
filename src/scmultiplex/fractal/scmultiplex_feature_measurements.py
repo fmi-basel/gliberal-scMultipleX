@@ -17,8 +17,6 @@ import logging
 from pathlib import Path
 from typing import Any
 from typing import Dict
-from typing import List
-from typing import Optional
 from typing import Sequence
 
 import anndata as ad
@@ -39,6 +37,7 @@ from fractal_tasks_core.lib_regions_of_interest import (
 )
 from fractal_tasks_core.lib_regions_of_interest import is_ROI_table_valid
 from fractal_tasks_core.lib_upscale_array import upscale_array
+from fractal_tasks_core.lib_write import write_table
 from fractal_tasks_core.lib_zattrs_utils import extract_zyx_pixel_sizes
 
 
@@ -65,6 +64,7 @@ def scmultiplex_feature_measurements(
     label_level: int = 0,
     measure_morphology: bool = True,
     allow_duplicate_labels: bool = False,
+    overwrite: bool = True,
 ):
     """
     Measurements of intensities and morphologies
@@ -109,6 +109,7 @@ def scmultiplex_feature_measurements(
             tables with non-unique label values. Can happen when segmentation 
             is run on a different ROI than the measurements (e.g. segment 
             per well, but measure per FOV)
+        overwrite: If `True`, overwrite the task output.
     """
 
     # 2D intensity image vs. 3D label image
@@ -394,10 +395,14 @@ def scmultiplex_feature_measurements(
         measurement_table = ad.AnnData()
 
     # Write to zarr group
-    ad._io.specs.write_elem(group_tables, output_table_name, measurement_table)
-    # Update OME-NGFF metadata
-    new_tables = current_tables + [output_table_name]
-    group_tables.attrs["tables"] = new_tables
+    image_group = zarr.group(f"{in_path}/{component}")
+    write_table(
+        image_group,
+        output_table_name,
+        measurement_table,
+        overwrite=overwrite,
+        logger=logger,
+    )
 
 
 if __name__ == "__main__":
