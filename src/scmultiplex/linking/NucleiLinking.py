@@ -83,6 +83,9 @@ def link_ffd(RX_numpy, R0_numpy, RX_raw, R0_raw, R0_seg, RX_seg, RX_obj, R0_obj,
 
 def apply_transform(transform_affine, organoid_R0, organoid_RX, RX_seg, RX_savepath, nuc_seg_ch):
 
+    if transform_affine is None:
+        return None
+    
     for channel in organoid_RX.raw_files:
         R0_raw = organoid_R0.get_raw_data(nuc_seg_ch) # doesn't matter which channel; can load seg channel here
         RX_raw = organoid_RX.get_raw_data(channel)
@@ -167,6 +170,8 @@ def link_nuclei(organoid, segname, rx_name, RX, z_anisotropy, org_seg_ch, nuc_se
                 R0_numpy[:, 4] /= z_anisotropy
                 RX_numpy[:, 3] /= z_anisotropy
                 RX_numpy[:, 4] /= z_anisotropy
+
+                transform_affine = None
 
                 if (R0_numpy.shape[0] > 4) and (RX_numpy.shape[0] > 4):
                     print("matching of", R0_obj, "and", RX_obj, "in", plate_id, well_id)
