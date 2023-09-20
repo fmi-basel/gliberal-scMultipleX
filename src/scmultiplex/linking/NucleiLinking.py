@@ -197,6 +197,11 @@ def link_nuclei(organoid, segname, rx_name, RX, z_anisotropy, org_seg_ch, nuc_se
                         organoid.add_measurement(name, path)
                         organoid.save()  # updates json file
 
+                        # Save affine transformation matrix to organoid directory
+                        path = join(RX_savepath, "affine.npy")
+                        np.save(path, transform_affine, allow_pickle=False)
+                        # to load from saved file, use np.load('filepath')
+
                         # Relabel RX segmentation images to match R0 labeling
                         RX_numpy_matched = relabel_RX_numpy(RX_seg, affine_matches)
                         
