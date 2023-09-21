@@ -64,7 +64,7 @@
           },
           "input_ROI_table": {
             "title": "Input Roi Table",
-            "default": "FOV_ROI_table",
+            "default": "well_ROI_table",
             "type": "string",
             "description": "Name of the ROI table to loop over. Needs to exists as a ROI table in the OME-Zarr file"
           },
