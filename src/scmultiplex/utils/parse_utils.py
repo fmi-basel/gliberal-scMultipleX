@@ -50,6 +50,8 @@ def prepare_and_add_well(
     ovr_mips: List[str],
     overview_spacing: Tuple[float],
     well_regex: Pattern,
+    mip_ovr_name,
+    org_seg_name,
     raw_file_to_raw_name=lambda p: splitext(p)[0][-3:],
     seg_file_to_seg_name=lambda p: splitext(p)[0][-3:],
     well_path_to_well_id=lambda p: basename(p).split("_")[3],
@@ -59,7 +61,7 @@ def prepare_and_add_well(
     )
 
     seg_files = get_well_overview_segs(
-        plate=plate, well_id=well_id, well_path_to_well_id=well_path_to_well_id
+        plate=plate, well_id=well_id, well_path_to_well_id=well_path_to_well_id,mip_ovr_name=mip_ovr_name,org_seg_name=org_seg_name,
     )
     return add_well(
         plate=plate,
@@ -135,13 +137,15 @@ def get_well_overview_segs(
     plate: PlateRecord,
     well_id: str,
     well_path_to_well_id: lambda p: basename(p).split("_")[3],
+    mip_ovr_name,
+    org_seg_name,
 ):
     seg_mips = glob(
         join(
             plate.experiment.root_dir,
             plate.plate_id,
-            "TIF_OVR_MIP_SEG",
-            "obj_v0.3",
+            mip_ovr_name + "_SEG",
+            org_seg_name,
             "*.tif",
         )
     )
@@ -160,6 +164,8 @@ def create_experiment(
     mask_regex,
     nuc_seg_regex,
     cell_seg_regex,
+    mip_ovr_name,
+    org_seg_name,
     logger=logging.getLogger("HCS_Experiment"),
 ):
     def raw_file_to_raw_name(p):
@@ -184,7 +190,7 @@ def create_experiment(
                 experiment=exp, plate_id=split(p)[1], save_dir=exp.get_experiment_dir()
             )
 
-            ovr_mips = glob(join(exp.root_dir, plate.plate_id, "TIF_OVR_MIP", "*.tif"))
+            ovr_mips = glob(join(exp.root_dir, plate.plate_id, mip_ovr_name, "*.tif"))
 
             well_ids = [well_regex.findall(basename(om))[0][1:-1] for om in ovr_mips]
 
@@ -201,13 +207,15 @@ def create_experiment(
                         ovr_mips=ovr_mips,
                         overview_spacing=overview_spacing,
                         well_regex=well_regex,
+                        mip_ovr_name=mip_ovr_name,
+                        org_seg_name=org_seg_name,
                         raw_file_to_raw_name=raw_file_to_raw_name,
                         seg_file_to_seg_name=seg_file_to_seg_name,
                         well_path_to_well_id=well_path_to_well_id,
                     )
                 )
 
-            organoid_parent_dir = join(exp.root_dir, plate.plate_id, "obj_v0.3_ROI")
+            organoid_parent_dir = join(exp.root_dir, plate.plate_id, org_seg_name + "_ROI")
             if exists(organoid_parent_dir):
                 for well in wells:
                     prepare_and_add_organoids(

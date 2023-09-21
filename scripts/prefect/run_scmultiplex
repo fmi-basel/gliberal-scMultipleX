@@ -32,8 +32,8 @@ try:
 except ImportError:
 	# older versions of python don't have the waitstatus_to_exitcode function
 	def waitstatus_to_exitcode(wstatus):
-		if os.WIFEXITED(wstatus[1]):
-			return os.WEXITSTATUS(wstatus[1])
+		if os.WIFEXITED(wstatus):
+			return os.WEXITSTATUS(wstatus)
 		return 1
 
 task_mapping = {}
@@ -100,7 +100,7 @@ def run_task_fork_pty(task, config_file_path, logfile_path, prefect_logfile_path
 	else:
 		with open(logfile_path, 'ab') as logfile, os.fdopen(controlt_fd, "rb", buffering = 0) as controlt:
 			tee(controlt, logfile)
-			wstatus = os.waitpid(pid, 0)
+			childpid, wstatus = os.waitpid(pid, 0)
 		ret = waitstatus_to_exitcode(wstatus)
 		if ret != 0:
 			raise subprocess.CalledProcessError(
