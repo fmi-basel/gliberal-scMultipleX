@@ -127,11 +127,13 @@ def load_features_for_well(table_path):
 # Inputs: input_ROI_table, measure_morphology, allow_duplicate_labels, expected to run
 inputs_2D = [
     ("well_ROI_table", multi_input_channels, False, False, True),
+    ("well_ROI_table", None, True, False, True),
     ("well_ROI_table", {}, True, False, True),
     ("well_ROI_table", multi_input_channels, True, False, True),
     ("FOV_ROI_table", single_input_channels, False, False, False),
     ("FOV_ROI_table", single_input_channels, False, True, True),
     ("FOV_ROI_table", single_input_channels, True, True, True),
+    ("well_ROI_table", None, False, False, False), # Testing no channels, no labels
 ]
 
 @pytest.mark.filterwarnings("ignore:Transforming to str index.")
@@ -144,7 +146,10 @@ def test_2D_fractal_measurements(
         expected_to_run,
     ):
     component = component_2D
-    output_table_name = f'table_{input_ROI_table}_{len(input_channels)}_{measure_morphology}_{level}_{label_level}'
+    try:
+        output_table_name = f'table_{input_ROI_table}_{len(input_channels)}_{measure_morphology}_{level}_{label_level}'
+    except TypeError:
+        output_table_name = f'table_{input_ROI_table}_0_{measure_morphology}_{level}_{label_level}'
     # Clear prior runs
     clear_tables_prior_run(output_table_name, component = component)
 
@@ -197,9 +202,10 @@ def test_2D_fractal_measurements(
         else:
             expected_columns = columns_2D_common.copy()
         # Add intensity columns
-        for channel in input_channels.keys():
-            for feature in columns_2D_intensity:
-                expected_columns.append(feature.format(Ch = channel))
+        if input_channels:
+            for channel in input_channels.keys():
+                for feature in columns_2D_intensity:
+                    expected_columns.append(feature.format(Ch = channel))
 
         assert list(df.columns) == expected_columns
 

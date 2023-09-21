@@ -111,6 +111,11 @@ def scmultiplex_feature_measurements(
             per well, but measure per FOV)
         overwrite: If `True`, overwrite the task output.
     """
+    if input_channels is None and not measure_morphology:
+        raise ValueError(
+            "You need to either add input_channels to make measurements on "
+            "or set measure_morphology to True"
+        )
 
     # 2D intensity image vs. 3D label image
     handle_2D_edge_case = False
@@ -194,24 +199,25 @@ def scmultiplex_feature_measurements(
     input_image_arrays = {}
     img_array = da.from_zarr(f"{in_path}/{component}/{level}")
     # Loop over image inputs and assign corresponding channel of the image
-    for name in input_channels.keys():
-        try:
-            channel = get_channel_from_image_zarr(
-                image_zarr_path=f"{in_path}/{component}",
-                wavelength_id=input_channels[name].wavelength_id,
-                label=input_channels[name].label,
-            )
-        except ChannelNotFoundError as e:
-            logger.warning(
-                "Channel not found, exit from the task.\n"
-                f"Original error: {str(e)}"
-            )
-            return {}
-        channel_index = channel.index
-        input_image_arrays[name] = img_array[channel_index]
+    if input_channels:
+        for name in input_channels.keys():
+            try:
+                channel = get_channel_from_image_zarr(
+                    image_zarr_path=f"{in_path}/{component}",
+                    wavelength_id=input_channels[name].wavelength_id,
+                    label=input_channels[name].label,
+                )
+            except ChannelNotFoundError as e:
+                logger.warning(
+                    "Channel not found, exit from the task.\n"
+                    f"Original error: {str(e)}"
+                )
+                return {}
+            channel_index = channel.index
+            input_image_arrays[name] = img_array[channel_index]
 
-        logger.info(f"Prepared input with {name=} and {input_channels[name]=}")
-        logger.info(f"{input_image_arrays=}")
+            logger.info(f"Prepared input with {name=} and {input_channels[name]=}")
+            logger.info(f"{input_image_arrays=}")
 
     # FIXME: Add check whether label exists?
     input_label_image = da.from_zarr(
