@@ -145,33 +145,21 @@ def get_intensity_measurements(labeled_obj, channel_prefix, spacing, is_2D):
         "stdev": labeled_obj["stdv"],
         "skew": labeled_obj["skewness"],
         "kurtosis": labeled_obj["kurtos"],
-        # "x_pos_weighted_pix": labeled_obj["weighted_centroid"][-1],
-        # "y_pos_weighted_pix": labeled_obj["weighted_centroid"][-2],
-        # "x_massDisp_pix": labeled_obj["weighted_centroid"][-1]
-        # - labeled_obj["centroid"][-1],
-        # "y_massDisp_pix": labeled_obj["weighted_centroid"][-2]
-        # - labeled_obj["centroid"][-2],
     }
 
-    # add 3D-specific intensity measurements
-    # if not is_2D:
-    #     intensity_3D_only = {
-    #         "z_pos_weighted_pix": labeled_obj["weighted_centroid"][-3],
-    #         "z_massDisp_pix": labeled_obj["weighted_centroid"][-3]
-    #         - labeled_obj["centroid"][-3],
-    #     }
-    #     intensity_measurements.update(intensity_3D_only)
-
-    # New centroid weighting block
-    if True:
+    # workaround for buggy version of skimage 0.20.0 . False if we don't need to apply the workaround
+    if False:
         corrected_weighted_centroid = centroid_weighted_correct(labeled_obj)
-        intensity_measurements['x_pos_weighted_pix'] = corrected_weighted_centroid[-1]
-        intensity_measurements['y_pos_weighted_pix'] = corrected_weighted_centroid[-2]
-        intensity_measurements['x_massDisp_pix'] = corrected_weighted_centroid[-1] - labeled_obj["centroid"][-1]
-        intensity_measurements['y_massDisp_pix'] = corrected_weighted_centroid[-2] - labeled_obj["centroid"][-2]
-        if not is_2D:
-            intensity_measurements['z_pos_weighted_pix'] = corrected_weighted_centroid[-3]
-            intensity_measurements['z_massDisp_pix'] = corrected_weighted_centroid[-3] - labeled_obj["centroid"][-3]
+    else:
+        corrected_weighted_centroid = labeled_obj
+    corrected_weighted_centroid = centroid_weighted_correct(labeled_obj)
+    intensity_measurements['x_pos_weighted_pix'] = corrected_weighted_centroid[-1]
+    intensity_measurements['y_pos_weighted_pix'] = corrected_weighted_centroid[-2]
+    intensity_measurements['x_massDisp_pix'] = corrected_weighted_centroid[-1] - labeled_obj["centroid"][-1]
+    intensity_measurements['y_massDisp_pix'] = corrected_weighted_centroid[-2] - labeled_obj["centroid"][-2]
+    if not is_2D:
+        intensity_measurements['z_pos_weighted_pix'] = corrected_weighted_centroid[-3]
+        intensity_measurements['z_massDisp_pix'] = corrected_weighted_centroid[-3] - labeled_obj["centroid"][-3]
 
     # channel prefix addition is optional
     if channel_prefix is not None:
