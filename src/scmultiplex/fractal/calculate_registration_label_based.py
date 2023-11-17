@@ -2,15 +2,17 @@
 # University of Zurich
 #
 # Original authors:
+# Nicole Repina <nicole.repina@fmi.ch>
 # Tommaso Comparin <tommaso.comparin@exact-lab.it>
 # Joel Lüthi <joel.luethi@uzh.ch>
 #
-# This file is part of Fractal and was originally developed by eXact lab S.r.l.
-# <exact-lab.it> under contract with Liberali Lab from the Friedrich Miescher
-# Institute for Biomedical Research and Pelkmans Lab from the University of
-# Zurich.
+
 """
-Calculates translation for image-based registration
+Calculates translation for label-based registration
+Note that this task is limited to well overviews that have same dimensions across multiplexing rounds
+In case that dimensions differ, the padding performed in calculate_shift needs to be taken into account for shift values
+Then apply_registration_to_ROI_tables task needs to be modified to accomodate cases of differing image dims
+The minimum consensus region across rounds should be found, and this consensus can then be visualized in Napari
 """
 import logging
 from pathlib import Path
@@ -53,7 +55,7 @@ def calculate_registration_label_based(
     metadata: dict[str, Any],
     # Task-specific arguments
     label_name: str,
-    roi_table: str = "FOV_ROI_table",
+    roi_table: str = "well_ROI_table",
     reference_cycle: int = 0,
     level: int = 2,
 ) -> dict[str, Any]:
@@ -81,8 +83,8 @@ def calculate_registration_label_based(
             (standard argument for Fractal tasks, managed by Fractal server).
         metadata: This parameter is not used by this task.
             (standard argument for Fractal tasks, managed by Fractal server).
-        wavelength_id: Wavelength that will be used for image-based
-            registration; e.g. `A01_C01` for Yokogawa, `C01` for MD.
+        label_name: Label name that will be used for label-based
+            registration; e.g. `org` from object segmentation.
         roi_table: Name of the ROI table over which the task loops to
             calculate the registration. Examples: `FOV_ROI_table` => loop over
             the field of views, `well_ROI_table` => process the whole well as
@@ -134,24 +136,12 @@ def calculate_registration_label_based(
 
     # Read ROIs
     ROI_table_ref = ad.read_zarr(f"{zarr_img_ref_cycle}/tables/{roi_table}")
-    ROI_table_x = ad.read_zarr(f"{zarr_img_ref_cycle}/tables/{roi_table}")
+    # TODO: Nicole thinks there is an error in fractal_core function here; load zarr table of x!
+    # TODO: Joel add to your calculate_registration_image_based code!
+    ROI_table_x = ad.read_zarr(f"{zarr_img_cycle_x}/tables/{roi_table}")
     logger.info(
         f"Found {len(ROI_table_x)} ROIs in {roi_table=} to be processed."
     )
-
-    # For each cycle, get the relevant info
-    # TODO: Add additional checks on ROIs?
-    if (ROI_table_ref.obs.index != ROI_table_x.obs.index).all():
-        raise ValueError(
-            "Registration is only implemented for ROIs that match between the "
-            "cycles (e.g. well, FOV ROIs). Here, the ROIs in the reference "
-            "cycles were {ROI_table_ref.obs.index}, but the ROIs in the "
-            "alignment cycle were {ROI_table_x.obs.index}"
-        )
-    # TODO: Make this less restrictive? i.e. could we also run it if different
-    # cycles have different FOVs? But then how do we know which FOVs to match?
-    # If we relax this, downstream assumptions on matching based on order
-    # in the list will break.
 
     # Read pixel sizes from zarr attributes
     ngff_image_meta_cycle_x = load_NgffImageMeta(str(zarr_img_cycle_x))
@@ -204,14 +194,9 @@ def calculate_registration_label_based(
         ##############
         #  Calculate the transformation
         ##############
-        # Basic version (no padding, no internal binning)
-        if img_ref.shape != img_cycle_x.shape:
-            raise NotImplementedError(
-                "This registration is not implemented for ROIs with "
-                "different shapes between cycles"
-            )
 
-        shifts, _, _ = calculate_shift(np.squeeze(img_ref), np.squeeze(img_cycle_x), bin = 1)
+        # calculate shifts on padded images that have the same shape (pad performed within calculate_shift function)
+        shifts, _, _ = calculate_shift(np.squeeze(img_ref), np.squeeze(img_cycle_x), bin=1)
         
         logger.info(shifts)
 
@@ -231,7 +216,8 @@ def calculate_registration_label_based(
             full_res_pxl_sizes_zyx=pxl_sizes_zyx,
         )
 
-    # Write physical shifts to disk (as part of the ROI table)
+    # Write physical shifts to disk (as part of the ROI table, add additional translation xyz columns)
+    # Update the original well_ROI_table with shifts
     logger.info(f"Updating the {roi_table=} with translation columns")
     new_ROI_table = get_ROI_table_with_translation(ROI_table_x, new_shifts)
     group_tables = zarr.group(f"{zarr_img_cycle_x}/tables/")
@@ -259,7 +245,6 @@ def calculate_physical_shifts(
     Returns:
         shifts_physical: shifts in physical units as zyx
     """
-
     curr_pixel_size = np.array(full_res_pxl_sizes_zyx) * coarsening_xy**level
     if len(shifts) == 3:
         shifts_physical = shifts * curr_pixel_size
@@ -292,17 +277,36 @@ def get_ROI_table_with_translation(
     """
 
     shift_table = pd.DataFrame(new_shifts).T
-    shift_table.columns = ["translation_z", "translation_y", "translation_x"]
+    translation_columns = ["translation_z", "translation_y", "translation_x"]
+    shift_table.columns = translation_columns
     shift_table = shift_table.rename_axis("FieldIndex")
-    new_roi_table = ROI_table.to_df().merge(
-        shift_table, left_index=True, right_index=True
-    )
+
+    # check if translation columns already exist; if exists, rewrite instead of doing a merge
+    new_roi_table = ROI_table.to_df()
+    # TODO: Joel add to your calculate_registration_image_based code!
+    if set(translation_columns).issubset(new_roi_table.columns):
+        logger.info(
+            "Columns are present : Yes "
+            "Overwriting translation columns"
+        )
+        new_roi_table[translation_columns] = shift_table[translation_columns]
+
+    else:
+        logger.info(
+            "Columns are present : No "
+            "Adding new translation columns"
+        )
+        new_roi_table = new_roi_table.merge(
+            shift_table, left_index=True, right_index=True
+        )
+
     if len(new_roi_table) != len(ROI_table):
         raise ValueError(
             "New ROI table with registration info has a "
             f"different length ({len(new_roi_table)=}) "
             f"from the original ROI table ({len(ROI_table)=})"
         )
+
     positional_columns = [
         "x_micrometer",
         "y_micrometer",
@@ -325,30 +329,14 @@ def get_ROI_table_with_translation(
     return adata
 
 
-
 if __name__ == "__main__":
     from fractal_tasks_core.tasks._utils import run_fractal_task
-    from fractal_tasks_core.tasks.apply_registration_to_ROI_tables import apply_registration_to_ROI_tables
 
-    # run_fractal_task(
-    #     task_function=calculate_registration_image_based,
-    #     logger_name=logger.name,
-    # )
+    run_fractal_task(
+        task_function=calculate_registration_image_based,
+        logger_name=logger.name,
+    )
 
-    calculate_registration_label_based(input_paths=['/tungstenfs/scratch/gliberal/Users/repinico/Fractal/20230928_Fractal/fractal_output'],
-                                       output_path='/tungstenfs/scratch/gliberal/Users/repinico/Fractal/20230928_Fractal/fractal_output',
-                                       component='220605_151046_mip.zarr/C/02/1',
-                                       metadata={},
-                                       label_name='org',
-                                       roi_table="well_ROI_table",
-                                       reference_cycle=0,
-                                       level=2)
-    
-    apply_registration_to_ROI_tables(input_paths=['/tungstenfs/scratch/gliberal/Users/repinico/Fractal/20230928_Fractal/fractal_output'],
-                                     output_path='/tungstenfs/scratch/gliberal/Users/repinico/Fractal/20230928_Fractal/fractal_output',
-                                     component='220605_151046_mip.zarr/C/02',
-                                     metadata={},
-                                     roi_table="well_ROI_table",)
     
     
 
