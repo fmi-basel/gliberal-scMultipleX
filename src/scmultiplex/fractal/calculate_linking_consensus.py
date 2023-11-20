@@ -1,18 +1,15 @@
-# Copyright 2022 (C) Friedrich Miescher Institute for Biomedical Research and
+# Copyright 2023 (C) Friedrich Miescher Institute for Biomedical Research and
 # University of Zurich
 #
 # Original authors:
+# Nicole Repina <nicole.repina@fmi.ch>
 # Tommaso Comparin <tommaso.comparin@exact-lab.it>
 # Joel Lüthi <joel.luethi@uzh.ch>
 #
-# This file is part of Fractal and was originally developed by eXact lab S.r.l.
-# <exact-lab.it> under contract with Liberali Lab from the Friedrich Miescher
-# Institute for Biomedical Research and Pelkmans Lab from the University of
-# Zurich.
+
 """
-Applies the multiplexing translation to all ROI tables
+Calculates consensus for linking tables across multiplexing rounds.
 """
-import copy
 import logging
 from typing import Any
 from typing import Optional
@@ -24,13 +21,10 @@ import anndata as ad
 import numpy as np
 import pandas as pd
 import zarr
-from fractal_tasks_core.tasks.apply_registration_to_ROI_tables import calculate_min_max_across_dfs
+
 from pydantic.decorator import validate_arguments
 
 from fractal_tasks_core.lib_ngff import load_NgffWellMeta
-from fractal_tasks_core.lib_regions_of_interest import (
-    are_ROI_table_columns_valid,
-)
 from fractal_tasks_core.lib_write import write_table
 
 logger = logging.getLogger(__name__)
