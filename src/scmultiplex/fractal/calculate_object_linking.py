@@ -216,6 +216,8 @@ def calculate_object_linking(
 
     # format output df and convert to anndata
     link_df = link_df.sort_values(by=["R0_label"])
+    link_df = link_df.rename(columns={"R0_label": "R" + str(reference_cycle) + "_label",
+                                      "RX_label": "R" + str(alignment_cycle) + "_label"})
     logger.info(link_df)
 
     link_df_adata = ad.AnnData(X=np.array(link_df), dtype=np.float32)
@@ -229,7 +231,7 @@ def calculate_object_linking(
     # Storing the calculated transformation ###
     ##############
 
-    # Generate linking table: 3 columns ["R0_label", "RX_label", "iou"]
+    # Generate linking table: 3 columns ["R0_label", "RX_label", "iou"], where are RX is R1,R2, etc
     if not new_link_table:
         new_link_table = "object_linking"
 
