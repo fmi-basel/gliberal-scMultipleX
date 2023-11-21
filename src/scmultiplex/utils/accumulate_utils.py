@@ -566,7 +566,7 @@ def merge_org_linking(exp: Experiment):
             )  # saves csv
 
 
-def merge_platymatch_linking(exp: Experiment):
+def merge_platymatch_linking(exp: Experiment, transform = "affine"):
     # pool together organoid linking files
     exp.only_iterate_over_wells(False)
     exp.reset_iterator()
@@ -579,7 +579,7 @@ def merge_platymatch_linking(exp: Experiment):
         linkMeasurements = [
             k
             for k, v in organoid.measurements.items()
-            if k.startswith("linking_nuc_ffd")
+            if k.startswith("linking_nuc_" + transform)
         ]
 
         # if no linking in organoid, skip
@@ -597,7 +597,7 @@ def merge_platymatch_linking(exp: Experiment):
         linkMeasurements = [
             k
             for k, v in organoid.measurements.items()
-            if k.startswith("linking_nuc_ffd")
+            if k.startswith("linking_nuc_" + transform)
         ]
 
         # if no linking in organoid, skip
@@ -616,7 +616,7 @@ def merge_platymatch_linking(exp: Experiment):
                 nuc_link_df_dict[key], ignore_index=True, sort=False
             )
             nuc_link_df.to_csv(
-                join(exp.get_experiment_dir(), ("linking_nuc_" + key + "_df.csv")),
+                join(exp.get_experiment_dir(), ("linking_nuc_" + key + "_" + transform + "_df.csv")),
                 index=False,
             )  # saves csv
 
@@ -782,7 +782,7 @@ def write_organoid_linking_over_multiplexing_rounds(round_names, round_summary_c
     )  # saves csv
 
 
-def write_nuclear_linking_over_multiplexing_rounds(round_names, round_summary_csvs):
+def write_nuclear_linking_over_multiplexing_rounds(round_names, round_summary_csvs, transform = "affine"):
     # Load the data
     exp_list = []
     df_list = []
@@ -814,7 +814,7 @@ def write_nuclear_linking_over_multiplexing_rounds(round_names, round_summary_cs
         # skip R0
         if i > 0:
             path = os.path.join(
-                exps["R0"].get_experiment_dir(), ("linking_nuc_R" + str(i) + "_df.csv")
+                exps["R0"].get_experiment_dir(), ("linking_nuc_R" + str(i) + "_" + transform + "_df.csv")
             )
             isExist = os.path.exists(path)
 
@@ -980,7 +980,7 @@ def write_nuclear_linking_over_multiplexing_rounds(round_names, round_summary_cs
     nuc_df_tidy.to_csv(
         join(
             exps["R0"].get_experiment_dir(),
-            ("nuc_df_tidy_linked_" + "-".join(round_names) + ".csv"),
+            ("nuc_df_tidy_linked_" + transform + "_" + "-".join(round_names) + ".csv"),
         ),
         index=False,
     )  # saves csv

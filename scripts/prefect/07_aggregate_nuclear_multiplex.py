@@ -43,8 +43,8 @@ def load_experiment(exp_path):
 
 @task()
 def merge_scmultiplexed_features_task(exp, round_names, round_summary_csvs):
-    merge_platymatch_linking(exp)
-    write_nuclear_linking_over_multiplexing_rounds(round_names, round_summary_csvs)
+    merge_platymatch_linking(exp, transform = "affine")
+    write_nuclear_linking_over_multiplexing_rounds(round_names, round_summary_csvs, transform = "affine")
 
 def run_flow(r_params, cpus):
     with Flow(

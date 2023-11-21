@@ -9,10 +9,12 @@
 ##############################################################################
 
 from os.path import join
+import numpy as np
 
 import pandas as pd
 from scmultiplex.faim_hcs.records.OrganoidRecord import OrganoidRecord
-from scmultiplex.linking.NucleiLinkingFunctions import run_affine, run_ffd
+from scmultiplex.linking.NucleiLinkingFunctions import relabel_RX_numpy, run_affine, run_ffd
+from skimage.io import imsave
 
 
 from platymatch.utils.utils import generate_affine_transformed_image
@@ -79,6 +81,26 @@ def link_ffd(RX_numpy, R0_numpy, RX_raw, R0_raw, R0_seg, RX_seg, RX_obj, R0_obj,
     return ffd_matches
 
 
+def apply_transform(transform_affine, organoid_R0, organoid_RX, RX_seg, RX_savepath, nuc_seg_ch):
+
+    if transform_affine is None:
+        return None
+    
+    for channel in organoid_RX.raw_files:
+        R0_raw = organoid_R0.get_raw_data(nuc_seg_ch) # doesn't matter which channel; can load seg channel here
+        RX_raw = organoid_RX.get_raw_data(channel)
+
+        transformed_affine_raw_image = generate_affine_transformed_image(transform_affine, R0_raw, RX_raw, RX_seg)[0]
+
+        print(transformed_affine_raw_image.dtype, np.amin(transformed_affine_raw_image), np.amax(transformed_affine_raw_image))
+
+        # Save transformed RX image
+        path = join(RX_savepath, channel+"_affine_transformed.tif")
+        imsave(path, transformed_affine_raw_image.astype(np.uint16), check_contrast=False)
+
+    return transformed_affine_raw_image
+
+
 def link_nuclei(organoid, segname, rx_name, RX, z_anisotropy, org_seg_ch, nuc_seg_ch):
     """
     Run PlatyMatch linking using Prefect/FAIM-HCS data structure
@@ -126,6 +148,12 @@ def link_nuclei(organoid, segname, rx_name, RX, z_anisotropy, org_seg_ch, nuc_se
                     .get_segmentation(segname)
                 )
 
+                RX_savepath = (
+                    RX.plates[plate_id]
+                    .wells[well_id]
+                    .organoids[RX_obj].organoid_dir
+                )
+
                 # N x 5 (first column is ids, last column is size)
                 R0_numpy = R0_df[
                     ["nuc_id", "x_pos_pix", "y_pos_pix", "z_pos_pix_scaled", "volume_pix"]
@@ -142,6 +170,8 @@ def link_nuclei(organoid, segname, rx_name, RX, z_anisotropy, org_seg_ch, nuc_se
                 R0_numpy[:, 4] /= z_anisotropy
                 RX_numpy[:, 3] /= z_anisotropy
                 RX_numpy[:, 4] /= z_anisotropy
+
+                transform_affine = None
 
                 if (R0_numpy.shape[0] > 4) and (RX_numpy.shape[0] > 4):
                     print("matching of", R0_obj, "and", RX_obj, "in", plate_id, well_id)
@@ -166,6 +196,18 @@ def link_nuclei(organoid, segname, rx_name, RX, z_anisotropy, org_seg_ch, nuc_se
                         # Add the measurement to the faim-hcs datastructure and save.
                         organoid.add_measurement(name, path)
                         organoid.save()  # updates json file
+
+                        # Save affine transformation matrix to organoid directory
+                        path = join(RX_savepath, "affine.npy")
+                        np.save(path, transform_affine, allow_pickle=False)
+                        # to load from saved file, use np.load('filepath')
+
+                        # Relabel RX segmentation images to match R0 labeling
+                        RX_numpy_matched = relabel_RX_numpy(RX_seg, affine_matches)
+                        
+                        # Save relabelled RX image
+                        path = join(RX_savepath, "relabelled.tif")
+                        imsave(path, RX_numpy_matched.astype(np.int16), check_contrast=False)
 
                     except Exception as e:
                         print(R0_obj, RX_obj, e)
@@ -195,3 +237,5 @@ def link_nuclei(organoid, segname, rx_name, RX, z_anisotropy, org_seg_ch, nuc_se
 
                     except Exception as e:
                         print(R0_obj, RX_obj, e)
+
+    return transform_affine, organoid, RX.plates[plate_id].wells[well_id].organoids[RX_obj], RX_seg, RX_savepath
