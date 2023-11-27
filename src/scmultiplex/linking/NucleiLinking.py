@@ -203,7 +203,8 @@ def link_nuclei(organoid, segname, rx_name, RX, z_anisotropy, org_seg_ch, nuc_se
                         # to load from saved file, use np.load('filepath')
 
                         # Relabel RX segmentation images to match R0 labeling
-                        RX_numpy_matched = relabel_RX_numpy(RX_seg, affine_matches)
+                        RX_numpy_matched = relabel_RX_numpy(RX_seg, affine_matches, moving_colname='RX_nuc_id',
+                                                            fixed_colname='R0_nuc_id', daskarr=False)
                         
                         # Save relabelled RX image
                         path = join(RX_savepath, "relabelled.tif")
