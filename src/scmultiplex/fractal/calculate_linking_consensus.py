@@ -92,6 +92,7 @@ def calculate_linking_consensus(
         f"{acquisition_dict}"
     )
 
+    # TODO: refactor to perform data merging on anndata without need to convert to pandas.
     # Collect all the ROI tables, dictionary key (round id): value (table as anndata)
     roi_tables = {}
     for acq in acquisition_dict.keys():
@@ -119,6 +120,12 @@ def calculate_linking_consensus(
     logger.info("Calculating consensus across cycles.")
 
     consensus = find_consensus(df_list=roi_df_list, on=["R" + str(reference_cycle) + "_label"])
+
+    consensus = consensus.sort_values(by=["R" + str(reference_cycle) + "_label"])
+    consensus['consensus_index'] = consensus.index.astype(np.float32)
+    consensus['consensus_label'] = consensus['consensus_index']+1
+
+    # Consensus table has columns ["R0_label", "R1_label", "R2_label", ... "consensus_index", 'consensus_label']
     logger.info(consensus)
 
     # Convert to adata
@@ -132,7 +139,6 @@ def calculate_linking_consensus(
     # Storing the calculated consensus ###
     ##############
 
-    # Consensus table has columns ["R0_label", "R1_label", "R2_label", ...]
     if not consensus_table_name:
         consensus_table_name = "object_linking_consensus"
 
