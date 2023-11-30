@@ -148,8 +148,11 @@ def make_object_dict(inv_cond, zarr_url_dict, roi_name):
             # determine objects from names of rows in anndata (obs_names)
             # note here FOV is NOT org_id from label map; it is the row index of FOV table (usually org_id - 1)
             # assume that org_id = FOV_id + 1; CAUTION may not always be the case?
-            
-            roi_set_well = list((well + (str(int(FOV)+1),)) for FOV in roi_an.obs_names)
+
+            if roi_an.obs_names.inferred_type != 'string':
+                roi_set_well = list((well + (str(int(FOV)+1),)) for FOV in roi_an.obs_names)
+            else:
+                roi_set_well = list((well + (str(FOV),)) for FOV in roi_an.obs_names)
             # generate tuple in form (plate, well_id, org_id)
             roi_set.extend(roi_set_well)
 
@@ -193,9 +196,9 @@ def load_imgs_from_object_dict(objects_randomized,
                                reset_origin=False):
 
     roi_npimg_dict = {}
-    
+
     # for each condition...
-    for cond in sorted(set(objects_randomized.keys())): 
+    for cond in sorted(set(objects_randomized.keys())):
         roi_npimg_dict[cond] = {}
 
         # for each object in condition...
@@ -203,7 +206,15 @@ def load_imgs_from_object_dict(objects_randomized,
             # extract path (by plate id, well id)
             zarr_url = Path(zarr_url_dict[obj[0:2]])
             # roi is third tuple element and convert to FOV_id
-            roi_of_interest = str(int(obj[2])-1)
+
+            # if roi is a string, assume loading well or FOV roi table
+            if isinstance(obj[2], str):
+                roi_of_interest = obj[2]
+
+            # else assume loading roi from segmentation, which is a number (float or int)
+            else:
+                # subtract 1 to get index of object id
+                roi_of_interest = str(int(obj[2]) - 1)
 
             npimg, scaleimg = load_intensity_roi(
                 zarr_url,
@@ -223,7 +234,6 @@ def load_imgs_from_object_dict(objects_randomized,
 def make_filtered_dict(all_objects, my_object_list, omit_my_list = False):
     
     filtered_objects = {}
-
     
     for cond in sorted(set(all_objects.keys())):
         roi_set = all_objects[cond]
@@ -235,7 +245,83 @@ def make_filtered_dict(all_objects, my_object_list, omit_my_list = False):
             # select images that are in my_object_list
             roi_set_filt=list(filter(lambda i: i in list(my_object_list), roi_set))
 
-
         filtered_objects[cond] = roi_set_filt
-    
+
     return filtered_objects
+
+
+def import_conditions_csv(zarr_url_dict, exp_path, plate_size, separate_by_plate_id=True):
+    # for each unique plate, load plate layout csv file
+    """
+    For each plate in experiment path, load plate layout csv file
+    The name of the csv file must match plate name e.g. plate_id.csv
+    plate_size is integer 18,24, 96 or 384
+    separate_by_plate_id if True appends suffix to condition name which is the plate name, ...
+        ... if False uses condition name directly as in CSV
+
+
+    """
+
+    conditions = {}
+
+    # for each unique plate, load plate layout csv file
+    for plate_id in np.unique(list(key[0] for key in zarr_url_dict)):
+        csv_name = plate_id + '.csv'
+        files = listdir(exp_path, only_dirs=False)
+
+        if csv_name not in files:
+            raise ValueError('cannot find .csv with plate layout for plate %s' % plate_id)
+
+        csv_path = os.path.join(exp_path, csv_name)
+
+        if plate_size == 18:
+            df_cond = pd.read_csv(csv_path, header=None).iloc[:3, :6]
+
+            index_lst = ["A", "B", "C"]
+            col_lst = [str(x) for x in range(1, 7)]
+
+        elif plate_size == 24:
+            df_cond = pd.read_csv(csv_path, header=None).iloc[:4, :6]
+
+            index_lst = ["A", "B", "C", "D"]
+            col_lst = [str(x) for x in range(1, 7)]
+
+        elif plate_size == 96:
+            df_cond = pd.read_csv(csv_path, header=None).iloc[:8, :12]
+
+            index_lst = ["A", "B", "C", "D", "E", "F", "G", "H"]
+            col_lst = [str(x) for x in range(1, 13)]
+
+        elif plate_size == 384:
+            df_cond = pd.read_csv(csv_path, header=None).iloc[:16, :24]
+
+            index_lst = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P"]
+            col_lst = [str(x) for x in range(1, 25)]
+
+        else:
+            raise ValueError('plate size does not match preset, must be 18, 24, 96, or 384 (integer)')
+
+        for i, el in enumerate(col_lst):
+            if len(el) == 1:
+                col_lst[i] = str(0) + el
+
+        # set df column and row names to match plate naming (e.g. A 01)
+        df_cond = df_cond.set_axis(index_lst, axis='index')
+        df_cond = df_cond.set_axis(col_lst, axis='columns')
+
+        # generate conditions dictionary where key is tuple ('plate_id', 'well_id')
+        # and value is a condition, as specified in plate layout csv
+        for i in index_lst:
+            for c in col_lst:
+                key = (plate_id, i + c)
+                value = df_cond.loc[i, c]
+
+                if separate_by_plate_id and pd.isnull(value) is False:
+                    value = str(plate_id) + '.' + str(value)
+
+                if key in zarr_url_dict.keys():
+                    # omit wells that are not in Fractal analysis, even if they are in your csv layout
+                    conditions[key] = str(value)
+
+    return conditions
+
