@@ -32,7 +32,8 @@ def plot_heatmap(df_hm, cmap, vmin, vmax, annot = True):
 
 # Function modified from Maurice
 def build_heatmap_df(plate_size):
-    
+    #TODO: refactor this function, lots of redundancy
+
     if plate_size == 384:
         index_lst = ["A", "B" , "C", "D", "E", "F", "G", "H", "I", "J", "K" , "L" , "M" , "N" , "O", "P"]
         col_lst = [str(x) for x in range(1,25)]
@@ -47,10 +48,17 @@ def build_heatmap_df(plate_size):
         for i,el in enumerate(col_lst):
             if len(el) == 1:
                 col_lst[i] = str(0)+el
+
+    if plate_size == 18:
+        index_lst = ["A", "B" , "C"]
+        col_lst = [str(x) for x in range(1,7)]
+        for i,el in enumerate(col_lst):
+            if len(el) == 1:
+                col_lst[i] = str(0)+el
         
     df_plot_HM = pd.DataFrame(np.nan, index = index_lst, columns = col_lst)
 
-    if (plate_size != 96) and (plate_size != 384):
+    if plate_size not in [18, 96, 384]:
         print("plate size not configured.")
 
     return df_plot_HM
@@ -148,71 +156,83 @@ def make_rgb_globalscale(r,g,b, r_range, g_range, b_range):
 
 
 # plot objects, one channel
-def plot_image_grid(roi_npimg_dict, brighten = 0.5, ncols=None, cmap='gray'):
+def plot_image_grid(roi_npimg_dict, brighten=0.5, ncols=None, cmap='gray'):
     '''Plot a grid of images'''
-    
-    imgs = [roi_npimg_dict[cond][obj][0] for cond in sorted(set(roi_npimg_dict.keys())) for obj in sorted(set(roi_npimg_dict[cond].keys()))]
-    plate_id = [obj[0] for cond in sorted(set(roi_npimg_dict.keys())) for obj in sorted(set(roi_npimg_dict[cond].keys()))]
-    well_id = [obj[1] for cond in sorted(set(roi_npimg_dict.keys())) for obj in sorted(set(roi_npimg_dict[cond].keys()))]
-    org_id = [obj[2] for cond in sorted(set(roi_npimg_dict.keys())) for obj in sorted(set(roi_npimg_dict[cond].keys()))] #note this value corresponds to organoid labelmap value (NOT feature index or FOV value)
+
+    imgs = [roi_npimg_dict[cond][obj][0] for cond in sorted(set(roi_npimg_dict.keys())) for obj in
+            sorted(set(roi_npimg_dict[cond].keys()))]
+    plate_id = [obj[0] for cond in sorted(set(roi_npimg_dict.keys())) for obj in
+                sorted(set(roi_npimg_dict[cond].keys()))]
+    well_id = [obj[1] for cond in sorted(set(roi_npimg_dict.keys())) for obj in
+               sorted(set(roi_npimg_dict[cond].keys()))]
+    org_id = [obj[2] for cond in sorted(set(roi_npimg_dict.keys())) for obj in sorted(set(roi_npimg_dict[
+                                                                                              cond].keys()))]
+    # note this value corresponds to organoid labelmap value (NOT feature index or FOV value)
+    print(well_id, org_id)
     # note that if there are 0 organoids in a condition, it is skipped
     cond_id = [cond for cond in sorted(set(roi_npimg_dict.keys())) for obj in sorted(set(roi_npimg_dict[cond].keys()))]
-    
+
     conditions = sorted(np.unique(cond_id))
-    nrows = len(conditions) # nrows is the number of conditions
-    
-    ncols = float('-inf') # Initialize
+    nrows = len(conditions)  # nrows is the number of conditions
+
+    ncols = float('-inf')  # Initialize
     for array in roi_npimg_dict.values():
         array_length = len(array)
         ncols = max(ncols, array_length)
-    
-    
-    f, axes = plt.subplots(nrows, ncols, figsize=(4*ncols, 4*nrows), sharex=True, sharey=True, tight_layout=True)
-    
+
+    f, axes = plt.subplots(nrows, ncols, figsize=(4 * ncols, 4 * nrows), sharex=True, sharey=True,
+                           tight_layout=True, squeeze=False)
+
     xmax = np.amax([img.shape[1] for img in imgs])
     ymax = np.amax([img.shape[0] for img in imgs])
-    umax = np.amax([xmax, ymax]) # set box shape to square, and max of all organoid dims
-    
-    img_count = 0 # count number of images total in figure (including blanks)
-    plotted_count = 0 # count number of images already plotted
-    
+    umax = np.amax([xmax, ymax])  # set box shape to square, and max of all organoid dims
+
+    img_count = 0  # count number of images total in figure (including blanks)
+    plotted_count = 0  # count number of images already plotted
+
     for row in range(nrows):
         for col in range(ncols):
             plot_cond = conditions[row]
-            ax=axes[row][col] # axes for next image slot
+            ax = axes[row][col]  # axes for next image slot
             # if the image to be plotted is the correct condition for this row, plot it. if not, plot empty img
             if cond_id[plotted_count] == plot_cond:
-                img=imgs[plotted_count]
-                p=plate_id[plotted_count]
-                w=well_id[plotted_count]
-                o=org_id[plotted_count]
-                c=cond_id[plotted_count]
-                ax.imshow(img, cmap=cmap, vmax = brighten * np.amax(img), origin = 'upper', extent=[(umax/2)-img.shape[1]/2., (umax/2)+img.shape[1]/2., (umax/2)-img.shape[0]/2., (umax/2)+img.shape[0]/2. ])
+                img = imgs[plotted_count]
+                p = plate_id[plotted_count]
+                w = well_id[plotted_count]
+                o = org_id[plotted_count]
+                c = cond_id[plotted_count]
+                ax.imshow(img, cmap=cmap, vmax=brighten * np.amax(img), origin='upper',
+                          extent=[(umax / 2) - img.shape[1] / 2., (umax / 2) + img.shape[1] / 2.,
+                                  (umax / 2) - img.shape[0] / 2., (umax / 2) + img.shape[0] / 2.])
                 ax.set_xlim(0, umax)
                 ax.set_ylim(umax, 0)
-                plotted_count += 1 # increment plotted count to mark image as "plotted"
+                ax.grid(False)
+                plotted_count += 1  # increment plotted count to mark image as "plotted"
             else:
-                img = 0*imgs[0]
-                p='None'
-                w='None'
-                o='None'
-                c=plot_cond
-                ax.imshow(img, cmap=cmap, vmax = brighten * np.amax(img), origin = 'upper', extent=[(umax/2)-img.shape[1]/2., (umax/2)+img.shape[1]/2., (umax/2)-img.shape[0]/2., (umax/2)+img.shape[0]/2. ])
+                img = 0 * imgs[0]
+                p = 'None'
+                w = 'None'
+                o = 'None'
+                c = plot_cond
+                ax.imshow(img, cmap=cmap, vmax=brighten * np.amax(img), origin='upper',
+                          extent=[(umax / 2) - img.shape[1] / 2., (umax / 2) + img.shape[1] / 2.,
+                                  (umax / 2) - img.shape[0] / 2., (umax / 2) + img.shape[0] / 2.])
                 ax.set_xlim(0, umax)
                 ax.set_ylim(umax, 0)
-            
+                ax.grid(False)
+
             if img_count % ncols == 0:
-            # for first image of row, set cond in title name
-                ax.set_title(c + "\n" + p+' '+w+' '+o)
+                # for first image of row, set cond in title name
+                ax.set_title(str(c) + "\n" + p + ' ' + w + ' ' + o)
             else:
-                ax.set_title(p+' '+w+' '+o)
-        
-            img_count += 1 # to count images for setting condition title
+                ax.set_title(p + ' ' + w + ' ' + o)
+
+            img_count += 1  # to count images for setting condition title
 
 
 
 def plot_rgb_grid(r_dict, g_dict, b_dict, brighten = 0.5, ncols=None, min_quantile = 0, max_quantile = 0.999,
-                 global_norm = False, auto_range = True, ranges = ()):
+                 global_norm = False, ranges = ()):
     '''Plot a grid of images'''
     # ranges is tuple of ranges in order r,g,b ex. ((100,200), (120,3000), (120, 4567))
     
@@ -234,28 +254,29 @@ def plot_rgb_grid(r_dict, g_dict, b_dict, brighten = 0.5, ncols=None, min_quanti
     # add else statements for what happens for empty zero arrays 
     
     if global_norm:
-        if auto_range:
-            r_range = quantile_value_across_arrays(r_imgs,min_quantile,max_quantile)
-            g_range = quantile_value_across_arrays(g_imgs,min_quantile,max_quantile)
-            b_range = quantile_value_across_arrays(b_imgs,min_quantile,max_quantile)
-        else:
+        if len(ranges) > 1:
             r_range = ranges[0]
             g_range = ranges[1]
             b_range = ranges[2]
+        else:
+            r_range = quantile_value_across_arrays(r_imgs,min_quantile,max_quantile)
+            g_range = quantile_value_across_arrays(g_imgs,min_quantile,max_quantile)
+            b_range = quantile_value_across_arrays(b_imgs,min_quantile,max_quantile)
         print('r_range: ', r_range, 'g_range: ', g_range, 'b_range: ', b_range)
 
     
     plate_id = [obj[0] for cond in sorted(set(metadict.keys())) for obj in sorted(set(metadict[cond].keys()))]
     well_id = [obj[1] for cond in sorted(set(metadict.keys())) for obj in sorted(set(metadict[cond].keys()))]
-    org_id = [str(int(obj[2])+1) for cond in sorted(set(metadict.keys())) for obj in sorted(set(metadict[cond].keys()))] #note this value corresponds to organoid labelmap value (NOT feature index or FOV value)
+    org_id = [obj[2] for cond in sorted(set(metadict.keys())) for obj in sorted(set(metadict[cond].keys()))] #note this value corresponds to organoid labelmap value (NOT feature index or FOV value)
     cond_id = [cond for cond in sorted(set(metadict.keys())) for obj in sorted(set(metadict[cond].keys()))]
-    
+
     conditions = sorted(np.unique(cond_id))
     nrows = len(conditions) # nrows is the number of conditions
     ncols = math.ceil(sum(len(v) for v in metadict.values()) / len(metadict)) # ncols is number of samples
     
     
-    f, axes = plt.subplots(nrows, ncols, figsize=(4*ncols, 4*nrows), sharex=True, sharey=True, tight_layout=True)
+    f, axes = plt.subplots(nrows, ncols, figsize=(4*ncols, 4*nrows),
+                           sharex=True, sharey=True, tight_layout=True, squeeze=False)
 
     
     #would break if r_dict is a zero array! FIX
@@ -291,6 +312,7 @@ def plot_rgb_grid(r_dict, g_dict, b_dict, brighten = 0.5, ncols=None, min_quanti
                          extent=[(umax/2)-rgb_uint8.shape[1]/2., (umax/2)+rgb_uint8.shape[1]/2., (umax/2)-rgb_uint8.shape[0]/2., (umax/2)+rgb_uint8.shape[0]/2. ])
                 ax.set_xlim(0, umax)
                 ax.set_ylim(umax, 0)
+                ax.grid(False)
 
                 plotted_count += 1 # increment plotted count to mark image as "plotted"
             #TODO would not work if first condition is empty and rgb_uint8 does not exist
@@ -306,10 +328,11 @@ def plot_rgb_grid(r_dict, g_dict, b_dict, brighten = 0.5, ncols=None, min_quanti
                          extent=[(umax/2)-rgb_uint8.shape[1]/2., (umax/2)+rgb_uint8.shape[1]/2., (umax/2)-rgb_uint8.shape[0]/2., (umax/2)+rgb_uint8.shape[0]/2. ])
                 ax.set_xlim(0, umax)
                 ax.set_ylim(umax, 0)
+                ax.grid(False)
 
             if img_count % ncols == 0:
             # for first image of row, set cond in title name
-                ax.set_title(c + "\n" + p+' '+w+' '+o)
+                ax.set_title(str(c) + "\n" + p+' '+w+' '+o)
             else:
                 ax.set_title(p+' '+w+' '+o)
 
@@ -322,6 +345,7 @@ def plot_single_image(c01_npimg_dict, cond = 'd3-P1.04', plate_id = '20230712-d3
     plt.figure(figsize=(5,5))
     plt.imshow(im, cmap='gray')
     plt.colorbar(shrink=0.8)
+    plt.grid(False)
     
 
 def plot_single_rgb(r_dict, g_dict, b_dict, cond = 'd3-P1.04', plate_id = '20230712-d3-P1', well_id = 'B04', org_id = '12'):
@@ -419,11 +443,11 @@ def plot_pos_and_neg_sets(df_filtered, grouped, inv_cond,
         
     print('negative')
     plot_rgb_grid(r_neg_dict, g_neg_dict, b_neg_dict, ncols=None, min_quantile = min_quantile, max_quantile = max_quantile,
-                          global_norm = True, auto_range = False, ranges = ranges)
+                          global_norm = True, ranges = ranges)
 
     print('positive')
     plot_rgb_grid(r_pos_dict, g_pos_dict, b_pos_dict, ncols=None, min_quantile = min_quantile, max_quantile = max_quantile,
-                          global_norm = True, auto_range = False, ranges = ranges)
+                          global_norm = True, ranges = ranges)
         
         
         
