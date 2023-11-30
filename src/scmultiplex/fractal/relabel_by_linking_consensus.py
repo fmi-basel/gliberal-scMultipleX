@@ -89,6 +89,9 @@ def relabel_by_linking_consensus(
 
     alignment_cycle = rx_zarr_path.name
 
+    new_label_name = label_name + '_consensus'
+    new_table_name = table_to_relabel + '_consensus'
+
     ##############
     #  Relabel ROI table
     ##############
@@ -126,18 +129,21 @@ def relabel_by_linking_consensus(
     # logger.info(bdata.obs)
 
     # Save the linking table as a new table in round directory
-    new_name = table_to_relabel + '_consensus'
     image_group = zarr.group(f"{rx_zarr_path}")
+
+    # TODO Temporary fix to write correct path to label in table zattr
+    table_attrs['region']['path'] = f"../labels/{new_label_name}"
+
     write_table(
         image_group,
-        new_name,
+        new_table_name,
         bdata,
         overwrite=True,
         table_attrs=table_attrs,
     )
 
     logger.info(
-        f"Saved the relabeled ROI table {new_name} in round {alignment_cycle} tables directory"
+        f"Saved the relabeled ROI table {new_table_name} in round {alignment_cycle} tables directory"
     )
 
     ##############
@@ -155,7 +161,9 @@ def relabel_by_linking_consensus(
     label_attrs = get_zattrs(zarr_url=f"{rx_zarr_path}/labels/{label_name}")
 
     rx_zarr_out = Path(output_path) / component
-    new_label_name = label_name + '_consensus'
+
+    # TODO Temporary fix to write correct label name to label zattr
+    label_attrs['multiscales'][0]['name'] = new_label_name
 
     # useful check for overwriting, adds metadata to labels group
     _ = prepare_label_group(
