@@ -148,8 +148,11 @@ def make_object_dict(inv_cond, zarr_url_dict, roi_name):
             # determine objects from names of rows in anndata (obs_names)
             # note here FOV is NOT org_id from label map; it is the row index of FOV table (usually org_id - 1)
             # assume that org_id = FOV_id + 1; CAUTION may not always be the case?
-            
-            roi_set_well = list((well + (str(int(FOV)+1),)) for FOV in roi_an.obs_names)
+
+            if roi_an.obs_names.inferred_type != 'string':
+                roi_set_well = list((well + (str(int(FOV)+1),)) for FOV in roi_an.obs_names)
+            else:
+                roi_set_well = list((well + (str(FOV),)) for FOV in roi_an.obs_names)
             # generate tuple in form (plate, well_id, org_id)
             roi_set.extend(roi_set_well)
 
@@ -193,9 +196,9 @@ def load_imgs_from_object_dict(objects_randomized,
                                reset_origin=False):
 
     roi_npimg_dict = {}
-    
+
     # for each condition...
-    for cond in sorted(set(objects_randomized.keys())): 
+    for cond in sorted(set(objects_randomized.keys())):
         roi_npimg_dict[cond] = {}
 
         # for each object in condition...
@@ -203,7 +206,15 @@ def load_imgs_from_object_dict(objects_randomized,
             # extract path (by plate id, well id)
             zarr_url = Path(zarr_url_dict[obj[0:2]])
             # roi is third tuple element and convert to FOV_id
-            roi_of_interest = str(int(obj[2])-1)
+
+            # if roi is a string, assume loading well or FOV roi table
+            if isinstance(obj[2], str):
+                roi_of_interest = obj[2]
+
+            # else assume loading roi from segmentation, which is a number (float or int)
+            else:
+                # subtract 1 to get index of object id
+                roi_of_interest = str(int(obj[2]) - 1)
 
             npimg, scaleimg = load_intensity_roi(
                 zarr_url,
@@ -223,7 +234,6 @@ def load_imgs_from_object_dict(objects_randomized,
 def make_filtered_dict(all_objects, my_object_list, omit_my_list = False):
     
     filtered_objects = {}
-
     
     for cond in sorted(set(all_objects.keys())):
         roi_set = all_objects[cond]
@@ -234,7 +244,6 @@ def make_filtered_dict(all_objects, my_object_list, omit_my_list = False):
         else:
             # select images that are in my_object_list
             roi_set_filt=list(filter(lambda i: i in list(my_object_list), roi_set))
-
 
         filtered_objects[cond] = roi_set_filt
     
