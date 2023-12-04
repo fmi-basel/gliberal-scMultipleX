@@ -186,6 +186,36 @@
       "task": {
         "source": "pip_local:fractal_tasks_core:0.14.0a0:fractal-tasks::napari_workflows_wrapper"
       }
+    },
+    {
+      "meta": {
+        "cpus_per_task": 4,
+        "mem": 16000,
+        "needs_gpu": true,
+        "parallelization_level": "image"
+      },
+      "args": {
+        "input_ROI_table": "FOV_ROI_table",
+        "use_masks": true,
+        "relabeling": true,
+        "diameter_level0": 1000,
+        "model_type": "cyto2",
+        "cellprob_threshold": 0,
+        "flow_threshold": 0.4,
+        "min_size": 15,
+        "augment": false,
+        "net_avg": false,
+        "use_gpu": true,
+        "overwrite": true,
+        "level": 2,
+        "channel": {
+          "wavelength_id": "A01_C01"
+        },
+        "output_label_name": "empty"
+      },
+      "task": {
+        "source": "pip_local:fractal_tasks_core:0.14.0a0:fractal-tasks::cellpose_segmentation"
+      }
     }
   ]
 }
