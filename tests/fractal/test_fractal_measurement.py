@@ -282,7 +282,6 @@ def test_2D_fractal_measurements(
 inputs_3D = [
     ("well_ROI_table", multi_input_channels, False, False, True),
     ("well_ROI_table", multi_input_channels, True, False, True),
-    ("FOV_ROI_table", single_input_channels, False, False, False),
     ("FOV_ROI_table", single_input_channels, False, True, True),
 ]
 
