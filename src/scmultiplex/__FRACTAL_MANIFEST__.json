@@ -130,6 +130,235 @@
       },
       "docs_info": "Measurements of intensities and morphologies\n\nWrapper task for scmultiplex measurements for Fractal to generate\nmeasurements of intensities and morphologies",
       "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+    },
+    {
+      "name": "scMultipleX Calculate Object Linking",
+      "executable": "fractal/calculate_object_linking.py",
+      "input_type": "zarr",
+      "output_type": "zarr",
+      "meta": {
+        "cpus_per_task": 4,
+        "mem": 16000,
+        "parallelization_level": "image"
+      },
+      "args_schema": {
+        "title": "CalculateObjectLinking",
+        "type": "object",
+        "properties": {
+          "input_paths": {
+            "title": "Input Paths",
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of input paths where the image data is stored as OME-Zarrs. Should point to the parent folder containing one or many OME-Zarr files, not the actual OME-Zarr file. Example: `[\"/some/path/\"]`. This task only supports a single input path. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "output_path": {
+            "title": "Output Path",
+            "type": "string",
+            "description": "This parameter is not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "component": {
+            "title": "Component",
+            "type": "string",
+            "description": "Path to the OME-Zarr image in the OME-Zarr plate that is processed. Example: `\"some_plate.zarr/B/03/0\"`. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "metadata": {
+            "title": "Metadata",
+            "type": "object",
+            "description": "This parameter is not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "label_name": {
+            "title": "Label Name",
+            "type": "string",
+            "description": "Label name that will be used for label-based registration; e.g. `org` from object segmentation."
+          },
+          "roi_table": {
+            "title": "Roi Table",
+            "default": "well_ROI_table",
+            "type": "string",
+            "description": "Name of the ROI table over which the task loops to calculate the registration. Examples: `FOV_ROI_table` => loop over the field of views, `well_ROI_table` => process the whole well as one image."
+          },
+          "reference_cycle": {
+            "title": "Reference Cycle",
+            "default": 0,
+            "type": "integer",
+            "description": "Which cycle to register against. Defaults to 0, which is the first OME-Zarr image in the well (usually the first cycle that was provided)."
+          },
+          "level": {
+            "title": "Level",
+            "default": 2,
+            "type": "integer",
+            "description": "Pyramid level of the image to be segmented. Choose `0` to process at full resolution."
+          },
+          "iou_cutoff": {
+            "title": "Iou Cutoff",
+            "default": 0.2,
+            "type": "number",
+            "description": "Float in range 0 to 1 to specify intersection over union cutoff. Linked organoid pairs that have an iou below this value are filtered out."
+          },
+          "new_link_table": {
+            "title": "New Link Table",
+            "type": "string",
+            "description": "Optional name for the new, linking table between R0 and RX. If no name is given, it will default to \"object_linking\"."
+          }
+        },
+        "required": [
+          "input_paths",
+          "output_path",
+          "component",
+          "metadata",
+          "label_name"
+        ],
+        "additionalProperties": false
+      },
+      "docs_info": "Calculate registration based on images\n\nThis task consists of 3 parts:\n\n1. Loading the images of a given ROI (=> loop over ROIs)\n2. Calculating the transformation for that ROI\n3. Storing the calculated transformation in the ROI table\n\nParallelization level: image",
+      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+    },
+    {
+      "name": "scMultipleX Calculate Linking Consensus",
+      "executable": "fractal/calculate_linking_consensus.py",
+      "input_type": "zarr",
+      "output_type": "zarr",
+      "meta": {
+        "cpus_per_task": 4,
+        "mem": 16000,
+        "parallelization_level": "well"
+      },
+      "args_schema": {
+        "title": "CalculateLinkingConsensus",
+        "type": "object",
+        "properties": {
+          "input_paths": {
+            "title": "Input Paths",
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of input paths where the image data is stored as OME-Zarrs. Should point to the parent folder containing one or many OME-Zarr files, not the actual OME-Zarr file. Example: `[\"/some/path/\"]`. This task only supports a single input path. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "output_path": {
+            "title": "Output Path",
+            "type": "string",
+            "description": "This parameter is not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "component": {
+            "title": "Component",
+            "type": "string",
+            "description": "Path to the OME-Zarr image in the OME-Zarr plate that is processed. Example: `\"some_plate.zarr/B/03`. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "metadata": {
+            "title": "Metadata",
+            "type": "object",
+            "description": "This parameter is not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "roi_table": {
+            "title": "Roi Table",
+            "default": "object_linking",
+            "type": "string",
+            "description": "Name of the ROI table over which the task loops to calculate the registration. Examples: `FOV_ROI_table` => loop over the field of views, `well_ROI_table` => process the whole well as one image."
+          },
+          "reference_cycle": {
+            "title": "Reference Cycle",
+            "default": 0,
+            "type": "integer",
+            "description": "Which cycle to register against. Defaults to 0, which is the first OME-Zarr image in the well, usually the first cycle that was provided"
+          },
+          "consensus_table_name": {
+            "title": "Consensus Table Name",
+            "type": "string",
+            "description": "Optional name for the new, consensus linking table between R0 and RX. If no name is given, it will default to \"object_linking_consensus\"."
+          }
+        },
+        "required": [
+          "input_paths",
+          "output_path",
+          "component",
+          "metadata"
+        ],
+        "additionalProperties": false
+      },
+      "docs_info": "Applies pre-calculated registration to ROI tables.\n\nApply pre-calculated registration such that resulting ROIs contain\nthe consensus align region between all cycles.\n\nParallelization level: well",
+      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+    },
+    {
+      "name": "scMultipleX Relabel by Linking Consensus",
+      "executable": "fractal/relabel_by_linking_consensus.py",
+      "input_type": "zarr",
+      "output_type": "zarr",
+      "meta": {
+        "cpus_per_task": 4,
+        "mem": 16000,
+        "parallelization_level": "image"
+      },
+      "args_schema": {
+        "title": "RelabelByLinkingConsensus",
+        "type": "object",
+        "properties": {
+          "input_paths": {
+            "title": "Input Paths",
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of input paths where the image data is stored as OME-Zarrs. Should point to the parent folder containing one or many OME-Zarr files, not the actual OME-Zarr file. Example: `[\"/some/path/\"]`. This task only supports a single input path. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "output_path": {
+            "title": "Output Path",
+            "type": "string",
+            "description": "This parameter is not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "component": {
+            "title": "Component",
+            "type": "string",
+            "description": "Path to the OME-Zarr image in the OME-Zarr plate that is processed. Example: `\"some_plate.zarr/B/03/0\"`. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "metadata": {
+            "title": "Metadata",
+            "type": "object",
+            "description": "This parameter is not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "label_name": {
+            "title": "Label Name",
+            "type": "string",
+            "description": "Label name that will be used for label-based registration; e.g. `org` from object segmentation."
+          },
+          "roi_table": {
+            "title": "Roi Table",
+            "default": "well_ROI_table",
+            "type": "string",
+            "description": "Name of the ROI table over which the task loops to calculate the registration. Examples: `FOV_ROI_table` => loop over the field of views, `well_ROI_table` => process the whole well as one image."
+          },
+          "consensus_table": {
+            "title": "Consensus Table",
+            "default": "object_linking_consensus",
+            "type": "string",
+            "description": "Name of ROI table that contains consensus linking across all rounds"
+          },
+          "table_to_relabel": {
+            "title": "Table To Relabel",
+            "default": "org_ROI_table",
+            "type": "string",
+            "description": "Table name to relabel based on consensus, e.g. 'org_ROI_table'"
+          },
+          "reference_cycle": {
+            "title": "Reference Cycle",
+            "default": 0,
+            "type": "integer",
+            "description": "Which cycle to register against. Defaults to 0, which is the first OME-Zarr image in the well (usually the first cycle that was provided)."
+          }
+        },
+        "required": [
+          "input_paths",
+          "output_path",
+          "component",
+          "metadata",
+          "label_name"
+        ],
+        "additionalProperties": false
+      },
+      "docs_info": "Relabels image labels and ROI tables based on consensus linking.\n\nParallelization level: image",
+      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
     }
   ],
   "has_args_schemas": true,

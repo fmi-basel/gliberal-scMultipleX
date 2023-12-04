@@ -11,6 +11,7 @@
 import time
 import warnings
 
+import dask.array as da
 import numpy as np
 import os.path
 import SimpleITK as sitk
@@ -204,8 +205,8 @@ def run_affine(moving_pc, fixed_pc, ransac_iterations, icp_iterations):
 
     results_affine = np.column_stack(
         (
-            moving_ids[row_indices].transpose(),
             fixed_ids[col_indices].transpose(),
+            moving_ids[row_indices].transpose(),
             cost_matrix[row_indices, col_indices],
             confidence[row_indices, col_indices],
         )
@@ -296,9 +297,9 @@ def run_ffd(
 
     # Return matching ids
     results_ffd = np.column_stack(
-        (
-            moving_ffd_ids[row_indices].transpose(),
+        (   
             fixed_ids[col_indices].transpose(),
+            moving_ffd_ids[row_indices].transpose(),
             cost_matrix[row_indices, col_indices],
         )
     )
@@ -332,3 +333,27 @@ def generate_ffd_rawimage_from_affine(moving_transformed_affine_raw_image,
     return moving_transformed_ffd_raw_image
 
 
+def relabel_RX_numpy(RX_seg, matches, moving_colname='RX_nuc_id', fixed_colname='R0_nuc_id', daskarr=False):
+    """
+    Relabel RX label map to match R0 labels based on linking. Matches is affine or ffd pandas df after platymatch matching
+    """
+    # key is moving_label, value is fixed_label
+    matching_dict = make_linking_dict(matches, moving_colname, fixed_colname)
+
+    if daskarr:
+        RX_numpy_matched = da.zeros_like(RX_seg)
+
+    else:
+        RX_numpy_matched = np.zeros_like(RX_seg)
+
+    # for each nuclear label in RX...
+    for l in filter(None, np.unique(matches[moving_colname])):
+        # set to r0 label
+        RX_numpy_matched[RX_seg == l] = matching_dict[l]
+        
+    return RX_numpy_matched
+
+
+def make_linking_dict(matches, moving_colname, fixed_colname):
+    linking_dict = matches.set_index(moving_colname).T.to_dict('index')[fixed_colname]
+    return linking_dict
