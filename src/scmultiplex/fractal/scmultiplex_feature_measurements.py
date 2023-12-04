@@ -28,6 +28,7 @@ from fractal_tasks_core.lib_channels import (
     get_channel_from_image_zarr,
 )
 from fractal_tasks_core.lib_input_models import Channel
+from fractal_tasks_core.lib_ngff import load_NgffImageMeta
 from fractal_tasks_core.lib_regions_of_interest import (
     convert_ROI_table_to_indices,
     is_ROI_table_valid,
@@ -35,7 +36,6 @@ from fractal_tasks_core.lib_regions_of_interest import (
 from fractal_tasks_core.lib_ROI_overlaps import find_overlaps_in_ROI_indices
 from fractal_tasks_core.lib_upscale_array import upscale_array
 from fractal_tasks_core.lib_write import write_table
-from fractal_tasks_core.lib_zattrs_utils import extract_zyx_pixel_sizes
 from pydantic.decorator import validate_arguments
 
 from scmultiplex.features.feature_wrapper import get_regionprops_measurements
@@ -132,9 +132,18 @@ def scmultiplex_feature_measurements(  # noqa: C901
     if len(input_paths) > 1:
         raise NotImplementedError("We currently only support a single in_path")
     in_path = Path(input_paths[0]).as_posix()
-    coarsening_xy = metadata["coarsening_xy"]
 
-    # Check output tables
+    # Read ROI table
+    zarrurl = f"{in_path}/{component}"
+    ROI_table = ad.read_zarr(f"{in_path}/{component}/tables/{input_ROI_table}")
+    # Load image metadata
+    ngff_image_meta = load_NgffImageMeta(zarrurl)
+    print(dir(ngff_image_meta))
+    # FIXME: Fix coarsening calculation => check if it works with the new test data
+    coarsening_xy = ngff_image_meta.coarsening_xy
+
+    # FIXME: Remove this check: now included in the overwrite table writing.
+    # Add a test to check for failure with this block, then remove it
     group_tables = zarr.group(f"{Path(output_path)}/{component}/tables/")
     current_tables = group_tables.attrs.asdict().get("tables") or []
     if output_table_name in current_tables:
@@ -143,7 +152,7 @@ def scmultiplex_feature_measurements(  # noqa: C901
             f"{output_table_name=} in {current_tables=}"
         )
 
-    # Load zattrs file and multiscales
+    # FIXME: Remove this with refactor. Load zattrs file and multiscales
     zattrs_file = f"{in_path}/{component}/.zattrs"
     with open(zattrs_file) as jsonfile:
         zattrs = json.load(jsonfile)
@@ -159,17 +168,13 @@ def scmultiplex_feature_measurements(  # noqa: C901
             "level are not currently supported"
         )
 
-    # Read ROI table
-    roi_table_path = f"{in_path}/{component}/tables/{input_ROI_table}"
-    ROI_table = ad.read_zarr(roi_table_path)
-
     # Read pixel sizes from zattrs file
     if input_channels:
-        full_res_pxl_sizes_zyx = extract_zyx_pixel_sizes(zattrs_file, level=0)
+        full_res_pxl_sizes_zyx = ngff_image_meta.get_pixel_sizes_zyx(level=0)
     else:
         # The label image may be lower resolution than the intensity images
-        zattrs_file_label = f"{in_path}/{component}/labels/{label_image}/.zattrs"
-        full_res_pxl_sizes_zyx = extract_zyx_pixel_sizes(zattrs_file_label, level=0)
+        ngff_label_image_meta = load_NgffImageMeta(f"{zarrurl}/labels/{label_image}")
+        full_res_pxl_sizes_zyx = ngff_label_image_meta.get_pixel_sizes_zyx(level=0)
 
     # Create list of indices for 3D FOVs spanning the entire Z direction
     list_indices = convert_ROI_table_to_indices(
