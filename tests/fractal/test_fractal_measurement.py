@@ -555,3 +555,35 @@ def test_overwrite(
                 allow_duplicate_labels=allow_duplicate_labels,
                 overwrite=overwrite,
             )
+
+
+# # The error I want to be raised isn't defined yet
+# def test_label_image_does_not_exist():
+#     input_ROI_table = "well_ROI_table"
+#     input_channels = multi_input_channels
+#     measure_morphology = False
+#     allow_duplicate_labels = False
+#     overwrite=True
+#     component = component_2D
+#     output_table_name = "Test"
+#     # Clear prior runs
+#     clear_tables_prior_run(output_table_name, component=component)
+
+#     # Prepare fractal task
+#     label_image = "nuclei_wrong"
+#     with pytest.raises(NotYetDefinedError):
+#         scmultiplex_feature_measurements(
+#             input_paths=input_paths,
+#             output_path=input_paths[0],
+#             metadata=metadata_2D,
+#             component=component,
+#             input_ROI_table=input_ROI_table,
+#             input_channels=input_channels,
+#             label_image=label_image,
+#             label_level=label_level,
+#             level=level,
+#             output_table_name=output_table_name,
+#             measure_morphology=measure_morphology,
+#             allow_duplicate_labels=allow_duplicate_labels,
+#             overwrite=overwrite,
+#         )
