@@ -31,11 +31,11 @@ from fractal_tasks_core.lib_input_models import Channel
 from fractal_tasks_core.lib_ngff import load_NgffImageMeta
 from fractal_tasks_core.lib_regions_of_interest import (
     convert_ROI_table_to_indices,
+    find_overlaps_in_ROI_indices,
     is_ROI_table_valid,
 )
-from fractal_tasks_core.lib_ROI_overlaps import find_overlaps_in_ROI_indices
+from fractal_tasks_core.lib_tables import write_table
 from fractal_tasks_core.lib_upscale_array import upscale_array
-from fractal_tasks_core.lib_write import write_table
 from pydantic.decorator import validate_arguments
 
 from scmultiplex.features.feature_wrapper import get_regionprops_measurements
@@ -138,35 +138,24 @@ def scmultiplex_feature_measurements(  # noqa: C901
     ROI_table = ad.read_zarr(f"{in_path}/{component}/tables/{input_ROI_table}")
     # Load image metadata
     ngff_image_meta = load_NgffImageMeta(zarrurl)
-    print(dir(ngff_image_meta))
-    # FIXME: Fix coarsening calculation => check if it works with the new test data
     coarsening_xy = ngff_image_meta.coarsening_xy
-
-    # FIXME: Remove this check: now included in the overwrite table writing.
-    # Add a test to check for failure with this block, then remove it
-    group_tables = zarr.group(f"{Path(output_path)}/{component}/tables/")
-    current_tables = group_tables.attrs.asdict().get("tables") or []
-    if output_table_name in current_tables:
-        raise ValueError(
-            f"{Path(output_path)}/{component}/tables/ already includes "
-            f"{output_table_name=} in {current_tables=}"
-        )
+    spacing = ngff_image_meta.get_pixel_sizes_zyx(level=level)
 
     # FIXME: Remove this with refactor. Load zattrs file and multiscales
-    zattrs_file = f"{in_path}/{component}/.zattrs"
-    with open(zattrs_file) as jsonfile:
-        zattrs = json.load(jsonfile)
-    multiscales = zattrs["multiscales"]
-    if len(multiscales) > 1:
-        raise NotImplementedError(
-            f"Found {len(multiscales)} multiscales, "
-            "but only one is currently supported."
-        )
-    if "coordinateTransformations" in multiscales[0].keys():
-        raise NotImplementedError(
-            "global coordinateTransformations at the multiscales "
-            "level are not currently supported"
-        )
+    # zattrs_file = f"{in_path}/{component}/.zattrs"
+    # with open(zattrs_file) as jsonfile:
+    #     zattrs = json.load(jsonfile)
+    # multiscales = zattrs["multiscales"]
+    # if len(multiscales) > 1:
+    #     raise NotImplementedError(
+    #         f"Found {len(multiscales)} multiscales, "
+    #         "but only one is currently supported."
+    #     )
+    # if "coordinateTransformations" in multiscales[0].keys():
+    #     raise NotImplementedError(
+    #         "global coordinateTransformations at the multiscales "
+    #         "level are not currently supported"
+    #     )
 
     # Read pixel sizes from zattrs file
     if input_channels:
@@ -246,9 +235,9 @@ def scmultiplex_feature_measurements(  # noqa: C901
         )
         # FIXME: More reliable way to get the correct scale? => switch to ome-zarr-py?
         # Would not work well with multiple different coordinateTransformations
-        spacing = multiscales[0]["datasets"][level]["coordinateTransformations"][0][
-            "scale"
-        ]
+        # spacing = multiscales[0]["datasets"][level]["coordinateTransformations"][0][
+        #     "scale"
+        # ]
         logger.info(f"Loaded {label_image=}")
     else:
         logger.info(
@@ -410,7 +399,6 @@ def scmultiplex_feature_measurements(  # noqa: C901
         output_table_name,
         measurement_table,
         overwrite=overwrite,
-        logger=logger,
     )
 
 

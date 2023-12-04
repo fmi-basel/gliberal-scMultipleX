@@ -8,6 +8,7 @@ import anndata as ad
 import pandas as pd
 import pytest
 from fractal_tasks_core.lib_input_models import Channel
+from fractal_tasks_core.lib_write import OverwriteNotAllowedError
 from pandas.testing import assert_frame_equal
 
 from scmultiplex.fractal.scmultiplex_feature_measurements import (
@@ -477,3 +478,80 @@ def test_empty_label(
     adata = ad.read_zarr(ad_path)
     assert len(adata) == 0
     assert adata.shape == (0, 0)
+
+
+@pytest.mark.filterwarnings("ignore:Transforming to str index.")
+@pytest.mark.filterwarnings(
+    "ignore:The dtype argument will be deprecated in anndata 0.10.0"
+)
+@pytest.mark.parametrize("overwrite", [True, False])
+def test_overwrite(
+    overwrite: bool,
+):
+    input_ROI_table = "well_ROI_table"
+    input_channels = multi_input_channels
+    measure_morphology = False
+    allow_duplicate_labels = False
+
+    component = component_2D
+    try:
+        output_table_name = f"table_overwrite_{overwrite}"
+    except TypeError:
+        output_table_name = (
+            f"table_{input_ROI_table}_0_{measure_morphology}_{level}_{label_level}"
+        )
+    # Clear prior runs
+    clear_tables_prior_run(output_table_name, component=component)
+
+    # Prepare fractal task
+    label_image = "nuclei"
+    scmultiplex_feature_measurements(
+        input_paths=input_paths,
+        output_path=input_paths[0],
+        metadata=metadata_2D,
+        component=component,
+        input_ROI_table=input_ROI_table,
+        input_channels=input_channels,
+        label_image=label_image,
+        label_level=label_level,
+        level=level,
+        output_table_name=output_table_name,
+        measure_morphology=measure_morphology,
+        allow_duplicate_labels=allow_duplicate_labels,
+        overwrite=overwrite,
+    )
+
+    if overwrite:
+        scmultiplex_feature_measurements(
+            input_paths=input_paths,
+            output_path=input_paths[0],
+            metadata=metadata_2D,
+            component=component,
+            input_ROI_table=input_ROI_table,
+            input_channels=input_channels,
+            label_image=label_image,
+            label_level=label_level,
+            level=level,
+            output_table_name=output_table_name,
+            measure_morphology=measure_morphology,
+            allow_duplicate_labels=allow_duplicate_labels,
+            overwrite=overwrite,
+        )
+
+    else:
+        with pytest.raises(OverwriteNotAllowedError):
+            scmultiplex_feature_measurements(
+                input_paths=input_paths,
+                output_path=input_paths[0],
+                metadata=metadata_2D,
+                component=component,
+                input_ROI_table=input_ROI_table,
+                input_channels=input_channels,
+                label_image=label_image,
+                label_level=label_level,
+                level=level,
+                output_table_name=output_table_name,
+                measure_morphology=measure_morphology,
+                allow_duplicate_labels=allow_duplicate_labels,
+                overwrite=overwrite,
+            )
