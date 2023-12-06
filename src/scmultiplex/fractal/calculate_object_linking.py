@@ -8,7 +8,7 @@
 #
 
 """
-Calculates linking tables for segmented objects
+Calculates linking tables for segmented objects in a well
 """
 import logging
 from pathlib import Path
@@ -52,16 +52,16 @@ def calculate_object_linking(
         reference_cycle: int = 0,
         level: int = 2,
         iou_cutoff: float = 0.2,
-        new_link_table: Optional[str] = None,
 ) -> dict[str, Any]:
     """
-    Calculate registration based on images
+    Calculate object linking based on segmentation label map images
 
-    This task consists of 3 parts:
+    This task consists of 4 parts:
 
-    1. Loading the images of a given ROI (=> loop over ROIs)
-    2. Calculating the transformation for that ROI
-    3. Storing the calculated transformation in the ROI table
+    1. Load the object segmentation images for each well (paired reference and alignment round)
+    2. Calculate the shift transformation for the image pair
+    3. Apply shifts to image pair and identify matching object labels given an iou cutoff threshold
+    3. Store the identified matches as a linking table in alignment round directory
 
     Parallelization level: image
 
@@ -80,25 +80,20 @@ def calculate_object_linking(
             (standard argument for Fractal tasks, managed by Fractal server).
         label_name: Label name that will be used for label-based
             registration; e.g. `org` from object segmentation.
-        roi_table: Name of the ROI table over which the task loops to
-            calculate the registration. Examples: `FOV_ROI_table` => loop over
-            the field of views, `well_ROI_table` => process the whole well as
-            one image.
+        roi_table: Name of the well ROI table. Input ROI table must have single ROI entry;
+            e.g. `well_ROI_table`
         reference_cycle: Which cycle to register against. Defaults to 0,
             which is the first OME-Zarr image in the well (usually the first
             cycle that was provided).
         level: Pyramid level of the image to be segmented. Choose `0` to
             process at full resolution.
         iou_cutoff: Float in range 0 to 1 to specify intersection over union cutoff.
-            Linked organoid pairs that have an iou below this value are filtered out.
-        new_link_table: Optional name for the new, linking table between R0 and RX. If no
-            name is given, it will default to "object_linking".
-
-
+            Object pairs that have an iou below this value are filtered out and stored in linking table.
     """
+
     logger.info(
         f"Running for {input_paths=}, {component=}. \n"
-        f"Calculating translation registration per {roi_table=} for "
+        f"Calculating object linking with {roi_table=} for "
         f"{label_name=}."
     )
     # Set OME-Zarr paths
@@ -111,14 +106,14 @@ def calculate_object_linking(
     alignment_cycle = rx_zarr_path.name
     if alignment_cycle == str(reference_cycle):
         logger.info(
-            "Calculate registration image-based is running for "
+            "Calculate object linking is running for "
             f"cycle {alignment_cycle}, which is the reference_cycle."
             "Thus, exiting the task."
         )
         return {}
     else:
         logger.info(
-            "Calculate registration image-based is running for "
+            "Calculate object linking is running for "
             f"cycle {alignment_cycle}"
         )
 
@@ -126,6 +121,7 @@ def calculate_object_linking(
     r0_ngffmeta = load_NgffImageMeta(str(r0_zarr_path))
     rx_ngffmeta = load_NgffImageMeta(str(rx_zarr_path))
     r0_xycoars = r0_ngffmeta.coarsening_xy
+    rx_xycoars = rx_ngffmeta.coarsening_xy
     r0_pixmeta = r0_ngffmeta.get_pixel_sizes_zyx(level=0)
     rx_pixmeta = rx_ngffmeta.get_pixel_sizes_zyx(level=0)
 
@@ -159,8 +155,8 @@ def calculate_object_linking(
     rx_idlist = convert_ROI_table_to_indices(
         rx_adata,
         level=level,
-        coarsening_xy=r0_xycoars,
-        full_res_pxl_sizes_zyx=r0_pixmeta,
+        coarsening_xy=rx_xycoars,
+        full_res_pxl_sizes_zyx=rx_pixmeta,
     )
     check_valid_ROI_indices(rx_idlist, roi_table)
 
@@ -181,6 +177,8 @@ def calculate_object_linking(
     # initialize variables
     compute = True
 
+    # TODO note that with [0] assume that ROI table has single ROI, i.e. it is a well overview.
+    #  Consider generalizing to multi-ROI processing, e.g. for FOV ROI tables
     r0 = load_region(
         data_zyx=r0_dask,
         region=convert_indices_to_regions(r0_idlist[0]),
@@ -188,7 +186,7 @@ def calculate_object_linking(
     )
     rx = load_region(
         data_zyx=rx_dask,
-        region=convert_indices_to_regions(r0_idlist[0]),
+        region=convert_indices_to_regions(rx_idlist[0]),
         compute=compute,
     )
 
@@ -207,11 +205,11 @@ def calculate_object_linking(
     stat, link_df_unfiltered, link_df = calculate_matching(r0_pad, rx_pad_shifted, iou_cutoff)
 
     # log matching output
-    logger.info(f"{stat[2]} out of {stat[10]} RX_org are not matched to an " "R0_org.")
-    logger.info(f"{stat[4]} out of {stat[9]} R0_org are not matched to an " "RX_org.")
+    logger.info(f"{stat[2]} out of {stat[10]} alignment objects are NOT matched to a reference object.")
+    logger.info(f"{stat[4]} out of {stat[9]} reference objects are NOT matched to an alignment object.")
     logger.info(
-        f"removed {len(link_df_unfiltered) - len(link_df)} out of {len(link_df_unfiltered)} RX "
-        f"organoids that are not matched to R0."
+        f"removed {len(link_df_unfiltered) - len(link_df)} out of {len(link_df_unfiltered)} alignment "
+        f"objects that are not matched to reference."
     )
 
     # format output df and convert to anndata
@@ -228,19 +226,20 @@ def calculate_object_linking(
 
 
     ##############
-    # Storing the calculated transformation ###
+    # Storing the calculated transformation in rx directory ###
     ##############
 
     # Generate linking table: 3 columns ["R0_label", "RX_label", "iou"], where are RX is R1,R2, etc
-    if not new_link_table:
-        new_link_table = "object_linking"
+    new_link_table = label_name + "_linking"
 
     # Save the shifted linking table as a new table
     logger.info(
-        f"Write the registered ROI table {new_link_table} for {alignment_cycle}"
+        f"Write the registered ROI table {new_link_table} for round {alignment_cycle}"
     )
 
     image_group = zarr.group(f"{rx_zarr_path}")
+
+    # TODO note saving in old standard; consider upgrading to new zattr table spec
     write_table(
         image_group,
         new_link_table,
