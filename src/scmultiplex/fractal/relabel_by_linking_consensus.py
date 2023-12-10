@@ -63,14 +63,12 @@ def relabel_by_linking_consensus(
             (standard argument for Fractal tasks, managed by Fractal server).
         metadata: This parameter is not used by this task.
             (standard argument for Fractal tasks, managed by Fractal server).
-        label_name: Label name that will be used for label-based
-            registration; e.g. `org` from object segmentation.
-        roi_table: Name of the ROI table over which the task loops to
-            calculate the registration. Examples: `FOV_ROI_table` => loop over
-            the field of views, `well_ROI_table` => process the whole well as
-            one image.
-        consensus_table: Name of ROI table that contains consensus linking across all rounds
-        table_to_relabel: Table name to relabel based on consensus, e.g. 'org_ROI_table'
+        label_name: Label name to be relabeled; e.g. `org` or `nuc`.
+        roi_table: Name of the ROI table that is parent of label_name. For example segmented
+            organoids or nuclei labels are usually unique across well and so `well_ROI_table` is used.
+        consensus_table: Name of ROI table that contains consensus linking for label_name across all rounds
+        table_to_relabel: Table name to relabel based on consensus linking. The table rows correspond
+            to label_name, e.g. 'org_ROI_table' or 'nuc_ROI_table'
         reference_cycle: Which cycle to register against. Defaults to 0,
             which is the first OME-Zarr image in the well (usually the first
             cycle that was provided).
@@ -177,6 +175,13 @@ def relabel_by_linking_consensus(
     # 2) Relabel image
 
     # Loop over linked labels and relabel. if label not in consensus, it is set to 0 (background).
+
+    # TODO: speed up, this is very slow for nuclei (3D)!
+
+    logger.info(
+        f"Relabeling {component=} image..."
+    )
+
     rx_dask_relabeled = relabel_RX_numpy(rx_dask, consensus_pd, moving_colname=moving_colname,
                                          fixed_colname=fixed_colname, daskarr=True)
 
