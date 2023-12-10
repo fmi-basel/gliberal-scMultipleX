@@ -410,6 +410,21 @@ def relabel_RX_numpy(RX_seg, matches, moving_colname='RX_nuc_id', fixed_colname=
     return RX_numpy_matched
 
 
+def remove_labels(seg_img, labels_to_remove, datatype):
+    """
+    Remove labels from segmentation image.
+    labels_to_remove is list of labels, and each value should match data format of
+    """
+    seg_img_relabeled = deepcopy(seg_img)
+
+    for lab in labels_to_remove:
+        lab = lab.astype(datatype)
+        seg_img_relabeled[seg_img_relabeled == lab.astype(datatype)] = 0
+
+    return seg_img_relabeled
+
+
 def make_linking_dict(matches, moving_colname, fixed_colname):
     linking_dict = matches.set_index(moving_colname).T.to_dict('index')[fixed_colname]
     return linking_dict
+
