@@ -9,6 +9,7 @@
 
 """
 Calculates consensus for linking tables across multiplexing rounds.
+Stores single consensus table in reference round directory.
 """
 import logging
 from typing import Any
@@ -79,7 +80,7 @@ def calculate_linking_consensus(
     logger.info(
         f"Running for {input_paths=}, {component=}. \n"
         f"Applying consensus finding to {roi_table=} and storing it as "
-        f"{consensus_table_name=}."
+        f"{consensus_table_name=} in reference round {reference_cycle} directory."
     )
 
     well_zarr_path = f"{input_paths[0]}/{component}"
