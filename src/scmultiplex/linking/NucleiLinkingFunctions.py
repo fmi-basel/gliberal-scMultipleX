@@ -17,6 +17,7 @@ import os.path
 import SimpleITK as sitk
 import sys
 import tifffile
+from copy import deepcopy
 from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
 
@@ -68,6 +69,29 @@ def calculate_size(mean, std):
     return size
 
 
+def calculate_quantiles(pc, q=0.5, column=-1):
+    """
+    Calculate mean and standard deviation of nuclear volumes in organoid
+    Helper function used during affine linking
+    q is quantile in range [0,1] to calclulate
+    """
+    quantile = np.quantile(pc[:, column].transpose(), q)
+    iqr = np.quantile(pc[:, column].transpose(), 0.75) - np.quantile(pc[:, column].transpose(), 0.25)
+    return quantile, iqr
+
+
+def calculate_nucleus_size_non_normal(moving_pc, fixed_pc, q=0.3):
+    """
+    Calculate lower size cutoff of nuclear volumes in organoid in fixed and moving image
+    Helper function used during affine linking
+    Uses medians and IQR to improve stability for not normal data inputs
+    """
+    moving_nuclei_size, _ = calculate_quantiles(moving_pc, q, column=-1)
+    fixed_nuclei_size, _ = calculate_quantiles(fixed_pc, q, column=-1)
+
+    return moving_nuclei_size, fixed_nuclei_size
+
+
 def calculate_nucleus_size(moving_pc, fixed_pc):
     """
     Calculate lower size cutoff of nuclear volumes in organoid in fixed and moving image
@@ -80,6 +104,37 @@ def calculate_nucleus_size(moving_pc, fixed_pc):
     fixed_nuclei_size = calculate_size(fixed_nuclei_size_mean, fixed_nuclei_size_std)
 
     return moving_nuclei_size, fixed_nuclei_size
+
+
+def filter_small_sizes(moving_pc, fixed_pc, column=-1, threshold=0.05):
+    """
+    Filter out nuclei with small volumes, presumed to be debris.
+    Column: index of column in numpy array that correspond to volume measurement
+    Threshold: multiplier that specifies cutoff for volumes below which nuclei are filtered out, float in range [0,1],
+        e.g. 0.05 means that 5% of median of nuclear volume distribution is used as cutoff.
+    Return filtered numpy array (moving_pc_filtered, fixed_pc_filtered) as well as logging metrics.
+    """
+    moving_median, _ = calculate_quantiles(moving_pc, q=0.5, column=column)
+    fixed_median, _ = calculate_quantiles(fixed_pc, q=0.5, column=column)
+
+    # generate boolean arrays for filtering
+    moving_row_selection = moving_pc[:, column].transpose() > (threshold * moving_median)
+    fixed_row_selection = fixed_pc[:, column].transpose() > (threshold * fixed_median)
+
+    # filter pc to remove small nuclei
+    moving_pc_filtered = moving_pc[moving_row_selection, :]
+    fixed_pc_filtered = fixed_pc[fixed_row_selection, :]
+
+    # return nuclear ids of removed nuclei, assume nuclear labels are first column (column 0)
+    moving_removed = moving_pc[~moving_row_selection, 0]
+    fixed_removed = fixed_pc[~fixed_row_selection, 0]
+
+    # calculate mean of removed nuclear sizes
+    moving_filtered_size_mean = np.mean(moving_pc[~moving_row_selection, column])
+    fixed_filtered_size_mean = np.mean(fixed_pc[~fixed_row_selection, column])
+
+    return (moving_pc_filtered, fixed_pc_filtered, moving_removed, fixed_removed,
+            moving_filtered_size_mean, fixed_filtered_size_mean)
 
 
 def run_affine(moving_pc, fixed_pc, ransac_iterations, icp_iterations):
@@ -102,14 +157,15 @@ def run_affine(moving_pc, fixed_pc, ransac_iterations, icp_iterations):
         transform_affine: affine transformation matrix, for use in FFD linking or for applying image transformation
     """
     # Obtain ids
-    moving_ids = moving_pc[:, 0].transpose()  # 1 x N
+    moving_ids = moving_pc[:, 0].transpose()  # (N,)
     moving_detections = np.flip(moving_pc[:, 1:-1], 1).transpose()  # z y x, 3 x N
 
-    fixed_ids = fixed_pc[:, 0].transpose()
-    fixed_detections = np.flip(fixed_pc[:, 1:-1], 1).transpose()
+    fixed_ids = fixed_pc[:, 0].transpose()  # (N,)
+    fixed_detections = np.flip(fixed_pc[:, 1:-1], 1).transpose()  # z y x, 3 x N
 
     # Calculate nucleus size
-    moving_nuclei_size, fixed_nuclei_size = calculate_nucleus_size(moving_pc, fixed_pc)
+    moving_nuclei_size, fixed_nuclei_size = calculate_nucleus_size_non_normal(moving_pc, fixed_pc, q=0.3)
+    # ransac error should be roughly cell diameter, in pixels
     ransac_error = 0.5 * (moving_nuclei_size ** (1 / 3) + fixed_nuclei_size ** (1 / 3))
 
     # Determine centroids
