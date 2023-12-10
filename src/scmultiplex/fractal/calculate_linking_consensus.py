@@ -41,7 +41,6 @@ def calculate_linking_consensus(
     # Task-specific arguments
     roi_table: str = "object_linking",
     reference_cycle: int = 0,
-    consensus_table_name: Optional[str] = None,
 ) -> dict[str, Any]:
     """
     Applies pre-calculated registration to ROI tables.
@@ -71,10 +70,11 @@ def calculate_linking_consensus(
         reference_cycle: Which cycle to register against. Defaults to 0,
             which is the first OME-Zarr image in the well, usually the first
             cycle that was provided
-        consensus_table_name: Optional name for the new, consensus linking table between R0 and RX. If no
-            name is given, it will default to "object_linking_consensus".
 
     """
+    # TODO: test this task on sample data with more than two rounds
+
+    consensus_table_name = roi_table + "_consensus"
 
     logger.info(
         f"Running for {input_paths=}, {component=}. \n"
@@ -138,9 +138,6 @@ def calculate_linking_consensus(
     ##############
     # Storing the calculated consensus ###
     ##############
-
-    if not consensus_table_name:
-        consensus_table_name = "object_linking_consensus"
 
     # Save the linking table as a new table in reference cycle directory
     logger.info(
