@@ -439,7 +439,7 @@ def remove_labels(seg_img, labels_to_remove, datatype):
 
     for lab in labels_to_remove:
         lab = lab.astype(datatype)
-        seg_img_relabeled[seg_img_relabeled == lab.astype(datatype)] = 0
+        seg_img_relabeled[seg_img_relabeled == lab] = 0
 
     return seg_img_relabeled
 
