@@ -182,15 +182,11 @@ def relabel_by_linking_consensus(
         f"Relabeling {component=} image..."
     )
 
-    rx_dask_relabeled = relabel_RX_numpy(rx_dask, consensus_pd, moving_colname=moving_colname,
-                                         fixed_colname=fixed_colname, daskarr=True)
+    rx_dask_relabeled, count_input, count_output = relabel_RX_numpy(rx_dask, consensus_pd,
+                                                                    moving_colname=moving_colname,
+                                                                    fixed_colname=fixed_colname, daskarr=True)
 
-    label_count = len(list(filter(None, np.unique(rx_dask_relabeled).compute_chunk_sizes())))
-
-    logger.info(
-        f"Relabeled {label_count} out of"
-        f" {len(list(filter(None, np.unique(rx_dask).compute_chunk_sizes())))} detected labels "
-    )
+    logger.info(f"Relabeled {count_output} out of {count_input} detected labels")
 
     # 3) Save changed label image to OME-Zarr
 
@@ -227,7 +223,7 @@ def relabel_by_linking_consensus(
 
     logger.info(f"Built a pyramid for the {new_label_name} label image")
 
-    if label_count != bdata.n_obs:
+    if count_output != bdata.n_obs:
         raise ValueError(
             "Label count in relabelled image must match length of relabelled table"
         )

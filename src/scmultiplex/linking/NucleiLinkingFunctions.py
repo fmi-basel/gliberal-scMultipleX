@@ -389,25 +389,45 @@ def generate_ffd_rawimage_from_affine(moving_transformed_affine_raw_image,
     return moving_transformed_ffd_raw_image
 
 
-def relabel_RX_numpy(RX_seg, matches, moving_colname='RX_nuc_id', fixed_colname='R0_nuc_id', daskarr=False):
+def relabel_RX_numpy(rx_seg, matches, moving_colname='RX_nuc_id', fixed_colname='R0_nuc_id', daskarr=False):
     """
     Relabel RX label map to match R0 labels based on linking. Matches is affine or ffd pandas df after platymatch matching
     """
     # key is moving_label, value is fixed_label
     matching_dict = make_linking_dict(matches, moving_colname, fixed_colname)
 
+    # convert to numpy if input is not numpy (e.g. if input is a dask array)
+    if not isinstance(rx_seg, np.ndarray):
+        rx_seg = np.asarray(rx_seg)
+
+    rx_numpy_matched = np.zeros_like(rx_seg)
+
+    # identify indexes that are non-zero
+    rx_seg_nonzero = np.nonzero(rx_seg)
+
+    # for each nonzero index, relabel if key is in dictionary
+    labels_in_input = set()
+    labels_in_output = set()
+    for nonzero_pixel in zip(*rx_seg_nonzero):
+
+        key = rx_seg[nonzero_pixel].item()
+        labels_in_input.add(key)
+
+        try:
+            relabeled_value = matching_dict[key]
+        except KeyError:
+            pass
+        else:
+            labels_in_output.add(relabeled_value)
+            rx_numpy_matched[tuple(nonzero_pixel)] = relabeled_value
+
+    count_input = len(labels_in_input)
+    count_output = len(labels_in_output)
+
     if daskarr:
-        RX_numpy_matched = da.zeros_like(RX_seg)
+        rx_numpy_matched = da.from_array(rx_numpy_matched)
 
-    else:
-        RX_numpy_matched = np.zeros_like(RX_seg)
-
-    # for each nuclear label in RX...
-    for l in filter(None, np.unique(matches[moving_colname])):
-        # set to r0 label
-        RX_numpy_matched[RX_seg == l] = matching_dict[l]
-        
-    return RX_numpy_matched
+    return rx_numpy_matched, count_input, count_output
 
 
 def remove_labels(seg_img, labels_to_remove, datatype):
