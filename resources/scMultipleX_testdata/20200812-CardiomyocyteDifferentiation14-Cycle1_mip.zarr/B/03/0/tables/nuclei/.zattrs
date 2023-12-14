@@ -1,4 +1,10 @@
 {
     "encoding-type": "anndata",
-    "encoding-version": "0.1.0"
+    "encoding-version": "0.1.0",
+    "fractal_table_version": "1",
+    "instance_key": "label",
+    "region": {
+        "path": "../labels/nuclei"
+    },
+    "type": "feature_table"
 }

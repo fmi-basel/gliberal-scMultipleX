@@ -147,6 +147,35 @@ def do_ransac_complete(U11, U12, U13, U14, U21, U22, U23, U24, moving_detections
                        processes=8):
     indices = list(map(linear_sum_assignment, [U11, U12, U13, U14, U21, U22, U23, U24]))
 
+    transformations = []
+    inliers = []
+    for row_indices, col_indices in indices:
+        (model, best_inliers) = fun(
+            dict(
+                data=(moving_detections[:, row_indices].T, fixed_detections[:, col_indices].T),
+                min_samples=ransac_samples,
+                max_trials=ransac_iterations,
+                residual_threshold=ransac_error,
+                model_class=AffineTransform3D,
+            )
+        )
+        if model is None:
+            print('Ransac0 failed, output[0], model')
+
+        if best_inliers is None:
+            print('Ransac0 failed, output[1], best_inliers')
+
+        transformations.append(model)
+        inliers.append(best_inliers.sum())
+
+    return transformations[np.argmax(inliers)], inliers
+
+
+def do_ransac_complete_multithread(U11, U12, U13, U14, U21, U22, U23, U24, moving_detections, fixed_detections, ransac_samples,
+                       ransac_iterations, ransac_error,
+                       processes=8):
+    indices = list(map(linear_sum_assignment, [U11, U12, U13, U14, U21, U22, U23, U24]))
+
     with Pool(processes=processes) as pool:
         results = [pool.apply_async(fun, [{
             "data": (moving_detections[:, row_indices].T, fixed_detections[:, col_indices].T),

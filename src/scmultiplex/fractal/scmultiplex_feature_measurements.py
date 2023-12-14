@@ -12,7 +12,6 @@ Copyright 2023 (C)
 Wrapper of scMultipleX measurements for Fractal
 """
 
-import json
 import logging
 from pathlib import Path
 from typing import Any, Dict, Sequence
@@ -23,19 +22,17 @@ import fractal_tasks_core
 import numpy as np
 import pandas as pd
 import zarr
-from fractal_tasks_core.lib_channels import (
-    ChannelNotFoundError,
-    get_channel_from_image_zarr,
-)
-from fractal_tasks_core.lib_input_models import Channel
-from fractal_tasks_core.lib_regions_of_interest import (
+
+from fractal_tasks_core.channels import get_channel_from_image_zarr, ChannelNotFoundError
+from fractal_tasks_core.channels import ChannelInputModel
+from fractal_tasks_core.ngff import load_NgffImageMeta
+from fractal_tasks_core.roi import (
     convert_ROI_table_to_indices,
+    find_overlaps_in_ROI_indices,
     is_ROI_table_valid,
 )
-from fractal_tasks_core.lib_ROI_overlaps import find_overlaps_in_ROI_indices
-from fractal_tasks_core.lib_upscale_array import upscale_array
-from fractal_tasks_core.lib_write import write_table
-from fractal_tasks_core.lib_zattrs_utils import extract_zyx_pixel_sizes
+from fractal_tasks_core.tables import write_table
+from fractal_tasks_core.upscale_array import upscale_array
 from pydantic.decorator import validate_arguments
 
 from scmultiplex.features.feature_wrapper import get_regionprops_measurements
@@ -57,7 +54,7 @@ def scmultiplex_feature_measurements(  # noqa: C901
     # Task-specific arguments:
     label_image: str,
     output_table_name: str,
-    input_channels: Dict[str, Channel] = None,
+    input_channels: Dict[str, ChannelInputModel] = None,
     input_ROI_table: str = "well_ROI_table",
     level: int = 0,
     label_level: int = 0,
@@ -132,44 +129,21 @@ def scmultiplex_feature_measurements(  # noqa: C901
     if len(input_paths) > 1:
         raise NotImplementedError("We currently only support a single in_path")
     in_path = Path(input_paths[0]).as_posix()
-    coarsening_xy = metadata["coarsening_xy"]
-
-    # Check output tables
-    group_tables = zarr.group(f"{Path(output_path)}/{component}/tables/")
-    current_tables = group_tables.attrs.asdict().get("tables") or []
-    if output_table_name in current_tables:
-        raise ValueError(
-            f"{Path(output_path)}/{component}/tables/ already includes "
-            f"{output_table_name=} in {current_tables=}"
-        )
-
-    # Load zattrs file and multiscales
-    zattrs_file = f"{in_path}/{component}/.zattrs"
-    with open(zattrs_file) as jsonfile:
-        zattrs = json.load(jsonfile)
-    multiscales = zattrs["multiscales"]
-    if len(multiscales) > 1:
-        raise NotImplementedError(
-            f"Found {len(multiscales)} multiscales, "
-            "but only one is currently supported."
-        )
-    if "coordinateTransformations" in multiscales[0].keys():
-        raise NotImplementedError(
-            "global coordinateTransformations at the multiscales "
-            "level are not currently supported"
-        )
 
     # Read ROI table
-    roi_table_path = f"{in_path}/{component}/tables/{input_ROI_table}"
-    ROI_table = ad.read_zarr(roi_table_path)
+    zarrurl = f"{in_path}/{component}"
+    ROI_table = ad.read_zarr(f"{in_path}/{component}/tables/{input_ROI_table}")
+    # Load image metadata
+    ngff_image_meta = load_NgffImageMeta(zarrurl)
+    ngff_label_image_meta = load_NgffImageMeta(f"{zarrurl}/labels/{label_image}")
+    coarsening_xy = ngff_image_meta.coarsening_xy
 
     # Read pixel sizes from zattrs file
     if input_channels:
-        full_res_pxl_sizes_zyx = extract_zyx_pixel_sizes(zattrs_file, level=0)
+        full_res_pxl_sizes_zyx = ngff_image_meta.get_pixel_sizes_zyx(level=0)
     else:
         # The label image may be lower resolution than the intensity images
-        zattrs_file_label = f"{in_path}/{component}/labels/{label_image}/.zattrs"
-        full_res_pxl_sizes_zyx = extract_zyx_pixel_sizes(zattrs_file_label, level=0)
+        full_res_pxl_sizes_zyx = ngff_label_image_meta.get_pixel_sizes_zyx(level=0)
 
     # Create list of indices for 3D FOVs spanning the entire Z direction
     list_indices = convert_ROI_table_to_indices(
@@ -217,7 +191,6 @@ def scmultiplex_feature_measurements(  # noqa: C901
             logger.info(f"Prepared input with {name=} and {input_channels[name]=}")
             logger.info(f"{input_image_arrays=}")
 
-    # FIXME: Add check whether label exists?
     input_label_image = da.from_zarr(
         f"{in_path}/{component}/labels/{label_image}/{label_level}"
     )
@@ -239,23 +212,12 @@ def scmultiplex_feature_measurements(  # noqa: C901
             axis=axis,
             pad_with_zeros=True,
         )
-        # FIXME: More reliable way to get the correct scale? => switch to ome-zarr-py?
-        # Would not work well with multiple different coordinateTransformations
-        spacing = multiscales[0]["datasets"][level]["coordinateTransformations"][0][
-            "scale"
-        ]
         logger.info(f"Loaded {label_image=}")
     else:
         logger.info(
             "No intensity images provided, only calculating measurement for "
             f"the label image {label_image}"
         )
-        zattrs_file_label = f"{in_path}/{component}/labels/{label_image}/.zattrs"
-        with open(zattrs_file_label) as jsonfile:
-            zattrs_label = json.load(jsonfile)
-        spacing = zattrs_label["multiscales"][0]["datasets"][level][
-            "coordinateTransformations"
-        ][0]["scale"]
 
     # Loop over ROIs to make measurements
     df_well = pd.DataFrame()
@@ -287,14 +249,14 @@ def scmultiplex_feature_measurements(  # noqa: C901
         if label_img.shape[0] == 1:
             logger.info("Label image is 2D only, processing with 2D options")
             label_img = np.squeeze(label_img, axis=0)
-            real_spacing = spacing[-2:]
+            real_spacing = full_res_pxl_sizes_zyx[-2:]
             is_2D = True
         elif len(label_img.shape) == 2:
             is_2D = True
-            real_spacing = spacing[-2:]
+            real_spacing = full_res_pxl_sizes_zyx[-2:]
         elif len(label_img.shape) == 3:
             is_2D = False
-            real_spacing = spacing[-3:]
+            real_spacing = full_res_pxl_sizes_zyx[-3:]
         else:
             raise NotImplementedError(
                 f"Loaded an image of shape {label_img.shape}. "
@@ -405,7 +367,11 @@ def scmultiplex_feature_measurements(  # noqa: C901
         output_table_name,
         measurement_table,
         overwrite=overwrite,
-        logger=logger,
+        table_attrs=dict(type="feature_table",
+                         fractal_table_version="1",
+                         region=dict(path=f"../labels/{label_image}"),
+                         instance_key="label",
+                         )
     )
 
 
