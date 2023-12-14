@@ -7,8 +7,8 @@ from pathlib import Path
 import anndata as ad
 import pandas as pd
 import pytest
-from fractal_tasks_core.lib_input_models import Channel
-from fractal_tasks_core.lib_write import OverwriteNotAllowedError
+from fractal_tasks_core.channels import ChannelInputModel
+from fractal_tasks_core.zarr_utils import OverwriteNotAllowedError
 from pandas.testing import assert_frame_equal
 
 from scmultiplex.fractal.scmultiplex_feature_measurements import (
@@ -136,11 +136,11 @@ columns_3D_intensity = [
 ]
 
 multi_input_channels = {
-    "C01": Channel(wavelength_id="A01_C01"),
-    "C02": Channel(wavelength_id="A01_C01"),
-    "C03": Channel(wavelength_id="A01_C01"),
+    "C01": ChannelInputModel(wavelength_id="A01_C01"),
+    "C02": ChannelInputModel(wavelength_id="A01_C01"),
+    "C03": ChannelInputModel(wavelength_id="A01_C01"),
 }
-single_input_channels = {"C01": Channel(wavelength_id="A01_C01")}
+single_input_channels = {"C01": ChannelInputModel(wavelength_id="A01_C01")}
 
 # TODO: Test measurements for level != 0? Not well supported yet
 level = 0

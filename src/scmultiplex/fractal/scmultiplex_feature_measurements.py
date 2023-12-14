@@ -22,19 +22,17 @@ import fractal_tasks_core
 import numpy as np
 import pandas as pd
 import zarr
-from fractal_tasks_core.lib_channels import (
-    ChannelNotFoundError,
-    get_channel_from_image_zarr,
-)
-from fractal_tasks_core.lib_input_models import Channel
-from fractal_tasks_core.lib_ngff import load_NgffImageMeta
-from fractal_tasks_core.lib_regions_of_interest import (
+
+from fractal_tasks_core.channels import get_channel_from_image_zarr, ChannelNotFoundError
+from fractal_tasks_core.channels import ChannelInputModel
+from fractal_tasks_core.ngff import load_NgffImageMeta
+from fractal_tasks_core.roi import (
     convert_ROI_table_to_indices,
     find_overlaps_in_ROI_indices,
     is_ROI_table_valid,
 )
-from fractal_tasks_core.lib_tables import write_table
-from fractal_tasks_core.lib_upscale_array import upscale_array
+from fractal_tasks_core.tables import write_table
+from fractal_tasks_core.upscale_array import upscale_array
 from pydantic.decorator import validate_arguments
 
 from scmultiplex.features.feature_wrapper import get_regionprops_measurements
@@ -56,7 +54,7 @@ def scmultiplex_feature_measurements(  # noqa: C901
     # Task-specific arguments:
     label_image: str,
     output_table_name: str,
-    input_channels: Dict[str, Channel] = None,
+    input_channels: Dict[str, ChannelInputModel] = None,
     input_ROI_table: str = "well_ROI_table",
     level: int = 0,
     label_level: int = 0,
@@ -369,6 +367,11 @@ def scmultiplex_feature_measurements(  # noqa: C901
         output_table_name,
         measurement_table,
         overwrite=overwrite,
+        table_attrs=dict(type="feature_table",
+                         fractal_table_version="1",
+                         region=dict(path=f"../labels/{label_image}"),
+                         instance_key="label",
+                         )
     )
 
 
