@@ -23,26 +23,21 @@ import pandas as pd
 import SimpleITK as sitk
 import sys
 
-import skimage
 import zarr
-from fractal_tasks_core.lib_channels import get_channel_from_image_zarr, OmeroChannel, ChannelNotFoundError
-from fractal_tasks_core.lib_upscale_array import upscale_array
-from fractal_tasks_core.lib_write import write_table
+from fractal_tasks_core.channels import get_channel_from_image_zarr, OmeroChannel, ChannelNotFoundError
+from fractal_tasks_core.upscale_array import upscale_array
+from fractal_tasks_core.tables import write_table
 from pydantic.decorator import validate_arguments
 
-from fractal_tasks_core.lib_ngff import load_NgffImageMeta
-from fractal_tasks_core.lib_input_models import Channel
-from fractal_tasks_core.lib_regions_of_interest import check_valid_ROI_indices
-from fractal_tasks_core.lib_regions_of_interest import (
+from fractal_tasks_core.channels import ChannelInputModel
+from fractal_tasks_core.ngff import load_NgffImageMeta
+from fractal_tasks_core.roi import (
+    check_valid_ROI_indices,
     convert_indices_to_regions,
-)
-from fractal_tasks_core.lib_regions_of_interest import (
     convert_ROI_table_to_indices,
-)
-from fractal_tasks_core.lib_regions_of_interest import load_region
+    load_region)
 
 from skimage.measure import regionprops_table
-
 
 # this is an hack to run platymatch without modifying its code. In some parts of the code
 # platymatch will import other submodules from itself in an absolute way (i.e. from platymatch.xxx import ....)
@@ -75,7 +70,7 @@ def calculate_platymatch_registration(
         save_transformation: bool = True,
         mask_by_parent: bool = True,
         calculate_ffd: bool = True,
-        seg_channel: Channel,
+        seg_channel: ChannelInputModel,
 
 ) -> dict[str, Any]:
     """
@@ -246,7 +241,6 @@ def calculate_platymatch_registration(
                 label=seg_channel.label,
             )
         except ChannelNotFoundError as e:
-            # TODO is tmp_channel set to None?
             logger.warning(
                 "Channel not found, exit from the task.\n"
                 f"Original error: {str(e)}"
@@ -550,13 +544,12 @@ def calculate_platymatch_registration(
 
         image_group = zarr.group(f"{rx_zarr_path}")
 
-        # TODO note saving in old standard; consider upgrading to new zattr table spec
         write_table(
             image_group,
             new_link_table,
             link_df_adata,
             overwrite=True,
-            table_attrs=dict(type="ngff:linking_table"),
+            table_attrs=dict(type="linking_table", fractal_table_version="1"),
         )
 
     # TODO refactor into a saving function
@@ -576,13 +569,12 @@ def calculate_platymatch_registration(
 
         image_group = zarr.group(f"{rx_zarr_path}")
 
-        # TODO note saving in old standard; consider upgrading to new zattr table spec
         write_table(
             image_group,
             new_link_table,
             link_df_adata,
             overwrite=True,
-            table_attrs=dict(type="ngff:linking_table"),
+            table_attrs=dict(type="linking_table", fractal_table_version="1"),
         )
 
     return {}
