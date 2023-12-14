@@ -1,4 +1,4 @@
-# Copyright 2022 (C) Friedrich Miescher Institute for Biomedical Research and
+# Copyright 2023 (C) Friedrich Miescher Institute for Biomedical Research and
 # University of Zurich
 #
 # Original authors:
@@ -13,25 +13,21 @@ Calculates linking tables for segmented objects in a well
 import logging
 from pathlib import Path
 from typing import Any
-from typing import Optional
 from typing import Sequence
 
 import anndata as ad
 import dask.array as da
 import numpy as np
 import zarr
-from fractal_tasks_core.lib_write import write_table
 from pydantic.decorator import validate_arguments
 
-from fractal_tasks_core.lib_ngff import load_NgffImageMeta
-from fractal_tasks_core.lib_regions_of_interest import check_valid_ROI_indices
-from fractal_tasks_core.lib_regions_of_interest import (
+from fractal_tasks_core.ngff import load_NgffImageMeta
+from fractal_tasks_core.roi import (
+    check_valid_ROI_indices,
     convert_indices_to_regions,
-)
-from fractal_tasks_core.lib_regions_of_interest import (
     convert_ROI_table_to_indices,
-)
-from fractal_tasks_core.lib_regions_of_interest import load_region
+    load_region)
+from fractal_tasks_core.tables import write_table
 
 from scmultiplex.linking.OrganoidLinkingFunctions import calculate_shift, apply_shift, calculate_matching
 
@@ -218,12 +214,12 @@ def calculate_object_linking(
                                       "RX_label": "R" + str(alignment_cycle) + "_label"})
     logger.info(link_df)
 
+    # TODO refactor into helper function and remove dtype argument from ad.AnnData
     link_df_adata = ad.AnnData(X=np.array(link_df), dtype=np.float32)
     obsnames = list(map(str, link_df.index))
     varnames = list(link_df.columns.values)
     link_df_adata.obs_names = obsnames
     link_df_adata.var_names = varnames
-
 
     ##############
     # Storing the calculated transformation in rx directory ###
@@ -239,13 +235,12 @@ def calculate_object_linking(
 
     image_group = zarr.group(f"{rx_zarr_path}")
 
-    # TODO note saving in old standard; consider upgrading to new zattr table spec
     write_table(
         image_group,
         new_link_table,
         link_df_adata,
         overwrite=True,
-        table_attrs=dict(type="ngff:linking_table"),
+        table_attrs=dict(type="linking_table", fractal_table_version="1"),
     )
 
     return {}

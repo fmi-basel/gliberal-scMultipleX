@@ -13,7 +13,6 @@ Stores single consensus table in reference round directory.
 """
 import logging
 from typing import Any
-from typing import Optional
 from typing import Sequence
 
 from functools import reduce
@@ -25,8 +24,8 @@ import zarr
 
 from pydantic.decorator import validate_arguments
 
-from fractal_tasks_core.lib_ngff import load_NgffWellMeta
-from fractal_tasks_core.lib_write import write_table
+from fractal_tasks_core.ngff import load_NgffWellMeta
+from fractal_tasks_core.tables import write_table
 
 logger = logging.getLogger(__name__)
 
@@ -152,7 +151,7 @@ def calculate_linking_consensus(
         consensus_table_name,
         consensus_adata,
         overwrite=True,
-        table_attrs=dict(type="ngff:linking_table"),
+        table_attrs=dict(type="linking_table", fractal_table_version="1"),
     )
 
     return {}

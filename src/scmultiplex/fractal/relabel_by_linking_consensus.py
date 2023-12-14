@@ -1,4 +1,4 @@
-# Copyright 2022 (C) Friedrich Miescher Institute for Biomedical Research and
+# Copyright 2023 (C) Friedrich Miescher Institute for Biomedical Research and
 # University of Zurich
 #
 # Original authors:
@@ -19,11 +19,11 @@ import anndata as ad
 import dask.array as da
 import numpy as np
 import zarr
-from fractal_tasks_core.lib_pyramid_creation import build_pyramid
-from fractal_tasks_core.lib_write import write_table, prepare_label_group
+from fractal_tasks_core.labels import prepare_label_group
+from fractal_tasks_core.ngff import load_NgffImageMeta
+from fractal_tasks_core.pyramids import build_pyramid
+from fractal_tasks_core.tables import write_table
 from pydantic.decorator import validate_arguments
-
-from fractal_tasks_core.lib_ngff import load_NgffImageMeta
 
 from scmultiplex.linking.NucleiLinkingFunctions import relabel_RX_numpy, make_linking_dict
 
@@ -160,9 +160,6 @@ def relabel_by_linking_consensus(
 
     rx_zarr_out = Path(output_path) / component
 
-    # TODO Temporary fix to write correct label name to label zattr
-    label_attrs['multiscales'][0]['name'] = new_label_name
-
     # useful check for overwriting, adds metadata to labels group
     _ = prepare_label_group(
         image_group=zarr.group(rx_zarr_out),
@@ -175,9 +172,6 @@ def relabel_by_linking_consensus(
     # 2) Relabel image
 
     # Loop over linked labels and relabel. if label not in consensus, it is set to 0 (background).
-
-    # TODO: speed up, this is very slow for nuclei (3D)!
-
     logger.info(
         f"Relabeling {component=} image..."
     )
