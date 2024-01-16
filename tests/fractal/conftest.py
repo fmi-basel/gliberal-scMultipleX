@@ -70,6 +70,134 @@ def tiny_zenodo_zarrs_base_path(tiny_zenodo_zarrs) -> Path:
     return str(Path(tiny_zenodo_zarrs[0]).parent)
 
 
+@pytest.fixture(scope="function")
+def metadata_tiny_zenodo() -> dict[str, dict]:
+    return {
+        "metadata_2D": {
+            "plate": ["20200812-CardiomyocyteDifferentiation14-Cycle1_mip.zarr"],
+            "well": ["20200812-CardiomyocyteDifferentiation14-Cycle1_mip.zarr/B/03/"],
+            "image": [
+                "20200812-CardiomyocyteDifferentiation14-Cycle1_mip.zarr/B/03/0/"
+            ],
+            "num_levels": 5,
+            "coarsening_xy": 2,
+            "image_extension": "png",
+            "image_glob_patterns": None,
+        },
+        "metadata_3D": {
+            "plate": ["20200812-CardiomyocyteDifferentiation14-Cycle1.zarr"],
+            "well": ["20200812-CardiomyocyteDifferentiation14-Cycle1.zarr/B/03/"],
+            "image": ["20200812-CardiomyocyteDifferentiation14-Cycle1.zarr/B/03/0/"],
+            "num_levels": 5,
+            "coarsening_xy": 2,
+            "image_extension": "png",
+            "image_glob_patterns": None,
+        },
+    }
+
+
+@pytest.fixture(scope="function")
+def column_names() -> dict[str, list]:
+    return {
+        "columns_2D_common": [
+            "label",
+            "ROI_table_name",
+            "ROI_name",
+            "index",
+            "x_pos_pix",
+            "y_pos_pix",
+        ],
+        "columns_2D_morphology": [
+            "is_touching_border_xy",
+            "imgdim_x",
+            "imgdim_y",
+            "area_bbox",
+            "area_convhull",
+            "equivDiam",
+            "extent",
+            "solidity",
+            "majorAxisLength",
+            "minorAxisLength",
+            "minmajAxisRatio",
+            "aspectRatio_equivalentDiameter",
+            "area_pix",
+            "perimeter",
+            "concavity",
+            "asymmetry",
+            "eccentricity",
+            "circularity",
+            "concavity_count",
+            "disconnected_components",
+        ],
+        "columns_2D_intensity": [
+            "{Ch}.mean_intensity",
+            "{Ch}.max_intensity",
+            "{Ch}.min_intensity",
+            "{Ch}.percentile25",
+            "{Ch}.percentile50",
+            "{Ch}.percentile75",
+            "{Ch}.percentile90",
+            "{Ch}.percentile95",
+            "{Ch}.percentile99",
+            "{Ch}.stdev",
+            "{Ch}.skew",
+            "{Ch}.kurtosis",
+            "{Ch}.x_pos_weighted_pix",
+            "{Ch}.y_pos_weighted_pix",
+            "{Ch}.x_massDisp_pix",
+            "{Ch}.y_massDisp_pix",
+        ],
+        "columns_3D_common": [
+            "label",
+            "ROI_table_name",
+            "ROI_name",
+            "index",
+            "x_pos_pix",
+            "y_pos_pix",
+            "z_pos_pix_scaled",
+            "z_pos_pix_img",
+            "volume_pix",
+        ],
+        "columns_3D_morphology": [
+            "is_touching_border_xy",
+            "imgdim_x",
+            "imgdim_y",
+            "area_bbox",
+            "area_convhull",
+            "equivDiam",
+            "extent",
+            "solidity",
+            "majorAxisLength",
+            "minorAxisLength",
+            "minmajAxisRatio",
+            "aspectRatio_equivalentDiameter",
+            "imgdim_z",
+            "is_touching_border_z",
+            "surface_area",
+        ],
+        "columns_3D_intensity": [
+            "{Ch}.mean_intensity",
+            "{Ch}.max_intensity",
+            "{Ch}.min_intensity",
+            "{Ch}.percentile25",
+            "{Ch}.percentile50",
+            "{Ch}.percentile75",
+            "{Ch}.percentile90",
+            "{Ch}.percentile95",
+            "{Ch}.percentile99",
+            "{Ch}.stdev",
+            "{Ch}.skew",
+            "{Ch}.kurtosis",
+            "{Ch}.x_pos_weighted_pix",
+            "{Ch}.y_pos_weighted_pix",
+            "{Ch}.x_massDisp_pix",
+            "{Ch}.y_massDisp_pix",
+            "{Ch}.z_pos_weighted_pix",
+            "{Ch}.z_massDisp_pix",
+        ],
+    }
+
+
 # @pytest.fixture(scope="function")
 # def zenodo_zarr_metadata(testdata_path: Path):
 #     metadata_3D = {

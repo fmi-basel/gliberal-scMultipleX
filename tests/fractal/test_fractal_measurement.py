@@ -12,127 +12,6 @@ from scmultiplex.fractal.scmultiplex_feature_measurements import (
     scmultiplex_feature_measurements,
 )
 
-# input_paths = [Path(get_tiny_zenodo_zarr_path())]
-# print(input_paths)
-metadata_2D = {
-    "plate": ["20200812-CardiomyocyteDifferentiation14-Cycle1_mip.zarr"],
-    "well": ["20200812-CardiomyocyteDifferentiation14-Cycle1_mip.zarr/B/03/"],
-    "image": ["20200812-CardiomyocyteDifferentiation14-Cycle1_mip.zarr/B/03/0/"],
-    "num_levels": 5,
-    "coarsening_xy": 2,
-    "image_extension": "png",
-    "image_glob_patterns": None,
-}
-
-metadata_3D = {
-    "plate": ["20200812-CardiomyocyteDifferentiation14-Cycle1.zarr"],
-    "well": ["20200812-CardiomyocyteDifferentiation14-Cycle1.zarr/B/03/"],
-    "image": ["20200812-CardiomyocyteDifferentiation14-Cycle1.zarr/B/03/0/"],
-    "num_levels": 5,
-    "coarsening_xy": 2,
-    "image_extension": "png",
-    "image_glob_patterns": None,
-}
-
-columns_2D_common = [
-    "label",
-    "ROI_table_name",
-    "ROI_name",
-    "index",
-    "x_pos_pix",
-    "y_pos_pix",
-]
-columns_2D_morphology = [
-    "is_touching_border_xy",
-    "imgdim_x",
-    "imgdim_y",
-    "area_bbox",
-    "area_convhull",
-    "equivDiam",
-    "extent",
-    "solidity",
-    "majorAxisLength",
-    "minorAxisLength",
-    "minmajAxisRatio",
-    "aspectRatio_equivalentDiameter",
-    "area_pix",
-    "perimeter",
-    "concavity",
-    "asymmetry",
-    "eccentricity",
-    "circularity",
-    "concavity_count",
-    "disconnected_components",
-]
-columns_2D_intensity = [
-    "{Ch}.mean_intensity",
-    "{Ch}.max_intensity",
-    "{Ch}.min_intensity",
-    "{Ch}.percentile25",
-    "{Ch}.percentile50",
-    "{Ch}.percentile75",
-    "{Ch}.percentile90",
-    "{Ch}.percentile95",
-    "{Ch}.percentile99",
-    "{Ch}.stdev",
-    "{Ch}.skew",
-    "{Ch}.kurtosis",
-    "{Ch}.x_pos_weighted_pix",
-    "{Ch}.y_pos_weighted_pix",
-    "{Ch}.x_massDisp_pix",
-    "{Ch}.y_massDisp_pix",
-]
-
-columns_3D_common = [
-    "label",
-    "ROI_table_name",
-    "ROI_name",
-    "index",
-    "x_pos_pix",
-    "y_pos_pix",
-    "z_pos_pix_scaled",
-    "z_pos_pix_img",
-    "volume_pix",
-]
-columns_3D_morphology = [
-    "is_touching_border_xy",
-    "imgdim_x",
-    "imgdim_y",
-    "area_bbox",
-    "area_convhull",
-    "equivDiam",
-    "extent",
-    "solidity",
-    "majorAxisLength",
-    "minorAxisLength",
-    "minmajAxisRatio",
-    "aspectRatio_equivalentDiameter",
-    "imgdim_z",
-    "is_touching_border_z",
-    "surface_area",
-]
-
-columns_3D_intensity = [
-    "{Ch}.mean_intensity",
-    "{Ch}.max_intensity",
-    "{Ch}.min_intensity",
-    "{Ch}.percentile25",
-    "{Ch}.percentile50",
-    "{Ch}.percentile75",
-    "{Ch}.percentile90",
-    "{Ch}.percentile95",
-    "{Ch}.percentile99",
-    "{Ch}.stdev",
-    "{Ch}.skew",
-    "{Ch}.kurtosis",
-    "{Ch}.x_pos_weighted_pix",
-    "{Ch}.y_pos_weighted_pix",
-    "{Ch}.x_massDisp_pix",
-    "{Ch}.y_massDisp_pix",
-    "{Ch}.z_pos_weighted_pix",
-    "{Ch}.z_massDisp_pix",
-]
-
 multi_input_channels = {
     "C01": ChannelInputModel(wavelength_id="A01_C01"),
     "C02": ChannelInputModel(wavelength_id="A01_C01"),
@@ -146,22 +25,6 @@ label_level = 0
 
 component_2D = "20200812-CardiomyocyteDifferentiation14-Cycle1_mip.zarr/B/03/0"
 component_3D = "20200812-CardiomyocyteDifferentiation14-Cycle1.zarr/B/03/0"
-
-
-# def clear_tables_prior_run(output_table_name, component):
-#     table_folder = Path(input_paths[0]) / component / "tables"
-#     existing_table_folder = table_folder / output_table_name
-#     if os.path.exists(existing_table_folder) and os.path.isdir(existing_table_folder):
-#         shutil.rmtree(existing_table_folder)
-#     zattrs_file = table_folder / ".zattrs"
-#     with open(zattrs_file, "r+") as f:
-#         data = json.load(f)
-
-#     if output_table_name in data["tables"]:
-#         os.remove(zattrs_file)
-#         data["tables"].remove(output_table_name)
-#         with open(zattrs_file, "w") as f:
-#             json.dump(data, f, indent=4)
 
 
 def load_features_for_well(table_path):
@@ -195,6 +58,8 @@ inputs_2D = [
 )
 def test_2D_fractal_measurements(
     tiny_zenodo_zarrs_base_path,
+    metadata_tiny_zenodo,
+    column_names,
     input_ROI_table,
     input_channels,
     measure_morphology,
@@ -209,8 +74,6 @@ def test_2D_fractal_measurements(
         output_table_name = (
             f"table_{input_ROI_table}_0_{measure_morphology}_{level}_{label_level}"
         )
-    # Clear prior runs
-    # clear_tables_prior_run(output_table_name, component=component)
 
     # Prepare fractal task
     label_image = "nuclei"
@@ -219,7 +82,7 @@ def test_2D_fractal_measurements(
             scmultiplex_feature_measurements(
                 input_paths=[base_path],
                 output_path=base_path,
-                metadata=metadata_2D,
+                metadata=metadata_tiny_zenodo["metadata_2D"],
                 component=component,
                 input_ROI_table=input_ROI_table,
                 input_channels=input_channels,
@@ -234,7 +97,7 @@ def test_2D_fractal_measurements(
         scmultiplex_feature_measurements(
             input_paths=[base_path],
             output_path=base_path,
-            metadata=metadata_2D,
+            metadata=metadata_tiny_zenodo["metadata_2D"],
             component=component,
             input_ROI_table=input_ROI_table,
             input_channels=input_channels,
@@ -257,13 +120,16 @@ def test_2D_fractal_measurements(
 
         expected_columns = []
         if measure_morphology:
-            expected_columns = columns_2D_common.copy() + columns_2D_morphology.copy()
+            expected_columns = (
+                column_names["columns_2D_common"].copy()
+                + column_names["columns_2D_morphology"].copy()
+            )
         else:
-            expected_columns = columns_2D_common.copy()
+            expected_columns = column_names["columns_2D_common"].copy()
         # Add intensity columns
         if input_channels:
             for channel in input_channels.keys():
-                for feature in columns_2D_intensity:
+                for feature in column_names["columns_2D_intensity"]:
                     expected_columns.append(feature.format(Ch=channel))
 
         assert list(df.columns) == expected_columns
@@ -295,6 +161,8 @@ inputs_3D = [
 )
 def test_3D_fractal_measurements(
     tiny_zenodo_zarrs_base_path,
+    metadata_tiny_zenodo,
+    column_names,
     input_ROI_table,
     input_channels,
     measure_morphology,
@@ -306,8 +174,6 @@ def test_3D_fractal_measurements(
     output_table_name = (
         f"table_{input_ROI_table}_{measure_morphology}_{level}_{label_level}"
     )
-    # Clear prior runs
-    # clear_tables_prior_run(output_table_name, component=component)
 
     # Prepare fractal task
     label_image = "nuclei"
@@ -316,7 +182,7 @@ def test_3D_fractal_measurements(
             scmultiplex_feature_measurements(
                 input_paths=[base_path],
                 output_path=base_path,
-                metadata=metadata_3D,
+                metadata=metadata_tiny_zenodo["metadata_3D"],
                 component=component,
                 input_ROI_table=input_ROI_table,
                 input_channels=input_channels,
@@ -331,7 +197,7 @@ def test_3D_fractal_measurements(
         scmultiplex_feature_measurements(
             input_paths=[base_path],
             output_path=base_path,
-            metadata=metadata_3D,
+            metadata=metadata_tiny_zenodo["metadata_3D"],
             component=component,
             input_ROI_table=input_ROI_table,
             input_channels=input_channels,
@@ -353,12 +219,15 @@ def test_3D_fractal_measurements(
             assert len(df) == 1632
 
         if measure_morphology:
-            expected_columns = columns_3D_common.copy() + columns_3D_morphology.copy()
+            expected_columns = (
+                column_names["columns_3D_common"].copy()
+                + column_names["columns_3D_morphology"].copy()
+            )
         else:
-            expected_columns = columns_3D_common.copy()
+            expected_columns = column_names["columns_3D_common"].copy()
         # Add intensity columns
         for channel in input_channels.keys():
-            for feature in columns_3D_intensity:
+            for feature in column_names["columns_3D_intensity"]:
                 expected_columns.append(feature.format(Ch=channel))
         assert list(df.columns) == expected_columns
 
@@ -375,7 +244,12 @@ inputs_masked = [{}, single_input_channels]
 
 @pytest.mark.filterwarnings("ignore:Transforming to str index.")
 @pytest.mark.parametrize("input_channels,", inputs_masked)
-def test_masked_measurements(input_channels, tiny_zenodo_zarrs_base_path):
+def test_masked_measurements(
+    tiny_zenodo_zarrs_base_path,
+    metadata_tiny_zenodo,
+    column_names,
+    input_channels,
+):
     # Test measuring when using a ROI table with masks
     allow_duplicate_labels = False
     base_path = tiny_zenodo_zarrs_base_path
@@ -383,8 +257,6 @@ def test_masked_measurements(input_channels, tiny_zenodo_zarrs_base_path):
     input_ROI_table = "nuclei_ROI_table"
     measure_morphology = True
     output_table_name = f"table_masked_{input_ROI_table}_{len(input_channels)}_{measure_morphology}_{level}_{label_level}"
-    # Clear prior runs
-    # clear_tables_prior_run(output_table_name, component=component)
 
     # Prepare fractal task
     label_image = "nuclei"
@@ -392,7 +264,7 @@ def test_masked_measurements(input_channels, tiny_zenodo_zarrs_base_path):
     scmultiplex_feature_measurements(
         input_paths=[base_path],
         output_path=base_path,
-        metadata=metadata_2D,
+        metadata=metadata_tiny_zenodo["metadata_2D"],
         component=component,
         input_ROI_table=input_ROI_table,
         input_channels=input_channels,
@@ -412,14 +284,17 @@ def test_masked_measurements(input_channels, tiny_zenodo_zarrs_base_path):
 
     expected_columns = []
     if measure_morphology:
-        expected_columns = columns_2D_common.copy() + columns_2D_morphology.copy()
+        expected_columns = (
+            column_names["columns_2D_common"].copy()
+            + column_names["columns_2D_morphology"].copy()
+        )
     else:
-        expected_columns = columns_2D_common.copy()
+        expected_columns = column_names["columns_2D_common"].copy()
     # Insert ROI_label entry to columns
     expected_columns.insert(3, "ROI_label")
     # Add intensity columns
     for channel in input_channels.keys():
-        for feature in columns_2D_intensity:
+        for feature in column_names["columns_2D_intensity"]:
             expected_columns.append(feature.format(Ch=channel))
 
     assert list(df.columns) == expected_columns
@@ -443,6 +318,7 @@ inputs_empty = [
 @pytest.mark.parametrize("input_channels,measure_morphology", inputs_empty)
 def test_empty_label(
     tiny_zenodo_zarrs_base_path,
+    metadata_tiny_zenodo,
     input_channels,
     measure_morphology,
 ):
@@ -450,8 +326,6 @@ def test_empty_label(
     base_path = tiny_zenodo_zarrs_base_path
     component = component_2D
     output_table_name = f"empty_{input_ROI_table}_{len(input_channels)}_{measure_morphology}_{level}_{label_level}"
-    # Clear prior runs
-    # clear_tables_prior_run(output_table_name, component=component)
 
     # Prepare fractal task
     label_image = "empty"
@@ -459,7 +333,7 @@ def test_empty_label(
     scmultiplex_feature_measurements(
         input_paths=[base_path],
         output_path=base_path,
-        metadata=metadata_2D,
+        metadata=metadata_tiny_zenodo["metadata_2D"],
         component=component,
         input_ROI_table=input_ROI_table,
         input_channels=input_channels,
@@ -484,6 +358,7 @@ def test_empty_label(
 @pytest.mark.parametrize("overwrite", [True, False])
 def test_overwrite(
     tiny_zenodo_zarrs_base_path,
+    metadata_tiny_zenodo,
     overwrite: bool,
 ):
     input_ROI_table = "well_ROI_table"
@@ -498,15 +373,13 @@ def test_overwrite(
         output_table_name = (
             f"table_{input_ROI_table}_0_{measure_morphology}_{level}_{label_level}"
         )
-    # Clear prior runs
-    # clear_tables_prior_run(output_table_name, component=component)
 
     # Prepare fractal task
     label_image = "nuclei"
     scmultiplex_feature_measurements(
         input_paths=[base_path],
         output_path=base_path,
-        metadata=metadata_2D,
+        metadata=metadata_tiny_zenodo["metadata_2D"],
         component=component,
         input_ROI_table=input_ROI_table,
         input_channels=input_channels,
@@ -523,7 +396,7 @@ def test_overwrite(
         scmultiplex_feature_measurements(
             input_paths=[base_path],
             output_path=base_path,
-            metadata=metadata_2D,
+            metadata=metadata_tiny_zenodo["metadata_2D"],
             component=component,
             input_ROI_table=input_ROI_table,
             input_channels=input_channels,
@@ -541,7 +414,7 @@ def test_overwrite(
             scmultiplex_feature_measurements(
                 input_paths=[base_path],
                 output_path=base_path,
-                metadata=metadata_2D,
+                metadata=metadata_tiny_zenodo["metadata_2D"],
                 component=component,
                 input_ROI_table=input_ROI_table,
                 input_channels=input_channels,
