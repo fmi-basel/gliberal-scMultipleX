@@ -6,7 +6,8 @@
 #
 
 """
-Calculates 3D surface mesh of parent object (e.g. organoid) from 3D cell-level segmentation (e.g. nuclei)
+Calculates 3D surface mesh of parent object (e.g. tissue, organoid)
+from 3D cell-level segmentation of children (e.g. nuclei)
 """
 from pathlib import Path
 from typing import Any
@@ -70,16 +71,19 @@ def surface_mesh(
 
 ) -> dict[str, Any]:
     """
-    Calculate registration based on images
+    Calculate 3D surface mesh of parent object (e.g. tissue, organoid)
+    from 3D cell-level segmentation of children (e.g. nuclei)
 
     This task consists of 4 parts:
 
-    1. Load the sub-object segmentation images for each well (paired reference and alignment round)
-    2. Select sub-objects that belong to object region by loading with object ROI table and mask by object mask.
-       Object pair is defined by consensus linking. Filter the sub-objects to remove small debris that was segmented.
-    3. Calculate affine and optionally the free-form deformation for each object pair
-    4. Output: save the identified matches as a linking table in alignment round directory
-       and optionally the transformation matrix on disk.
+    1. Load the sub-object (e.g. nuc) segmentation images for each object of a given reference round; skip other rounds.
+        Select sub-objects (e.g. nuc) that belong to parent object region by masking by parent.
+        Filter the sub-objects to remove small debris that was segmented.
+    2. Perform label fusion and edge detection to generate surface label image.
+    3. Calculate surface mesh of label image using marching cubes algorithm.
+    4. Output: save the (1) meshes (.vtp) per object id in meshes folder and (2) well label map as a new label in zarr.
+        Note that label map output may be clipped for objects that are dense and have overlapping pixels.
+        In this case, the 'winning' object in the overlap region is the one with higher label id.
 
     Parallelization level: image
 
@@ -115,12 +119,12 @@ def surface_mesh(
         mask_by_parent: if True, nuclei are masked by parent object (e.g. organoid) to only select nuclei
             belonging to parent. Recommended to set to True when iterating over object (e.g. organoid) ROIs.
         save_mesh: if True, saves the vtk mesh on disk in subfolder 'meshes'. Filename corresponds to object label id
-        save_labels: if True, saves the calculated 3D label map as label map in 'labels'
+        save_labels: if True, saves the calculated 3D label map as label map in 'labels' with suffix '_3d'
 
     """
     logger.info(
         f"Running for {input_paths=}, {component=}. \n"
-        f"Calculating translation registration per {roi_table=} for "
+        f"Calculating surface mesh per {roi_table=} for "
         f"{label_name=}."
     )
     # Set OME-Zarr paths
