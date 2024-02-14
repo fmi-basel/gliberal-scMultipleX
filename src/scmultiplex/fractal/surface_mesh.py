@@ -18,12 +18,10 @@ import dask.array as da
 import logging
 import numpy as np
 import os
-import pandas as pd
 
 import zarr
 from fractal_tasks_core.labels import prepare_label_group
 from fractal_tasks_core.pyramids import build_pyramid
-from fractal_tasks_core.upscale_array import upscale_array
 from pydantic.decorator import validate_arguments
 
 from fractal_tasks_core.ngff import load_NgffImageMeta
@@ -36,13 +34,14 @@ from scipy.ndimage import binary_fill_holes, binary_erosion
 
 from skimage.feature import canny
 from skimage.filters import gaussian
-from skimage.measure import label, regionprops_table
+from skimage.measure import label
 from skimage.morphology import disk, remove_small_objects
 from skimage.segmentation import expand_labels
 
 from scmultiplex.fractal.FractalHelperFunctions import get_zattrs
 
-from scmultiplex.meshing.FilterFunctions import filter_small_sizes_per_round, equivalent_diam
+from scmultiplex.meshing.FilterFunctions import equivalent_diam, mask_by_parent_object, \
+    calculate_mean_volume
 from scmultiplex.meshing.MeshFunctions import labels_to_mesh, export_vtk_polydata
 
 logger = logging.getLogger(__name__)
@@ -65,7 +64,6 @@ def surface_mesh(
         expandby_factor: float = 0.6,
         sigma_factor: float = 5,
         canny_threshold: float = 0.3,
-        mask_by_parent: bool = True,
         save_mesh: bool = True,
         save_labels: bool = True,
 
@@ -116,8 +114,6 @@ def surface_mesh(
             values correspond to more blurring. Recommended range 1-8.
         canny_threshold: image values below this threshold are set to 0 after Gaussian blur. float in range [0,1].
             Higher values result in tighter fit of mesh to nuclear surface
-        mask_by_parent: if True, nuclei are masked by parent object (e.g. organoid) to only select nuclei
-            belonging to parent. Recommended to set to True when iterating over object (e.g. organoid) ROIs.
         save_mesh: if True, saves the vtk mesh on disk in subfolder 'meshes'. Filename corresponds to object label id
         save_labels: if True, saves the calculated 3D label map as label map in 'labels' with suffix '_3d'
 
@@ -150,7 +146,7 @@ def surface_mesh(
     # load well image as dask array e.g. for nuclear segmentation
     r0_dask = da.from_zarr(f"{input_zarr_path}/labels/{label_name}/{level}")
 
-    # Read ROIs
+    # Read ROIs of objects
     r0_adata = ad.read_zarr(f"{input_zarr_path}/tables/{roi_table}")
 
     # Read Zarr metadata
@@ -204,34 +200,29 @@ def surface_mesh(
             dimension_separator="/",
         )
 
-        logger.info(
-            f"mask will have shape {shape} "
-            f"and chunks {chunks}"
-        )
+        logger.info(f"Mask will have shape {shape} and chunks {chunks}")
 
     ##############
-    # Filter nuclei by parent mask, remove small nuclei, and disconnected component analysis ###
+    # Filter nuclei by parent mask ###
     ##############
 
-    # TODO consider making this section a stand-alone Fractal task that is run before multiplexed linking...
-    #  ...Then clean up label masks only once, instead of repeating every time
-    if mask_by_parent:
-        # load well image as dask array for parent objects
-        r0_dask_parent = da.from_zarr(f"{input_zarr_path}/labels/{label_name_obj}/{level}")
+    # nuclei are masked by parent object (e.g. organoid) to only select nuclei belonging to parent.
+    # load well image as dask array for parent objects
+    r0_dask_parent = da.from_zarr(f"{input_zarr_path}/labels/{label_name_obj}/{level}")
 
-        # Read Zarr metadata
-        r0_ngffmeta_parent = load_NgffImageMeta(f"{input_zarr_path}/labels/{label_name_obj}")
-        r0_xycoars_parent = r0_ngffmeta_parent.coarsening_xy
-        r0_pixmeta_parent = r0_ngffmeta_parent.get_pixel_sizes_zyx(level=level)
+    # Read Zarr metadata
+    r0_ngffmeta_parent = load_NgffImageMeta(f"{input_zarr_path}/labels/{label_name_obj}")
+    r0_xycoars_parent = r0_ngffmeta_parent.coarsening_xy
+    r0_pixmeta_parent = r0_ngffmeta_parent.get_pixel_sizes_zyx(level=level)
 
-        r0_idlist_parent = convert_ROI_table_to_indices(
-            r0_adata,
-            level=level,
-            coarsening_xy=r0_xycoars_parent,
-            full_res_pxl_sizes_zyx=r0_pixmeta_parent,
-        )
+    r0_idlist_parent = convert_ROI_table_to_indices(
+        r0_adata,
+        level=level,
+        coarsening_xy=r0_xycoars_parent,
+        full_res_pxl_sizes_zyx=r0_pixmeta_parent,
+    )
 
-        check_valid_ROI_indices(r0_idlist_parent, roi_table)
+    check_valid_ROI_indices(r0_idlist_parent, roi_table)
 
     r0_labels = r0_adata.obs_vector('label')
     # initialize variables
@@ -250,48 +241,14 @@ def surface_mesh(
             compute=compute,
         )
 
-        if mask_by_parent:
-            # load object label image for object in reference round
-            r0_parent = load_region(
-                data_zyx=r0_dask_parent,
-                region=convert_indices_to_regions(r0_idlist_parent[row_int]),
-                compute=compute,
-            )
-            # if object segmentation was run at a different level than nuclear segmentation,
-            # need to upscale arrays to match shape
-            if r0_parent.shape != seg.shape:
-                r0_parent = upscale_array(array=r0_parent, target_shape=seg.shape, pad_with_zeros=False)
-
-            # mask nuclei by parent object
-            r0_parent_mask = np.zeros_like(r0_parent)
-            r0_parent_mask[r0_parent == int(r0_org_label)] = 1  # select only current object and binarize object mask
-            seg = seg * r0_parent_mask
-
-            # run regionprops to extract centroids and volume of each nuc label
-            # note that registration is performed on unscaled image
-            # TODO: consider upscaling label image prior to alignment, in cases where z-anisotropy is
-            #  extreme upscaling could lead to improved performance
-
-        r0_props = regionprops_table(label_image=seg, properties=('label', 'centroid', 'area'))  # zyx
-
-        # output column order must be: ["label", "x_centroid", "y_centroid", "z_centroid", "volume"]
-        # units are in pixels
-        r0_props = (pd.DataFrame(r0_props,
-                                 columns=['label', 'centroid-2', 'centroid-1', 'centroid-0', 'area'])).to_numpy()
-
-        # discard segmentations that have a volume less than 5% of median nuclear volume (segmented debris)
-        (r0_props, removed, removed_size_mean, size_mean) = (
-            filter_small_sizes_per_round(r0_props, column=-1, threshold=0.05))
-
-        logger.info(f"\nFiltered out {len(removed)} cells from object {r0_org_label} that have a "
-                    f" mean volume of {removed_size_mean} and correspond to labels \n {removed}"
-                   )
-
-        # TODO add disconnected component detection here to remove nuclei that don't belong to main organoid
+        seg = mask_by_parent_object(seg, r0_dask_parent, r0_idlist_parent, row_int, r0_org_label)
 
         ##############
         # Perform label fusion and edge detection  ###
         ##############
+
+        # calculate mean volume of nuclei or cells in object
+        size_mean = calculate_mean_volume(seg)
 
         # expand labels in each z-slice and combine together
         seg_fill = np.zeros_like(seg)
