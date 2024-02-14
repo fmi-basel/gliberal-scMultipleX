@@ -32,19 +32,13 @@ from fractal_tasks_core.roi import (
     convert_indices_to_regions,
     convert_ROI_table_to_indices,
     load_region)
-from scipy.ndimage import binary_fill_holes, binary_erosion
 
-from skimage.feature import canny
-from skimage.filters import gaussian
 from skimage.measure import label, regionprops_table
-from skimage.morphology import disk, remove_small_objects
-from skimage.segmentation import expand_labels
 
 from scmultiplex.fractal.FractalHelperFunctions import get_zattrs
 from scmultiplex.linking.NucleiLinkingFunctions import remove_labels
 
-from scmultiplex.meshing.FilterFunctions import filter_small_sizes_per_round, equivalent_diam, mask_by_parent_object
-from scmultiplex.meshing.MeshFunctions import labels_to_mesh, export_vtk_polydata
+from scmultiplex.meshing.FilterFunctions import filter_small_sizes_per_round, mask_by_parent_object
 
 logger = logging.getLogger(__name__)
 
@@ -67,8 +61,6 @@ def clean_cell_seg(
         mask_by_parent: bool = True,
         volume_filter: bool = True,
         disconnected_component_filter: bool = True,
-        save_mesh: bool = True,
-        save_labels: bool = True,
 
 ) -> dict[str, Any]:
     """
@@ -117,8 +109,6 @@ def clean_cell_seg(
         volume_filter: if True, discard segmentations (e.g. segmented debris) below a given volume,
             as specified by volume_filter_threshold
         disconnected_component_filter: if True, discard disconnected components
-        save_mesh: if True, saves the vtk mesh on disk in subfolder 'meshes'. Filename corresponds to object label id
-        save_labels: if True, saves the calculated 3D label map as label map in 'labels' with suffix '_3d'
 
     """
     logger.info(
@@ -126,7 +116,7 @@ def clean_cell_seg(
         f"Cleaning up {roi_table_toclean=} and "
         f"{label_name_toclean=}."
     )
-    #TODO: remove level variable from all tasks
+    # TODO: remove level variable from all tasks
 
     # Set OME-Zarr paths
     input_zarr_path = Path(input_paths[0]) / component
@@ -322,7 +312,7 @@ def clean_cell_seg(
 
         # check that dimensions of rois match
         if seg_ondisk.shape != seg_filtered.shape:
-            raise ValueError('Filteered label image must match image dimensions of bounding box during saving')
+            raise ValueError('Filtered label image must match image dimensions of bounding box during saving')
 
         # use fmax so that if one of the elements being compared is a NaN, then the non-nan element is returned
         seg_filtered_tosave = np.fmax(seg_filtered, seg_ondisk)
