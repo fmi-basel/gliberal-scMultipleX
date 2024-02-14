@@ -18,10 +18,12 @@ import dask.array as da
 import logging
 import numpy as np
 import os
+import pandas as pd
 
 import zarr
 from fractal_tasks_core.labels import prepare_label_group
 from fractal_tasks_core.pyramids import build_pyramid
+from fractal_tasks_core.tables import write_table
 from pydantic.decorator import validate_arguments
 
 from fractal_tasks_core.ngff import load_NgffImageMeta
@@ -29,7 +31,7 @@ from fractal_tasks_core.roi import (
     check_valid_ROI_indices,
     convert_indices_to_regions,
     convert_ROI_table_to_indices,
-    load_region)
+    load_region, array_to_bounding_box_table, get_overlapping_pairs_3D, empty_bounding_box_table)
 from scipy.ndimage import binary_fill_holes, binary_erosion
 
 from skimage.feature import canny
@@ -38,7 +40,7 @@ from skimage.measure import label
 from skimage.morphology import disk, remove_small_objects
 from skimage.segmentation import expand_labels
 
-from scmultiplex.fractal.FractalHelperFunctions import get_zattrs
+from scmultiplex.fractal.FractalHelperFunctions import get_zattrs, convert_indices_to_origin_zyx
 
 from scmultiplex.meshing.FilterFunctions import equivalent_diam, mask_by_parent_object, \
     calculate_mean_volume
@@ -174,6 +176,7 @@ def surface_mesh(
         chunks = r0_dask.chunksize
         label_dtype = np.uint32
         output_label_name = label_name_obj + '_3d'
+        output_roi_table_name = roi_table + '_3d'
         store = zarr.storage.FSStore(f"{input_zarr_path}/labels/{output_label_name}/0")
 
         if len(shape) != 3 or len(chunks) != 3 or shape[0] == 1:
@@ -201,6 +204,9 @@ def surface_mesh(
         )
 
         logger.info(f"Mask will have shape {shape} and chunks {chunks}")
+
+        # initialize new ROI table
+        bbox_dataframe_list = []
 
     ##############
     # Filter nuclei by parent mask ###
@@ -323,7 +329,7 @@ def surface_mesh(
             export_vtk_polydata(os.path.join(save_transform_path, save_name), mesh_polydata_organoid)
 
         ##############
-        # Save labels  ###
+        # Save labels and make ROI table ###
         ##############
 
         if save_labels:
@@ -375,6 +381,27 @@ def surface_mesh(
                 compute=True,
             )
 
+            # make new ROI table
+            origin_zyx = convert_indices_to_origin_zyx(r0_idlist[row_int])
+
+            bbox_df = array_to_bounding_box_table(
+                edges_canny_label,
+                r0_pixmeta,
+                origin_zyx=origin_zyx,
+            )
+
+            bbox_dataframe_list.append(bbox_df)
+
+            overlap_list = []
+            for df in bbox_dataframe_list:
+                overlap_list.extend(
+                    get_overlapping_pairs_3D(df, r0_pixmeta)
+                )
+            if len(overlap_list) > 0:
+                logger.warning(
+                    f"{len(overlap_list)} bounding-box pairs overlap"
+                )
+
     # Starting from on-disk highest-resolution data, build and write to disk a
     # pyramid of coarser levels
     if save_labels:
@@ -389,6 +416,40 @@ def surface_mesh(
         )
 
         logger.info(f"Built a pyramid for the {input_zarr_path}/labels/{output_label_name} label image")
+
+        # Handle the case where `bbox_dataframe_list` is empty (typically
+        # because list_indices is also empty)
+        if len(bbox_dataframe_list) == 0:
+            bbox_dataframe_list = [empty_bounding_box_table()]
+        # Concatenate all ROI dataframes
+        df_well = pd.concat(bbox_dataframe_list, axis=0, ignore_index=True)
+        df_well.index = df_well.index.astype(str)
+        # Extract labels and drop them from df_well
+        labels = pd.DataFrame(df_well["label"].astype(str))
+        df_well.drop(labels=["label"], axis=1, inplace=True)
+        # Convert all to float (warning: some would be int, in principle)
+        bbox_dtype = np.float32
+        df_well = df_well.astype(bbox_dtype)
+        # Convert to anndata
+        bbox_table = ad.AnnData(df_well, dtype=bbox_dtype)
+        bbox_table.obs = labels
+
+        # Write to zarr group
+        logger.info(f"Writing new bounding-box ROI table to {input_zarr_path}/tables/{output_roi_table_name}")
+
+        table_attrs = {
+            "type": "ngff:region_table",
+            "region": {"path": f"../labels/{output_label_name}"},
+            "instance_key": "label",
+        }
+
+        write_table(
+            zarr.group(input_zarr_path),
+            output_roi_table_name,
+            bbox_table,
+            overwrite=True,
+            table_attrs=table_attrs,
+        )
 
     logger.info(f"End surface_mesh task for {input_zarr_path}/labels/{output_label_name}")
 
