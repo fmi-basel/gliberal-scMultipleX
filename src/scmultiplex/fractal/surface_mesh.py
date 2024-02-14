@@ -18,7 +18,6 @@ import dask.array as da
 import logging
 import numpy as np
 import os
-import pandas as pd
 
 import zarr
 from fractal_tasks_core.labels import prepare_label_group
@@ -31,7 +30,7 @@ from fractal_tasks_core.roi import (
     check_valid_ROI_indices,
     convert_indices_to_regions,
     convert_ROI_table_to_indices,
-    load_region, array_to_bounding_box_table, get_overlapping_pairs_3D, empty_bounding_box_table)
+    load_region, array_to_bounding_box_table, get_overlapping_pairs_3D)
 from scipy.ndimage import binary_fill_holes, binary_erosion
 
 from skimage.feature import canny
@@ -40,7 +39,7 @@ from skimage.measure import label
 from skimage.morphology import disk, remove_small_objects
 from skimage.segmentation import expand_labels
 
-from scmultiplex.fractal.FractalHelperFunctions import get_zattrs, convert_indices_to_origin_zyx
+from scmultiplex.fractal.FractalHelperFunctions import get_zattrs, convert_indices_to_origin_zyx, format_roi_table
 
 from scmultiplex.meshing.FilterFunctions import equivalent_diam, mask_by_parent_object, \
     calculate_mean_volume
@@ -417,23 +416,7 @@ def surface_mesh(
 
         logger.info(f"Built a pyramid for the {input_zarr_path}/labels/{output_label_name} label image")
 
-        # Handle the case where `bbox_dataframe_list` is empty (typically
-        # because list_indices is also empty)
-        if len(bbox_dataframe_list) == 0:
-            bbox_dataframe_list = [empty_bounding_box_table()]
-        # Concatenate all ROI dataframes
-        df_well = pd.concat(bbox_dataframe_list, axis=0, ignore_index=True)
-        df_well.index = df_well.index.astype(str)
-        # Extract labels and drop them from df_well
-        labels = pd.DataFrame(df_well["label"].astype(str))
-        df_well.drop(labels=["label"], axis=1, inplace=True)
-        # Convert all to float (warning: some would be int, in principle)
-        bbox_dtype = np.float32
-        df_well = df_well.astype(bbox_dtype)
-        # Convert to anndata
-        bbox_table = ad.AnnData(df_well, dtype=bbox_dtype)
-        bbox_table.obs = labels
-
+        bbox_table = format_roi_table(bbox_dataframe_list)
         # Write to zarr group
         logger.info(f"Writing new bounding-box ROI table to {input_zarr_path}/tables/{output_roi_table_name}")
 
