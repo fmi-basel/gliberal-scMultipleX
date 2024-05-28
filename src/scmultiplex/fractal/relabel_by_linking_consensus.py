@@ -25,6 +25,7 @@ from fractal_tasks_core.pyramids import build_pyramid
 from fractal_tasks_core.tables import write_table
 from pydantic.decorator import validate_arguments
 
+from scmultiplex.fractal.FractalHelperFunctions import get_zattrs, read_table_and_attrs
 from scmultiplex.linking.NucleiLinkingFunctions import relabel_RX_numpy, make_linking_dict
 
 logger = logging.getLogger(__name__)
@@ -41,7 +42,7 @@ def relabel_by_linking_consensus(
         # Task-specific arguments
         label_name: str,
         roi_table: str = "well_ROI_table",
-        consensus_table: str = "object_linking_consensus",
+        consensus_table: str = "org_match_table_consensus",
         table_to_relabel: str = "org_ROI_table",
         reference_cycle: int = 0,
 ) -> dict[str, Any]:
@@ -87,8 +88,8 @@ def relabel_by_linking_consensus(
 
     alignment_cycle = rx_zarr_path.name
 
-    new_label_name = label_name + '_consensus'
-    new_table_name = table_to_relabel + '_consensus'
+    new_label_name = label_name + '_linked'
+    new_table_name = table_to_relabel + '_linked'
 
     ##############
     #  Relabel ROI table
@@ -233,14 +234,3 @@ if __name__ == "__main__":
         logger_name=logger.name,
     )
 
-
-def read_table_and_attrs(zarr_url: Path, roi_table):
-    table_url = zarr_url / f"tables/{roi_table}"
-    table = ad.read_zarr(table_url)
-    table_attrs = get_zattrs(table_url)
-    return table, table_attrs
-
-
-def get_zattrs(zarr_url):
-    with zarr.open(zarr_url, mode="r") as zarr_img:
-        return zarr_img.attrs.asdict()

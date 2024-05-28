@@ -63,8 +63,8 @@ def calculate_platymatch_registration(
         metadata: dict[str, Any],
         # Task-specific arguments
         label_name_to_register: str = "nuc",
-        label_name_obj: str = "org_consensus",
-        roi_table: str = "org_ROI_table_consensus",
+        label_name_obj: str = "org_linked",
+        roi_table: str = "org_ROI_table_linked",
         reference_cycle: int = 0,
         level: int = 0,
         save_transformation: bool = True,
@@ -103,9 +103,9 @@ def calculate_platymatch_registration(
         label_name_to_register: Label name that will be used for label-based
             registration, e.g. `nuc`.
         label_name_obj: Label name of segmented objects that is parent of
-            label_name_to_register e.g. `org_consensus`.
+            label_name_to_register e.g. `org_linked`.
         roi_table: Name of the ROI table over which the task loops to
-            calculate the registration. e.g. consensus object table 'org_ROI_table_consensus'
+            calculate the registration. e.g. linked consensus object table 'org_ROI_table_linked'
         reference_cycle: Which cycle to register against. Defaults to 0,
             which is the first OME-Zarr image in the well (usually the first
             cycle that was provided).
@@ -535,7 +535,7 @@ def calculate_platymatch_registration(
         link_df_adata.obs_names = obsnames
         link_df_adata.var_names = varnames
 
-        new_link_table = label_name_to_register + "_affine_linking"
+        new_link_table = label_name_to_register + "_match_table_affine"
 
         # Save the linking table as a new table
         logger.info(
@@ -560,7 +560,7 @@ def calculate_platymatch_registration(
         link_df_adata.obs_names = obsnames
         link_df_adata.var_names = varnames
 
-        new_link_table = label_name_to_register + "_ffd_linking"
+        new_link_table = label_name_to_register + "_match_table_ffd"
 
         # Save the linking table as a new table
         logger.info(

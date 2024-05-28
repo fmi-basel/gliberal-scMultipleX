@@ -187,7 +187,7 @@
           },
           "level": {
             "title": "Level",
-            "default": 2,
+            "default": 0,
             "type": "integer",
             "description": "Pyramid level of the image to be segmented. Choose `0` to process at full resolution."
           },
@@ -249,7 +249,7 @@
           },
           "roi_table": {
             "title": "Roi Table",
-            "default": "object_linking",
+            "default": "org_match_table",
             "type": "string",
             "description": "Name of the ROI table over which the task loops to calculate the registration. Examples: `FOV_ROI_table` => loop over the field of views, `well_ROI_table` => process the whole well as one image."
           },
@@ -321,7 +321,7 @@
           },
           "consensus_table": {
             "title": "Consensus Table",
-            "default": "object_linking_consensus",
+            "default": "org_match_table_consensus",
             "type": "string",
             "description": "Name of ROI table that contains consensus linking for label_name across all rounds"
           },
@@ -395,15 +395,15 @@
           },
           "label_name_obj": {
             "title": "Label Name Obj",
-            "default": "org_consensus",
+            "default": "org_linked",
             "type": "string",
-            "description": "Label name of segmented objects that is parent of label_name_to_register e.g. `org_consensus`."
+            "description": "Label name of segmented objects that is parent of label_name_to_register e.g. `org_linked`."
           },
           "roi_table": {
             "title": "Roi Table",
-            "default": "org_ROI_table_consensus",
+            "default": "org_ROI_table_linked",
             "type": "string",
-            "description": "Name of the ROI table over which the task loops to calculate the registration. e.g. consensus object table 'org_ROI_table_consensus'"
+            "description": "Name of the ROI table over which the task loops to calculate the registration. e.g. linked consensus object table 'org_ROI_table_linked'"
           },
           "reference_cycle": {
             "title": "Reference Cycle",
@@ -470,6 +470,115 @@
         }
       },
       "docs_info": "Calculate registration based on images\n\nThis task consists of 4 parts:\n\n1. Load the sub-object segmentation images for each well (paired reference and alignment round)\n2. Select sub-objects that belong to object region by loading with object ROI table and mask by object mask.\n   Object pair is defined by consensus linking. Filter the sub-objects to remove small debris that was segmented.\n3. Calculate affine and optionally the free-form deformation for each object pair\n4. Output: save the identified matches as a linking table in alignment round directory\n   and optionally the transformation matrix on disk.\n\nParallelization level: image",
+      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+    },
+    {
+      "name": "scMultipleX Surface Mesh",
+      "executable": "fractal/surface_mesh.py",
+      "input_type": "zarr",
+      "output_type": "zarr",
+      "meta": {
+        "cpus_per_task": 4,
+        "mem": 16000,
+        "parallelization_level": "image"
+      },
+      "args_schema": {
+        "title": "SurfaceMesh",
+        "type": "object",
+        "properties": {
+          "input_paths": {
+            "title": "Input Paths",
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of input paths where the image data is stored as OME-Zarrs. Should point to the parent folder containing one or many OME-Zarr files, not the actual OME-Zarr file. Example: `[\"/some/path/\"]`. This task only supports a single input path. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "output_path": {
+            "title": "Output Path",
+            "type": "string",
+            "description": "This parameter is not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "component": {
+            "title": "Component",
+            "type": "string",
+            "description": "Path to the OME-Zarr image in the OME-Zarr plate that is processed. Example: `\"some_plate.zarr/B/03/1\"`. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "metadata": {
+            "title": "Metadata",
+            "type": "object",
+            "description": "This parameter is not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "label_name": {
+            "title": "Label Name",
+            "default": "nuc",
+            "type": "string",
+            "description": "Label name that will be used for surface estimation, e.g. `nuc`."
+          },
+          "label_name_obj": {
+            "title": "Label Name Obj",
+            "default": "org_consensus",
+            "type": "string",
+            "description": "Label name of segmented objects that is parent of label_name e.g. `org_consensus`."
+          },
+          "roi_table": {
+            "title": "Roi Table",
+            "default": "org_ROI_table_consensus",
+            "type": "string",
+            "description": "Name of the ROI table over which the task loops to calculate the registration. e.g. consensus object table 'org_ROI_table_consensus'"
+          },
+          "reference_cycle": {
+            "title": "Reference Cycle",
+            "default": 0,
+            "type": "integer",
+            "description": "Which cycle to use for surface mesh calculation. Defaults to 0, which is the first OME-Zarr image in the well (usually the first cycle that was provided)."
+          },
+          "level": {
+            "title": "Level",
+            "default": 0,
+            "type": "integer",
+            "description": "Pyramid level of the labels to register. Choose `0` to process at full resolution."
+          },
+          "expandby_factor": {
+            "title": "Expandby Factor",
+            "default": 0.6,
+            "type": "number",
+            "description": "multiplier that specifies pixels by which to expand each nuclear mask for merging, float in range [0,1 or higher], e.g. 0.2 means that 20% of mean of nuclear equivalent diameter is used."
+          },
+          "sigma_factor": {
+            "title": "Sigma Factor",
+            "default": 5,
+            "type": "number",
+            "description": "float that specifies sigma (standard deviation) for Gaussian kernel. Higher values correspond to more blurring. Recommended range 1-8."
+          },
+          "canny_threshold": {
+            "title": "Canny Threshold",
+            "default": 0.3,
+            "type": "number",
+            "description": "image values below this threshold are set to 0 after Gaussian blur. float in range [0,1]. Higher values result in tighter fit of mesh to nuclear surface"
+          },
+          "save_mesh": {
+            "title": "Save Mesh",
+            "default": true,
+            "type": "boolean",
+            "description": "if True, saves the vtk mesh on disk in subfolder 'meshes'. Filename corresponds to object label id"
+          },
+          "save_labels": {
+            "title": "Save Labels",
+            "default": true,
+            "type": "boolean",
+            "description": "if True, saves the calculated 3D label map as label map in 'labels' with suffix '_3d'"
+          }
+        },
+        "required": [
+          "input_paths",
+          "output_path",
+          "component",
+          "metadata"
+        ],
+        "additionalProperties": false
+      },
+      "docs_info": "Calculate 3D surface mesh of parent object (e.g. tissue, organoid)\nfrom 3D cell-level segmentation of children (e.g. nuclei)\n\nThis task consists of 4 parts:\n\n1. Load the sub-object (e.g. nuc) segmentation images for each object of a given reference round; skip other rounds.\n    Select sub-objects (e.g. nuc) that belong to parent object region by masking by parent.\n    Filter the sub-objects to remove small debris that was segmented.\n2. Perform label fusion and edge detection to generate surface label image.\n3. Calculate surface mesh of label image using marching cubes algorithm.\n4. Output: save the (1) meshes (.vtp) per object id in meshes folder and (2) well label map as a new label in zarr.\n    Note that label map output may be clipped for objects that are dense and have overlapping pixels.\n    In this case, the 'winning' object in the overlap region is the one with higher label id.\n\nParallelization level: image",
       "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
     }
   ],
