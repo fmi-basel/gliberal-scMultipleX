@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 
 
 @validate_arguments
-def clean_cell_seg(
+def cleanup_3d_cell_segmentation(
         *,
         # Fractal arguments
         input_paths: Sequence[str],
@@ -54,8 +54,8 @@ def clean_cell_seg(
         # Task-specific arguments
         label_name_toclean: str = "nuc",
         roi_table_toclean: str = "nuc_ROI_table",
-        label_name_parent: str = "org_consensus",
-        roi_table_parent: str = "org_ROI_table_consensus",
+        label_name_parent: str = "org_linked",
+        roi_table_parent: str = "org_ROI_table_linked",
         level: int = 0,
         volume_filter_threshold: float = 0.05,
         mask_by_parent: bool = True,
@@ -176,6 +176,7 @@ def clean_cell_seg(
     chunks = seg_dask.chunksize
     label_dtype = np.uint32
     output_label_name = label_name_toclean + '_clean'
+    output_roi_table_name = roi_table_toclean + '_clean'
     store = zarr.storage.FSStore(f"{input_zarr_path}/labels/{output_label_name}/0")
 
     if len(shape) != 3 or len(chunks) != 3 or shape[0] == 1:
@@ -228,6 +229,7 @@ def clean_cell_seg(
     # initialize variables
     parent_labels = parent_adata.obs_vector('label')
     compute = True  # convert to numpy array from dask
+    segids_toremove_perwell = [] # list of nuclei ids to remove in the well
 
     ##############
     # Perform cleanup per object ###
@@ -292,6 +294,7 @@ def clean_cell_seg(
         # Filter flagged labels from labelmap and ROI table  ###
         ##############
 
+        segids_toremove_perwell.extend(segids_toremove)
         datatype = seg.dtype
         seg_filtered = remove_labels(seg, segids_toremove, datatype)
 
@@ -326,6 +329,7 @@ def clean_cell_seg(
 
     # Starting from on-disk highest-resolution data, build and write to disk a
     # pyramid of coarser levels
+
     build_pyramid(
         zarrurl=f"{input_zarr_path}/labels/{output_label_name}",
         overwrite=True,
@@ -336,6 +340,9 @@ def clean_cell_seg(
     )
 
     logger.info(f"Built a pyramid for the {input_zarr_path}/labels/{output_label_name} label image")
+
+    # Filter ROI table
+    # print('fullwell', segids_toremove_perwell)
     logger.info(f"End clean cell segmentation task for {input_zarr_path}/labels/{output_label_name}")
 
     return {}
@@ -345,6 +352,6 @@ if __name__ == "__main__":
     from fractal_tasks_core.tasks._utils import run_fractal_task
 
     run_fractal_task(
-        task_function=clean_cell_seg,
+        task_function=cleanup_3d_cell_segmentation,
         logger_name=logger.name,
     )
