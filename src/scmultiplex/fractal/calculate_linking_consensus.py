@@ -15,17 +15,16 @@ import logging
 from typing import Any
 from typing import Sequence
 
-from functools import reduce
-
 import anndata as ad
 import numpy as np
-import pandas as pd
 import zarr
 
 from pydantic.decorator import validate_arguments
 
 from fractal_tasks_core.ngff import load_NgffWellMeta
 from fractal_tasks_core.tables import write_table
+
+from scmultiplex.fractal.FractalHelperFunctions import are_linking_table_columns_valid, find_consensus
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +38,7 @@ def calculate_linking_consensus(
     component: str,
     metadata: dict[str, Any],
     # Task-specific arguments
-    roi_table: str = "object_linking",
+    roi_table: str = "org_match_table",
     reference_cycle: int = 0,
 ) -> dict[str, Any]:
     """
@@ -155,42 +154,6 @@ def calculate_linking_consensus(
     )
 
     return {}
-
-
-def are_linking_table_columns_valid(*, table: ad.AnnData, reference_cycle: int, alignment_cycle: int) -> None:
-    """
-    Verify some validity assumptions on a ROI table.
-
-    This function reflects our current working assumptions (e.g. the presence
-    of some specific columns); this may change in future versions.
-
-    Args:
-        table: AnnData table to be checked
-        reference_cycle: reference round id to which all rounds are linked
-        alignment_cycle: alignment round id which is being linked to reference
-    """
-    # Hard constraint: table columns must include some expected ones
-    columns = ["R" + str(reference_cycle) + "_label",
-               "R" + str(alignment_cycle) + "_label"
-    ]
-    for column in columns:
-        if column not in table.var_names:
-            raise ValueError(f"Column {column} is not present in linking table")
-    return
-
-
-def find_consensus(*, df_list: Sequence[pd.DataFrame], on: Sequence[str]) -> pd.DataFrame:
-    """
-    Find consensus df from a list of dfs where only common ref IDs are kept
-
-    Args:
-        df_list: list of dataframes across which consensus is to be found
-        on: column name(s) that are in common between rounds
-    """
-
-    consensus = reduce(lambda left, right: pd.merge(left, right, on=on, how='outer'), df_list)
-
-    return consensus
 
 
 if __name__ == "__main__":

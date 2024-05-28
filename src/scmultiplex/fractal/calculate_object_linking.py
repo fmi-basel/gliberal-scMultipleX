@@ -46,7 +46,7 @@ def calculate_object_linking(
         label_name: str,
         roi_table: str = "well_ROI_table",
         reference_cycle: int = 0,
-        level: int = 2,
+        level: int = 0,
         iou_cutoff: float = 0.2,
 ) -> dict[str, Any]:
     """
@@ -226,7 +226,7 @@ def calculate_object_linking(
     ##############
 
     # Generate linking table: 3 columns ["R0_label", "RX_label", "iou"], where are RX is R1,R2, etc
-    new_link_table = label_name + "_linking"
+    new_link_table = label_name + "_match_table"
 
     # Save the shifted linking table as a new table
     logger.info(

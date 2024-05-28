@@ -12,6 +12,8 @@ import zarr
 import pandas as pd
 import numpy as np
 from fractal_tasks_core.roi import empty_bounding_box_table
+from functools import reduce
+from typing import Sequence
 
 
 def read_table_and_attrs(zarr_url: Path, roi_table):
@@ -68,4 +70,38 @@ def format_roi_table(bbox_dataframe_list):
     return bbox_table
 
 
+def are_linking_table_columns_valid(*, table: ad.AnnData, reference_cycle: int, alignment_cycle: int) -> None:
+    """
+    Verify some validity assumptions on a ROI table.
+
+    This function reflects our current working assumptions (e.g. the presence
+    of some specific columns); this may change in future versions.
+
+    Args:
+        table: AnnData table to be checked
+        reference_cycle: reference round id to which all rounds are linked
+        alignment_cycle: alignment round id which is being linked to reference
+    """
+    # Hard constraint: table columns must include some expected ones
+    columns = ["R" + str(reference_cycle) + "_label",
+               "R" + str(alignment_cycle) + "_label"
+    ]
+    for column in columns:
+        if column not in table.var_names:
+            raise ValueError(f"Column {column} is not present in linking table")
+    return
+
+
+def find_consensus(*, df_list: Sequence[pd.DataFrame], on: Sequence[str]) -> pd.DataFrame:
+    """
+    Find consensus df from a list of dfs where only common ref IDs are kept
+
+    Args:
+        df_list: list of dataframes across which consensus is to be found
+        on: column name(s) that are in common between rounds
+    """
+
+    consensus = reduce(lambda left, right: pd.merge(left, right, on=on, how='outer'), df_list)
+
+    return consensus
 
