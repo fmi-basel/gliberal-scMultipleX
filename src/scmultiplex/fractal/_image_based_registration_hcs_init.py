@@ -58,6 +58,8 @@ def _image_based_registration_hcs_init(
             parallelization list.
     """
 
+    # zarr url is the cycle x image, will have a list of non-reference rounds
+    # in init args you have the reference zarr url
     return image_based_registration_hcs_init(zarr_urls=zarr_urls,
                                              zarr_dir=zarr_dir,
                                              reference_acquisition=reference_acquisition)

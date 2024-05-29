@@ -12,19 +12,14 @@ Calculates consensus for linking tables across multiplexing rounds.
 Stores single consensus table in reference round directory.
 """
 import logging
-from typing import Any
-from typing import Sequence
-
 import anndata as ad
 import numpy as np
 import zarr
-
+from fractal_tasks_core.tasks.io_models import InitArgsRegistrationConsensus
 from pydantic.decorator import validate_arguments
-
-from fractal_tasks_core.ngff import load_NgffWellMeta
 from fractal_tasks_core.tables import write_table
-
-from scmultiplex.fractal.fractal_helper_functions import are_linking_table_columns_valid, find_consensus
+from scmultiplex.fractal.fractal_helper_functions import are_linking_table_columns_valid, find_consensus, \
+    extract_acq_info
 
 logger = logging.getLogger(__name__)
 
@@ -33,14 +28,11 @@ logger = logging.getLogger(__name__)
 def calculate_linking_consensus(
     *,
     # Fractal arguments
-    input_paths: Sequence[str],
-    output_path: str,
-    component: str,
-    metadata: dict[str, Any],
+    zarr_url: str,
+    init_args: InitArgsRegistrationConsensus,
     # Task-specific arguments
     roi_table: str = "org_match_table",
-    reference_cycle: int = 0,
-) -> dict[str, Any]:
+):
     """
     Applies pre-calculated registration to ROI tables.
 
@@ -50,65 +42,55 @@ def calculate_linking_consensus(
     Parallelization level: well
 
     Args:
-        input_paths: List of input paths where the image data is stored as
-            OME-Zarrs. Should point to the parent folder containing one or many
-            OME-Zarr files, not the actual OME-Zarr file. Example:
-            `["/some/path/"]`. This task only supports a single input path.
+        zarr_url: Path or url to the individual OME-Zarr image to be processed.
+            Refers to the zarr_url of the reference acquisition.
             (standard argument for Fractal tasks, managed by Fractal server).
-        output_path: This parameter is not used by this task.
-            (standard argument for Fractal tasks, managed by Fractal server).
-        component: Path to the OME-Zarr image in the OME-Zarr plate that is
-            processed. Example: `"some_plate.zarr/B/03`.
-            (standard argument for Fractal tasks, managed by Fractal server).
-        metadata: This parameter is not used by this task.
+        init_args: Intialization arguments provided by
+            `init_group_by_well_for_multiplexing`. It contains the
+            zarr_url_list listing all the zarr_urls in the same well as the
+            zarr_url of the reference acquisition that are being processed.
             (standard argument for Fractal tasks, managed by Fractal server).
         roi_table: Name of the ROI table over which the task loops to
             calculate the registration. Examples: `FOV_ROI_table` => loop over
             the field of views, `well_ROI_table` => process the whole well as
             one image.
-        reference_cycle: Which cycle to register against. Defaults to 0,
-            which is the first OME-Zarr image in the well, usually the first
-            cycle that was provided
 
     """
     # TODO: test this task on sample data with more than two rounds
 
     consensus_table_name = roi_table + "_consensus"
 
+    #zarr_url is the path to the reference round
+    #init args contain the list to all rounds, including reference round
+    ref_acquisition = extract_acq_info(zarr_url)
+
     logger.info(
-        f"Running for {input_paths=}, {component=}. \n"
+        f"Running for reference round {zarr_url=}. \n"
         f"Applying consensus finding to {roi_table=} and storing it as "
-        f"{consensus_table_name=} in reference round {reference_cycle} directory."
-    )
-
-    well_zarr_path = f"{input_paths[0]}/{component}"
-
-    well_meta = load_NgffWellMeta(well_zarr_path)
-    # dictionary of all rounds present in zarr
-    acquisition_dict = well_meta.get_acquisition_paths()
-    logger.info(
+        f"{consensus_table_name=} in reference round {ref_acquisition} directory. \n"
         "Calculating consensus for the following cycles: "
-        f"{acquisition_dict}"
+        f"{init_args.zarr_url_list}"
     )
 
     # TODO: refactor to perform data merging on anndata without need to convert to pandas.
     # Collect all the ROI tables, dictionary key (round id): value (table as anndata)
     roi_tables = {}
-    for acq in acquisition_dict.keys():
+
+    for acq_zarr_url in init_args.zarr_url_list:
+        zarr_acquisition = extract_acq_info(acq_zarr_url)
         # Skip the reference cycle because it will not contain linking table
-        if acq == reference_cycle:
+        if acq_zarr_url == zarr_url:
             continue
 
-        acq_path = acquisition_dict[acq]
         rx_adata = ad.read_zarr(
-            f"{well_zarr_path}/{acq_path}/tables/{roi_table}"
+            f"{acq_zarr_url}/tables/{roi_table}"
         )
 
         # Check for valid ROI tables
-        are_linking_table_columns_valid(table=rx_adata, reference_cycle=reference_cycle, alignment_cycle=acq)
+        are_linking_table_columns_valid(table=rx_adata, reference_cycle=ref_acquisition, alignment_cycle=zarr_acquisition)
 
         # Add to dictionary
-        roi_tables[acq] = rx_adata
+        roi_tables[zarr_acquisition] = rx_adata
 
     # Convert dictionary of anndata tables to list of pandas dfs
     roi_df_list = [
@@ -118,9 +100,9 @@ def calculate_linking_consensus(
 
     logger.info("Calculating consensus across cycles.")
 
-    consensus = find_consensus(df_list=roi_df_list, on=["R" + str(reference_cycle) + "_label"])
+    consensus = find_consensus(df_list=roi_df_list, on=["R" + str(ref_acquisition) + "_label"])
 
-    consensus = consensus.sort_values(by=["R" + str(reference_cycle) + "_label"])
+    consensus = consensus.sort_values(by=["R" + str(ref_acquisition) + "_label"])
     consensus['consensus_index'] = consensus.index.astype(np.float32)
     consensus['consensus_label'] = consensus['consensus_index']+1
 
@@ -128,7 +110,7 @@ def calculate_linking_consensus(
     logger.info(consensus)
 
     # Convert to adata
-    consensus_adata = ad.AnnData(X=np.array(consensus), dtype=np.float32)
+    consensus_adata = ad.AnnData(X=np.array(consensus, dtype=np.float32))
     obsnames = list(map(str, consensus.index))
     varnames = list(consensus.columns.values)
     consensus_adata.obs_names = obsnames
@@ -140,10 +122,10 @@ def calculate_linking_consensus(
 
     # Save the linking table as a new table in reference cycle directory
     logger.info(
-        f"Write the consensus ROI table {consensus_table_name} in {reference_cycle} directory"
+        f"Write the consensus ROI table {consensus_table_name} in {ref_acquisition} directory"
     )
 
-    image_group = zarr.group(f"{well_zarr_path}/{acquisition_dict[reference_cycle]}")
+    image_group = zarr.group(f"{zarr_url}")
 
     write_table(
         image_group,
@@ -152,8 +134,6 @@ def calculate_linking_consensus(
         overwrite=True,
         table_attrs=dict(type="linking_table", fractal_table_version="1"),
     )
-
-    return {}
 
 
 if __name__ == "__main__":
