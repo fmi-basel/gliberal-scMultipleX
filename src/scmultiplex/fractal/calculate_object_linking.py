@@ -188,8 +188,8 @@ def calculate_object_linking(
                                       "RX_label": "R" + str(zarr_acquisition) + "_label"})
     logger.info(link_df)
 
-    # TODO refactor into helper function and remove dtype argument from ad.AnnData
-    link_df_adata = ad.AnnData(X=np.array(link_df), dtype=np.float32)
+    # TODO refactor into helper function
+    link_df_adata = ad.AnnData(X=np.array(link_df, dtype=np.float32))
     obsnames = list(map(str, link_df.index))
     varnames = list(link_df.columns.values)
     link_df_adata.obs_names = obsnames
