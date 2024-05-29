@@ -19,6 +19,7 @@ import anndata as ad
 import dask.array as da
 import numpy as np
 import zarr
+from fractal_tasks_core.tasks.io_models import InitArgsRegistration
 from pydantic.decorator import validate_arguments
 
 from fractal_tasks_core.ngff import load_NgffImageMeta
@@ -29,6 +30,7 @@ from fractal_tasks_core.roi import (
     load_region)
 from fractal_tasks_core.tables import write_table
 
+from scmultiplex.fractal.FractalHelperFunctions import extract_acq_info
 from scmultiplex.linking.OrganoidLinkingFunctions import calculate_shift, apply_shift, calculate_matching
 
 logger = logging.getLogger(__name__)
@@ -38,14 +40,11 @@ logger = logging.getLogger(__name__)
 def calculate_object_linking(
         *,
         # Fractal arguments
-        input_paths: Sequence[str],
-        output_path: str,
-        component: str,
-        metadata: dict[str, Any],
+        zarr_url: str,
+        init_args: InitArgsRegistration,
         # Task-specific arguments
         label_name: str,
         roi_table: str = "well_ROI_table",
-        reference_cycle: int = 0,
         level: int = 0,
         iou_cutoff: float = 0.2,
 ) -> dict[str, Any]:
@@ -62,25 +61,16 @@ def calculate_object_linking(
     Parallelization level: image
 
     Args:
-        input_paths: List of input paths where the image data is stored as
-            OME-Zarrs. Should point to the parent folder containing one or many
-            OME-Zarr files, not the actual OME-Zarr file. Example:
-            `["/some/path/"]`. This task only supports a single input path.
+        zarr_url: Path or url to the individual OME-Zarr image to be processed.
             (standard argument for Fractal tasks, managed by Fractal server).
-        output_path: This parameter is not used by this task.
-            (standard argument for Fractal tasks, managed by Fractal server).
-        component: Path to the OME-Zarr image in the OME-Zarr plate that is
-            processed. Example: `"some_plate.zarr/B/03/0"`.
-            (standard argument for Fractal tasks, managed by Fractal server).
-        metadata: This parameter is not used by this task.
+        init_args: Intialization arguments provided by
+            `_image_based_registration_hcs_init`. They contain the
+            reference_zarr_url that is used for registration.
             (standard argument for Fractal tasks, managed by Fractal server).
         label_name: Label name that will be used for label-based
             registration; e.g. `org` from object segmentation.
         roi_table: Name of the well ROI table. Input ROI table must have single ROI entry;
             e.g. `well_ROI_table`
-        reference_cycle: Which cycle to register against. Defaults to 0,
-            which is the first OME-Zarr image in the well (usually the first
-            cycle that was provided).
         level: Pyramid level of the image to be segmented. Choose `0` to
             process at full resolution.
         iou_cutoff: Float in range 0 to 1 to specify intersection over union cutoff.
@@ -88,34 +78,18 @@ def calculate_object_linking(
     """
 
     logger.info(
-        f"Running for {input_paths=}, {component=}. \n"
+        f"Running for {zarr_url=}\n"
         f"Calculating object linking with {roi_table=} for "
         f"{label_name=}."
     )
     # Set OME-Zarr paths
-    rx_zarr_path = Path(input_paths[0]) / component
-    r0_zarr_path = rx_zarr_path.parent / str(reference_cycle)
+    r0_zarr_path = init_args.reference_zarr_url
 
-    # If the task is run for the reference cycle, exit
-    # TODO: Improve the input for this: Can we filter components to not
-    # run for itself?
-    alignment_cycle = rx_zarr_path.name
-    if alignment_cycle == str(reference_cycle):
-        logger.info(
-            "Calculate object linking is running for "
-            f"cycle {alignment_cycle}, which is the reference_cycle."
-            "Thus, exiting the task."
-        )
-        return {}
-    else:
-        logger.info(
-            "Calculate object linking is running for "
-            f"cycle {alignment_cycle}"
-        )
+    zarr_acquisition, ref_acquisition = extract_acq_info(zarr_url, r0_zarr_path)
 
     # Read Zarr metadata
-    r0_ngffmeta = load_NgffImageMeta(str(r0_zarr_path))
-    rx_ngffmeta = load_NgffImageMeta(str(rx_zarr_path))
+    r0_ngffmeta = load_NgffImageMeta(r0_zarr_path)
+    rx_ngffmeta = load_NgffImageMeta(zarr_url)
     r0_xycoars = r0_ngffmeta.coarsening_xy
     rx_xycoars = rx_ngffmeta.coarsening_xy
     r0_pixmeta = r0_ngffmeta.get_pixel_sizes_zyx(level=0)
@@ -130,11 +104,11 @@ def calculate_object_linking(
     # Reference (e.g. R0, fixed) vs. alignment (e.g. RX, moving)
     # load well image as dask array
     r0_dask = da.from_zarr(f"{r0_zarr_path}/labels/{label_name}/{level}")
-    rx_dask = da.from_zarr(f"{rx_zarr_path}/labels/{label_name}/{level}")
+    rx_dask = da.from_zarr(f"{zarr_url}/labels/{label_name}/{level}")
 
     # Read ROIs
     r0_adata = ad.read_zarr(f"{r0_zarr_path}/tables/{roi_table}")
-    rx_adata = ad.read_zarr(f"{rx_zarr_path}/tables/{roi_table}")
+    rx_adata = ad.read_zarr(f"{zarr_url}/tables/{roi_table}")
     logger.info(
         f"Found {len(rx_adata)} ROIs in {roi_table=} to be processed."
     )
@@ -210,8 +184,8 @@ def calculate_object_linking(
 
     # format output df and convert to anndata
     link_df = link_df.sort_values(by=["R0_label"])
-    link_df = link_df.rename(columns={"R0_label": "R" + str(reference_cycle) + "_label",
-                                      "RX_label": "R" + str(alignment_cycle) + "_label"})
+    link_df = link_df.rename(columns={"R0_label": "R" + str(ref_acquisition) + "_label",
+                                      "RX_label": "R" + str(zarr_acquisition) + "_label"})
     logger.info(link_df)
 
     # TODO refactor into helper function and remove dtype argument from ad.AnnData
@@ -230,10 +204,10 @@ def calculate_object_linking(
 
     # Save the shifted linking table as a new table
     logger.info(
-        f"Write the registered ROI table {new_link_table} for round {alignment_cycle}"
+        f"Write the registered ROI table {new_link_table} for round {zarr_acquisition}"
     )
 
-    image_group = zarr.group(f"{rx_zarr_path}")
+    image_group = zarr.group(f"{zarr_url}")
 
     write_table(
         image_group,
@@ -242,8 +216,6 @@ def calculate_object_linking(
         overwrite=True,
         table_attrs=dict(type="linking_table", fractal_table_version="1"),
     )
-
-    return {}
 
 
 if __name__ == "__main__":

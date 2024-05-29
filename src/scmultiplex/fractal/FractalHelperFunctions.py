@@ -11,6 +11,7 @@ import anndata as ad
 import zarr
 import pandas as pd
 import numpy as np
+from fractal_tasks_core.ngff import load_NgffWellMeta
 from fractal_tasks_core.roi import empty_bounding_box_table
 from functools import reduce
 from typing import Sequence
@@ -104,4 +105,25 @@ def find_consensus(*, df_list: Sequence[pd.DataFrame], on: Sequence[str]) -> pd.
     consensus = reduce(lambda left, right: pd.merge(left, right, on=on, how='outer'), df_list)
 
     return consensus
+
+
+def extract_acq_info(zarr_url, ref_url):
+    zarr_acquisition = None
+    ref_acquisition = None
+
+    zarr_pathname = Path(zarr_url).name
+    ref_pathname = Path(ref_url).name
+    wellmeta = load_NgffWellMeta(str(Path(zarr_url).parent)).well.images #list of dictionaries for each round
+    for img in wellmeta:
+        if img.path == zarr_pathname:
+            zarr_acquisition = img.acquisition
+        if img.path == ref_pathname:
+            ref_acquisition = img.acquisition
+    if zarr_acquisition is None:
+        raise ValueError(f"{zarr_url=} well metadata does not contain expected path and acquisition naming")
+    if ref_acquisition is None:
+        raise ValueError(f"{ref_url=} well metadata does not contain expected path and acquisition naming")
+
+    return zarr_acquisition, ref_acquisition
+
 
