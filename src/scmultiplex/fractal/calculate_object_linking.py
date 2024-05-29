@@ -30,7 +30,7 @@ from fractal_tasks_core.roi import (
     load_region)
 from fractal_tasks_core.tables import write_table
 
-from scmultiplex.fractal.FractalHelperFunctions import extract_acq_info
+from scmultiplex.fractal.fractal_helper_functions import extract_acq_info
 from scmultiplex.linking.OrganoidLinkingFunctions import calculate_shift, apply_shift, calculate_matching
 
 logger = logging.getLogger(__name__)

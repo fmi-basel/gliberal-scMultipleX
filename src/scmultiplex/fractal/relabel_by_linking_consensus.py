@@ -25,7 +25,7 @@ from fractal_tasks_core.pyramids import build_pyramid
 from fractal_tasks_core.tables import write_table
 from pydantic.decorator import validate_arguments
 
-from scmultiplex.fractal.FractalHelperFunctions import get_zattrs, read_table_and_attrs
+from scmultiplex.fractal.fractal_helper_functions import get_zattrs, read_table_and_attrs
 from scmultiplex.linking.NucleiLinkingFunctions import relabel_RX_numpy, make_linking_dict
 
 logger = logging.getLogger(__name__)

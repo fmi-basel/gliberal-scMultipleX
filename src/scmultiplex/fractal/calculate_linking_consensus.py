@@ -24,7 +24,7 @@ from pydantic.decorator import validate_arguments
 from fractal_tasks_core.ngff import load_NgffWellMeta
 from fractal_tasks_core.tables import write_table
 
-from scmultiplex.fractal.FractalHelperFunctions import are_linking_table_columns_valid, find_consensus
+from scmultiplex.fractal.fractal_helper_functions import are_linking_table_columns_valid, find_consensus
 
 logger = logging.getLogger(__name__)
 
