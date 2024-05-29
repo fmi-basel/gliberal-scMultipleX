@@ -107,23 +107,25 @@ def find_consensus(*, df_list: Sequence[pd.DataFrame], on: Sequence[str]) -> pd.
     return consensus
 
 
-def extract_acq_info(zarr_url, ref_url):
+def extract_acq_info(zarr_url):
+    """
+    Find name of acquisition (cycles, e.g. 0, 1, 2, etc) of given paths from their metadata
+
+    Args:
+        zarr_url: string, path to zarr image of some acquisition cycle (e.g. /myfolder/test.zarr/C/01/2)
+
+    Output would be 2
+    """
     zarr_acquisition = None
-    ref_acquisition = None
 
     zarr_pathname = Path(zarr_url).name
-    ref_pathname = Path(ref_url).name
     wellmeta = load_NgffWellMeta(str(Path(zarr_url).parent)).well.images #list of dictionaries for each round
     for img in wellmeta:
         if img.path == zarr_pathname:
             zarr_acquisition = img.acquisition
-        if img.path == ref_pathname:
-            ref_acquisition = img.acquisition
     if zarr_acquisition is None:
         raise ValueError(f"{zarr_url=} well metadata does not contain expected path and acquisition naming")
-    if ref_acquisition is None:
-        raise ValueError(f"{ref_url=} well metadata does not contain expected path and acquisition naming")
 
-    return zarr_acquisition, ref_acquisition
+    return zarr_acquisition
 
 

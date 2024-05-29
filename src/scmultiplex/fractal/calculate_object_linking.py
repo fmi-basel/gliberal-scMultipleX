@@ -85,7 +85,8 @@ def calculate_object_linking(
     # Set OME-Zarr paths
     r0_zarr_path = init_args.reference_zarr_url
 
-    zarr_acquisition, ref_acquisition = extract_acq_info(zarr_url, r0_zarr_path)
+    zarr_acquisition = extract_acq_info(zarr_url)
+    ref_acquisition = extract_acq_info(r0_zarr_path)
 
     # Read Zarr metadata
     r0_ngffmeta = load_NgffImageMeta(r0_zarr_path)
