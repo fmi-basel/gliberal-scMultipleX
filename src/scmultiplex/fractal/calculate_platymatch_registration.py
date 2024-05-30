@@ -10,9 +10,7 @@
 """
 Calculates linking tables for segmented sub-objects (e.g. nuclei, cells) for segmented and linked objects in a well
 """
-from pathlib import Path
 from typing import Any
-from typing import Sequence
 
 import anndata as ad
 import dask.array as da
@@ -25,6 +23,7 @@ import sys
 
 import zarr
 from fractal_tasks_core.channels import get_channel_from_image_zarr, OmeroChannel, ChannelNotFoundError
+from fractal_tasks_core.tasks.io_models import InitArgsRegistration
 from fractal_tasks_core.upscale_array import upscale_array
 from fractal_tasks_core.tables import write_table
 from pydantic.decorator import validate_arguments
@@ -43,6 +42,8 @@ from skimage.measure import regionprops_table
 # platymatch will import other submodules from itself in an absolute way (i.e. from platymatch.xxx import ....)
 # rather than a relative way. Maybe we can create a pull request to switch those import statements to relative
 import scmultiplex
+from scmultiplex.fractal.fractal_helper_functions import extract_acq_info
+
 sys.path.append(os.path.join(scmultiplex.__path__[0], r'platymatch'))
 
 from platymatch.utils.utils import generate_affine_transformed_image
@@ -57,20 +58,17 @@ logger = logging.getLogger(__name__)
 def calculate_platymatch_registration(
         *,
         # Fractal arguments
-        input_paths: Sequence[str],
-        output_path: str,
-        component: str,
-        metadata: dict[str, Any],
+        zarr_url: str,
+        init_args: InitArgsRegistration,
         # Task-specific arguments
+        seg_channel: ChannelInputModel,
         label_name_to_register: str = "nuc",
         label_name_obj: str = "org_linked",
         roi_table: str = "org_ROI_table_linked",
-        reference_cycle: int = 0,
         level: int = 0,
         save_transformation: bool = True,
         mask_by_parent: bool = True,
         calculate_ffd: bool = True,
-        seg_channel: ChannelInputModel,
 
 ) -> dict[str, Any]:
     """
@@ -88,17 +86,11 @@ def calculate_platymatch_registration(
     Parallelization level: image
 
     Args:
-        input_paths: List of input paths where the image data is stored as
-            OME-Zarrs. Should point to the parent folder containing one or many
-            OME-Zarr files, not the actual OME-Zarr file. Example:
-            `["/some/path/"]`. This task only supports a single input path.
+        zarr_url: Path or url to the individual OME-Zarr image to be processed.
             (standard argument for Fractal tasks, managed by Fractal server).
-        output_path: This parameter is not used by this task.
-            (standard argument for Fractal tasks, managed by Fractal server).
-        component: Path to the OME-Zarr image in the OME-Zarr plate that is
-            processed. Example: `"some_plate.zarr/B/03/1"`.
-            (standard argument for Fractal tasks, managed by Fractal server).
-        metadata: This parameter is not used by this task.
+        init_args: Intialization arguments provided by
+            `_image_based_registration_hcs_init`. They contain the
+            reference_zarr_url that is used for registration.
             (standard argument for Fractal tasks, managed by Fractal server).
         label_name_to_register: Label name that will be used for label-based
             registration, e.g. `nuc`.
@@ -106,9 +98,6 @@ def calculate_platymatch_registration(
             label_name_to_register e.g. `org_linked`.
         roi_table: Name of the ROI table over which the task loops to
             calculate the registration. e.g. linked consensus object table 'org_ROI_table_linked'
-        reference_cycle: Which cycle to register against. Defaults to 0,
-            which is the first OME-Zarr image in the well (usually the first
-            cycle that was provided).
         level: Pyramid level of the labels to register. Choose `0` to
             process at full resolution.
         save_transformation: if True, saves the transformation matrix on disk in subfolder 'transformations'
@@ -121,44 +110,28 @@ def calculate_platymatch_registration(
 
     """
     logger.info(
-        f"Running for {input_paths=}, {component=}. \n"
+        f"Running for {zarr_url=}. \n"
         f"Calculating translation registration per {roi_table=} for "
         f"{label_name_to_register=}."
     )
-    # Set OME-Zarr paths
-    rx_zarr_path = Path(input_paths[0]) / component
-    r0_zarr_path = rx_zarr_path.parent / str(reference_cycle)
 
-    # If the task is run for the reference cycle, exit
-    # TODO: Improve the input for this: Can we filter components to not
-    # run for itself?
-    alignment_cycle = rx_zarr_path.name
-    if alignment_cycle == str(reference_cycle):
-        logger.info(
-            "Calculate platymatch registration is running for "
-            f"cycle {alignment_cycle}, which is the reference_cycle."
-            "Thus, exiting the task."
-        )
-        return {}
-    else:
-        logger.info(
-            "Calculate platymatch registration is running for "
-            f"cycle {alignment_cycle}"
-        )
+    r0_zarr_path = init_args.reference_zarr_url
+    zarr_acquisition = extract_acq_info(zarr_url)
+    ref_acquisition = extract_acq_info(r0_zarr_path)
 
     # Lazily load zarr array
     # Reference (e.g. R0, fixed) vs. alignment (e.g. RX, moving)
     # load well image as dask array e.g. for nuclear segmentation
     r0_dask = da.from_zarr(f"{r0_zarr_path}/labels/{label_name_to_register}/{level}")
-    rx_dask = da.from_zarr(f"{rx_zarr_path}/labels/{label_name_to_register}/{level}")
+    rx_dask = da.from_zarr(f"{zarr_url}/labels/{label_name_to_register}/{level}")
 
     # Read ROIs
     r0_adata = ad.read_zarr(f"{r0_zarr_path}/tables/{roi_table}")
-    rx_adata = ad.read_zarr(f"{rx_zarr_path}/tables/{roi_table}")
+    rx_adata = ad.read_zarr(f"{zarr_url}/tables/{roi_table}")
 
     # Read Zarr metadata
     r0_ngffmeta = load_NgffImageMeta(f"{r0_zarr_path}/labels/{label_name_to_register}")
-    rx_ngffmeta = load_NgffImageMeta(f"{rx_zarr_path}/labels/{label_name_to_register}")
+    rx_ngffmeta = load_NgffImageMeta(f"{zarr_url}/labels/{label_name_to_register}")
     r0_xycoars = r0_ngffmeta.coarsening_xy # need to know when building new pyramids
     rx_xycoars = rx_ngffmeta.coarsening_xy
     r0_pixmeta = r0_ngffmeta.get_pixel_sizes_zyx(level=level)
@@ -201,11 +174,11 @@ def calculate_platymatch_registration(
     if mask_by_parent:
         # load well image as dask array for parent objects
         r0_dask_parent = da.from_zarr(f"{r0_zarr_path}/labels/{label_name_obj}/{level}")
-        rx_dask_parent = da.from_zarr(f"{rx_zarr_path}/labels/{label_name_obj}/{level}")
+        rx_dask_parent = da.from_zarr(f"{zarr_url}/labels/{label_name_obj}/{level}")
 
         # Read Zarr metadata
         r0_ngffmeta_parent = load_NgffImageMeta(f"{r0_zarr_path}/labels/{label_name_obj}")
-        rx_ngffmeta_parent = load_NgffImageMeta(f"{rx_zarr_path}/labels/{label_name_obj}")
+        rx_ngffmeta_parent = load_NgffImageMeta(f"{zarr_url}/labels/{label_name_obj}")
         r0_xycoars_parent = r0_ngffmeta_parent.coarsening_xy
         rx_xycoars_parent = rx_ngffmeta_parent.coarsening_xy
         r0_pixmeta_parent = r0_ngffmeta_parent.get_pixel_sizes_zyx(level=level)
@@ -251,7 +224,7 @@ def calculate_platymatch_registration(
         # Find channel index for alignment round (rx)
         try:
             tmp_channel: OmeroChannel = get_channel_from_image_zarr(
-                image_zarr_path=f"{rx_zarr_path}",
+                image_zarr_path=f"{zarr_url}",
                 wavelength_id=seg_channel.wavelength_id,
                 label=seg_channel.label,
             )
@@ -265,11 +238,11 @@ def calculate_platymatch_registration(
 
         # Load channel data
         r0_dask_raw = da.from_zarr(f"{r0_zarr_path}/{level}")[r0_channel]
-        rx_dask_raw = da.from_zarr(f"{rx_zarr_path}/{level}")[rx_channel]
+        rx_dask_raw = da.from_zarr(f"{zarr_url}/{level}")[rx_channel]
 
         # Read Zarr metadata
         r0_ngffmeta_raw = load_NgffImageMeta(f"{r0_zarr_path}")
-        rx_ngffmeta_raw = load_NgffImageMeta(f"{rx_zarr_path}")
+        rx_ngffmeta_raw = load_NgffImageMeta(f"{zarr_url}")
         r0_xycoars_raw = r0_ngffmeta_raw.coarsening_xy
         rx_xycoars_raw = rx_ngffmeta_raw.coarsening_xy
         r0_pixmeta_raw = r0_ngffmeta_raw.get_pixel_sizes_zyx(level=level)
@@ -412,8 +385,8 @@ def calculate_platymatch_registration(
                         f"and alignment object label {rx_org_label}")
 
             affine_matches = pd.DataFrame(affine_matches,
-                                          columns=["R" + str(reference_cycle) + "_label",
-                                                   "R" + str(alignment_cycle) + "_label",
+                                          columns=["R" + str(ref_acquisition) + "_label",
+                                                   "R" + str(zarr_acquisition) + "_label",
                                                    "pixdist",
                                                    "confidence"]
                                           )
@@ -423,7 +396,7 @@ def calculate_platymatch_registration(
             if save_transformation and transform_affine is not None:
                 # store the transformation matrix on disk
                 # check if transformation folder exists, if not create it
-                save_transform_path = f"{rx_zarr_path}/transforms/{roi_table}_{label_name_to_register}_affine"
+                save_transform_path = f"{zarr_url}/transforms/{roi_table}_{label_name_to_register}_affine"
                 os.makedirs(save_transform_path, exist_ok=True)
                 # saving name is row in obs_names of tables anndata; so matches with input tables ROI naming
                 save_name = f"{row}.npy"
@@ -492,8 +465,8 @@ def calculate_platymatch_registration(
                             f"and alignment object label {rx_org_label}")
 
                 ffd_matches = pd.DataFrame(ffd_matches,
-                                           columns=["R" + str(reference_cycle) + "_label",
-                                                    "R" + str(alignment_cycle) + "_label",
+                                           columns=["R" + str(ref_acquisition) + "_label",
+                                                    "R" + str(zarr_acquisition) + "_label",
                                                     "pixdist"]
 
                                            )
@@ -502,7 +475,7 @@ def calculate_platymatch_registration(
                 if save_transformation and transform_ffd is not None:
                     # store the transformation matrix on disk
                     # check if transformation folder exists, if not create it
-                    save_transform_path = f"{rx_zarr_path}/transforms/{roi_table}_{label_name_to_register}_ffd"
+                    save_transform_path = f"{zarr_url}/transforms/{roi_table}_{label_name_to_register}_ffd"
                     os.makedirs(save_transform_path, exist_ok=True)
                     # saving name is row in obs_names of tables anndata; so matches with input tables ROI naming
                     save_name = f"{row}.tfm"
@@ -529,7 +502,7 @@ def calculate_platymatch_registration(
 
     # TODO refactor into a saving function
     if link_df_affine is not None:
-        link_df_adata = ad.AnnData(X=np.array(link_df_affine), dtype=np.float32)
+        link_df_adata = ad.AnnData(X=np.array(link_df_affine, dtype=np.float32))
         obsnames = list(map(str, link_df_affine.index))
         varnames = list(link_df_affine.columns.values)
         link_df_adata.obs_names = obsnames
@@ -539,10 +512,10 @@ def calculate_platymatch_registration(
 
         # Save the linking table as a new table
         logger.info(
-            f"Writing the affine linking table for {component=} as {new_link_table}"
+            f"Writing the affine linking table for round {zarr_acquisition} as {new_link_table}"
         )
 
-        image_group = zarr.group(f"{rx_zarr_path}")
+        image_group = zarr.group(f"{zarr_url}")
 
         write_table(
             image_group,
@@ -554,7 +527,7 @@ def calculate_platymatch_registration(
 
     # TODO refactor into a saving function
     if calculate_ffd and link_df_ffd is not None:
-        link_df_adata = ad.AnnData(X=np.array(link_df_ffd), dtype=np.float32)
+        link_df_adata = ad.AnnData(X=np.array(link_df_ffd, dtype=np.float32))
         obsnames = list(map(str, link_df_ffd.index))
         varnames = list(link_df_ffd.columns.values)
         link_df_adata.obs_names = obsnames
@@ -564,10 +537,10 @@ def calculate_platymatch_registration(
 
         # Save the linking table as a new table
         logger.info(
-            f"Writing the ffd linking table for {component=} as {new_link_table}"
+            f"Writing the ffd linking table round {zarr_acquisition} as {new_link_table}"
         )
 
-        image_group = zarr.group(f"{rx_zarr_path}")
+        image_group = zarr.group(f"{zarr_url}")
 
         write_table(
             image_group,
