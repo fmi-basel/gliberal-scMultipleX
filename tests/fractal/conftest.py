@@ -225,3 +225,61 @@ def column_names() -> dict[str, list]:
 #     }
 
 #     return [metadata_3D, metadata_2D]
+
+
+@pytest.fixture(scope="session")
+def linking_zenodo_zarrs(testdata_path: Path) -> list[str]:
+    """
+    Prepare Zarr test data from Zenodo.
+
+    This is based on the fractal-tasks-core task conftest
+    This takes care of multiple steps:
+
+    1. Download/unzip two Zarr containers (3D and MIP) from Zenodo, via pooch
+    2. Copy the two Zarr containers into tests/data
+    """
+
+    # 1 Download Zarrs from Zenodo
+    DOI = "10.5281/zenodo.10683086"
+    DOI_slug = DOI.replace("/", "_").replace(".", "_")
+    platenames = [
+        "220605_151046.zarr",
+        "220605_151046_mip.zarr",
+    ]
+    rootfolder = testdata_path / DOI_slug
+    folders = [rootfolder / plate for plate in platenames]
+
+    registry = {
+        "220605_151046.zarr.zip": None,
+        "220605_151046_mip.zarr.zip": None,
+    }
+    base_url = f"doi:{DOI}"
+    POOCH = pooch.create(
+        pooch.os_cache("pooch") / DOI_slug,
+        base_url,
+        registry=registry,
+        retry_if_failed=10,
+        allow_updates=False,
+    )
+
+    for ind, file_name in enumerate(platenames):
+        # 1) Download/unzip a single Zarr from Zenodo
+        file_paths = POOCH.fetch(
+            f"{file_name}.zip", processor=pooch.Unzip(extract_dir=file_name)
+        )
+        zarr_full_path = file_paths[0].split(file_name)[0] + file_name
+        print(zarr_full_path)
+        folder = folders[ind]
+
+        # 2) Copy the downloaded Zarr into tests/data
+        if os.path.isdir(str(folder)):
+            shutil.rmtree(str(folder))
+        shutil.copytree(Path(zarr_full_path) / file_name, folder)
+    return [str(f) for f in folders]
+
+
+@pytest.fixture(scope="function")
+def linking_zenodo_zarrs_base_path(linking_zenodo_zarrs) -> str:
+    """Return the path to the tiny Zenodo Zarr test data base folder."""
+    return str(Path(linking_zenodo_zarrs[0]).parent)
+
