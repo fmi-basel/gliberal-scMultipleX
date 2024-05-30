@@ -43,7 +43,10 @@ def filter_small_sizes_per_round(props_numpy, column=-1, threshold=0.05):
     removed = props_numpy[~row_selection, 0]
 
     # calculate mean of removed nuclear sizes
-    removed_size_mean = np.mean(props_numpy[~row_selection, column])
+    if props_numpy[~row_selection, column].size == 0:
+        removed_size_mean = None
+    else:
+        removed_size_mean = np.mean(props_numpy[~row_selection, column])
 
     # calculate mean of kept nuclear sizes
     size_mean = np.mean(props_numpy_filtered[:, column])
