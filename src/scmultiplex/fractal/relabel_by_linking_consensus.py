@@ -13,7 +13,6 @@ Relabels image labels and ROI tables based on consensus linking.
 import logging
 from pathlib import Path
 from typing import Any
-from typing import Sequence
 
 import anndata as ad
 import dask.array as da
@@ -23,9 +22,10 @@ from fractal_tasks_core.labels import prepare_label_group
 from fractal_tasks_core.ngff import load_NgffImageMeta
 from fractal_tasks_core.pyramids import build_pyramid
 from fractal_tasks_core.tables import write_table
+from fractal_tasks_core.tasks.io_models import InitArgsRegistration
 from pydantic.decorator import validate_arguments
 
-from scmultiplex.fractal.fractal_helper_functions import get_zattrs, read_table_and_attrs
+from scmultiplex.fractal.fractal_helper_functions import get_zattrs, read_table_and_attrs, extract_acq_info
 from scmultiplex.linking.NucleiLinkingFunctions import relabel_RX_numpy, make_linking_dict
 
 logger = logging.getLogger(__name__)
@@ -35,34 +35,25 @@ logger = logging.getLogger(__name__)
 def relabel_by_linking_consensus(
         *,
         # Fractal arguments
-        input_paths: Sequence[str],
-        output_path: str,
-        component: str,
-        metadata: dict[str, Any],
+        zarr_url: str,
+        init_args: InitArgsRegistration,
         # Task-specific arguments
         label_name: str,
         roi_table: str = "well_ROI_table",
         consensus_table: str = "org_match_table_consensus",
         table_to_relabel: str = "org_ROI_table",
-        reference_cycle: int = 0,
-) -> dict[str, Any]:
+):
     """
     Relabels image labels and ROI tables based on consensus linking.
 
     Parallelization level: image
 
     Args:
-        input_paths: List of input paths where the image data is stored as
-            OME-Zarrs. Should point to the parent folder containing one or many
-            OME-Zarr files, not the actual OME-Zarr file. Example:
-            `["/some/path/"]`. This task only supports a single input path.
+        zarr_url: Path or url to the individual OME-Zarr image to be processed.
             (standard argument for Fractal tasks, managed by Fractal server).
-        output_path: This parameter is not used by this task.
-            (standard argument for Fractal tasks, managed by Fractal server).
-        component: Path to the OME-Zarr image in the OME-Zarr plate that is
-            processed. Example: `"some_plate.zarr/B/03/0"`.
-            (standard argument for Fractal tasks, managed by Fractal server).
-        metadata: This parameter is not used by this task.
+        init_args: Intialization arguments provided by
+            `_image_based_registration_hcs_init`. They contain the
+            reference_zarr_url that is used for registration.
             (standard argument for Fractal tasks, managed by Fractal server).
         label_name: Label name to be relabeled; e.g. `org` or `nuc`.
         roi_table: Name of the ROI table that is parent of label_name. For example segmented
@@ -70,26 +61,25 @@ def relabel_by_linking_consensus(
         consensus_table: Name of ROI table that contains consensus linking for label_name across all rounds
         table_to_relabel: Table name to relabel based on consensus linking. The table rows correspond
             to label_name, e.g. 'org_ROI_table' or 'nuc_ROI_table'
-        reference_cycle: Which cycle to register against. Defaults to 0,
-            which is the first OME-Zarr image in the well (usually the first
-            cycle that was provided).
     """
     # Refactor lines below to make single function for loading?
     # parameter for 'run on reference cycle' true or false; here is True
 
-    logger.info(
-        f"Running for {input_paths=}, {component=}. \n"
-        f"Relabeling {table_to_relabel=} with labeled objects "
-        f"{label_name=} for each region in {roi_table=}."
-    )
     # Set OME-Zarr paths
-    rx_zarr_path = Path(input_paths[0]) / component
-    r0_zarr_path = rx_zarr_path.parent / str(reference_cycle)
+    r0_zarr_path = init_args.reference_zarr_url
 
-    alignment_cycle = rx_zarr_path.name
+    zarr_acquisition = extract_acq_info(zarr_url)
+    ref_acquisition = extract_acq_info(r0_zarr_path)
 
     new_label_name = label_name + '_linked'
     new_table_name = table_to_relabel + '_linked'
+
+    logger.info(
+        f"Running for {zarr_url=}. \n"
+        f"Relabeling {table_to_relabel=} with labeled objects "
+        f"{label_name=} for each region in {roi_table=} \n"
+        f"based on consensus table {consensus_table} in reference round {ref_acquisition} directory."
+    )
 
     ##############
     #  Relabel ROI table
@@ -98,12 +88,12 @@ def relabel_by_linking_consensus(
     # Read ROIs
     consensus_adata = ad.read_zarr(f"{r0_zarr_path}/tables/{consensus_table}")
     rx_label_adata, table_attrs = read_table_and_attrs(
-        Path(rx_zarr_path),
+        Path(zarr_url),
         table_to_relabel
     )
     consensus_pd = consensus_adata.to_df()
 
-    moving_colname = "R" + str(alignment_cycle) + "_label"
+    moving_colname = "R" + str(zarr_acquisition) + "_label"
     fixed_colname = "consensus_label"
 
     # make list of rx IDs (list of strings) that are linked across all rounds
@@ -124,11 +114,12 @@ def relabel_by_linking_consensus(
     bdata.obs['label'] = bdata.obs['label'].map(matching_dict)
     # reset label index
     bdata.obs.reset_index(drop=True, inplace=True)
+    bdata.obs.index = bdata.obs.index.map(str) # anndata wants indexes as trings!
 
     # logger.info(bdata.obs)
 
     # Save the linking table as a new table in round directory
-    image_group = zarr.group(f"{rx_zarr_path}")
+    image_group = zarr.group(f"{zarr_url}")
 
     # TODO Temporary fix to write correct path to label in table zattr
     table_attrs['region']['path'] = f"../labels/{new_label_name}"
@@ -142,7 +133,7 @@ def relabel_by_linking_consensus(
     )
 
     logger.info(
-        f"Saved the relabeled ROI table {new_table_name} in round {alignment_cycle} tables directory"
+        f"Saved the relabeled ROI table {new_table_name} in round {zarr_acquisition} tables directory"
     )
 
     ##############
@@ -152,18 +143,16 @@ def relabel_by_linking_consensus(
     # 1) Load label image
 
     # Load label image as dask array, assume that always use level 0 (full res)
-    rx_dask = da.from_zarr(f"{rx_zarr_path}/labels/{label_name}/0")
+    rx_dask = da.from_zarr(f"{zarr_url}/labels/{label_name}/0")
     chunks = rx_dask.chunksize
 
     # Prepare the output label group
     # Get the label_attrs correctly
-    label_attrs = get_zattrs(zarr_url=f"{rx_zarr_path}/labels/{label_name}")
-
-    rx_zarr_out = Path(output_path) / component
+    label_attrs = get_zattrs(zarr_url=f"{zarr_url}/labels/{label_name}")
 
     # useful check for overwriting, adds metadata to labels group
     _ = prepare_label_group(
-        image_group=zarr.group(rx_zarr_out),
+        image_group=zarr.group(zarr_url),
         label_name=new_label_name,
         overwrite=True,
         label_attrs=label_attrs,
@@ -174,7 +163,7 @@ def relabel_by_linking_consensus(
 
     # Loop over linked labels and relabel. if label not in consensus, it is set to 0 (background).
     logger.info(
-        f"Relabeling {component=} image..."
+        f"Relabeling {zarr_url=} image..."
     )
 
     rx_dask_relabeled, count_input, count_output = relabel_RX_numpy(rx_dask, consensus_pd,
@@ -187,7 +176,7 @@ def relabel_by_linking_consensus(
 
     label_dtype = np.uint32
     # this could be restructured to use output of prepare_label_group, work in progress
-    store = zarr.storage.FSStore(f"{rx_zarr_path}/labels/{new_label_name}/0")
+    store = zarr.storage.FSStore(f"{zarr_url}/labels/{new_label_name}/0")
     new_label_array = zarr.create(
         shape=rx_dask_relabeled.shape,
         chunks=chunks,
@@ -205,10 +194,10 @@ def relabel_by_linking_consensus(
     # 4) Build pyramids for label image
 
     # load meta for original label image just to get metadata
-    label_meta = load_NgffImageMeta(f"{rx_zarr_path}/labels/{label_name}")
+    label_meta = load_NgffImageMeta(f"{zarr_url}/labels/{label_name}")
 
     build_pyramid(
-        zarrurl=f"{rx_zarr_path}/labels/{new_label_name}",
+        zarrurl=f"{zarr_url}/labels/{new_label_name}",
         overwrite=True,
         num_levels=label_meta.num_levels,
         coarsening_xy=label_meta.coarsening_xy,
@@ -222,8 +211,6 @@ def relabel_by_linking_consensus(
         raise ValueError(
             "Label count in relabelled image must match length of relabelled table"
         )
-
-    return {}
 
 
 if __name__ == "__main__":
