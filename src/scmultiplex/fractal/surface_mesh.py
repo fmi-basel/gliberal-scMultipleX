@@ -9,9 +9,7 @@
 Calculates 3D surface mesh of parent object (e.g. tissue, organoid)
 from 3D cell-level segmentation of children (e.g. nuclei)
 """
-from pathlib import Path
 from typing import Any
-from typing import Sequence
 
 import anndata as ad
 import dask.array as da
@@ -23,6 +21,7 @@ import zarr
 from fractal_tasks_core.labels import prepare_label_group
 from fractal_tasks_core.pyramids import build_pyramid
 from fractal_tasks_core.tables import write_table
+from fractal_tasks_core.tasks.io_models import InitArgsRegistrationConsensus
 from pydantic.decorator import validate_arguments
 
 from fractal_tasks_core.ngff import load_NgffImageMeta
@@ -39,7 +38,8 @@ from skimage.measure import label
 from skimage.morphology import disk, remove_small_objects
 from skimage.segmentation import expand_labels
 
-from scmultiplex.fractal.fractal_helper_functions import get_zattrs, convert_indices_to_origin_zyx, format_roi_table
+from scmultiplex.fractal.fractal_helper_functions import get_zattrs, convert_indices_to_origin_zyx, format_roi_table, \
+    extract_acq_info
 
 from scmultiplex.meshing.FilterFunctions import equivalent_diam, mask_by_parent_object, \
     calculate_mean_volume
@@ -52,15 +52,12 @@ logger = logging.getLogger(__name__)
 def surface_mesh(
         *,
         # Fractal arguments
-        input_paths: Sequence[str],
-        output_path: str,
-        component: str,
-        metadata: dict[str, Any],
+        zarr_url: str,
+        init_args: InitArgsRegistrationConsensus,
         # Task-specific arguments
         label_name: str = "nuc",
-        label_name_obj: str = "org_consensus",
-        roi_table: str = "org_ROI_table_consensus",
-        reference_cycle: int = 0,
+        label_name_obj: str = "org_linked",
+        roi_table: str = "org_ROI_table_linked",
         level: int = 0,
         expandby_factor: float = 0.6,
         sigma_factor: float = 5,
@@ -87,26 +84,19 @@ def surface_mesh(
     Parallelization level: image
 
     Args:
-        input_paths: List of input paths where the image data is stored as
-            OME-Zarrs. Should point to the parent folder containing one or many
-            OME-Zarr files, not the actual OME-Zarr file. Example:
-            `["/some/path/"]`. This task only supports a single input path.
+        zarr_url: Path or url to the individual OME-Zarr image to be processed.
+            Refers to the zarr_url of the reference acquisition.
             (standard argument for Fractal tasks, managed by Fractal server).
-        output_path: This parameter is not used by this task.
-            (standard argument for Fractal tasks, managed by Fractal server).
-        component: Path to the OME-Zarr image in the OME-Zarr plate that is
-            processed. Example: `"some_plate.zarr/B/03/1"`.
-            (standard argument for Fractal tasks, managed by Fractal server).
-        metadata: This parameter is not used by this task.
+        init_args: Intialization arguments provided by
+            `init_group_by_well_for_multiplexing`. It contains the
+            zarr_url_list listing all the zarr_urls in the same well as the
+            zarr_url of the reference acquisition that are being processed.
             (standard argument for Fractal tasks, managed by Fractal server).
         label_name: Label name that will be used for surface estimation, e.g. `nuc`.
         label_name_obj: Label name of segmented objects that is parent of
             label_name e.g. `org_consensus`.
         roi_table: Name of the ROI table over which the task loops to
             calculate the registration. e.g. consensus object table 'org_ROI_table_consensus'
-        reference_cycle: Which cycle to use for surface mesh calculation. Defaults to 0,
-            which is the first OME-Zarr image in the well (usually the first
-            cycle that was provided).
         level: Pyramid level of the labels to register. Choose `0` to
             process at full resolution.
         expandby_factor: multiplier that specifies pixels by which to expand each nuclear mask for merging,
@@ -120,38 +110,20 @@ def surface_mesh(
 
     """
     logger.info(
-        f"Running for {input_paths=}, {component=}. \n"
+        f"Running for {zarr_url=}. \n"
         f"Calculating surface mesh per {roi_table=} for "
         f"{label_name=}."
     )
-    # Set OME-Zarr paths
-    input_zarr_path = Path(input_paths[0]) / component
-    # r0_zarr_path = input_zarr_path.parent / str(reference_cycle)
-
-    # If the task is run for the any cycle that is not reference, exit
-    # TODO: Improve the input for this: Can we filter components to not
-    current_cycle = input_zarr_path.name
-    if current_cycle != str(reference_cycle):
-        logger.info(
-            f"Skipping cycle {current_cycle} "
-        )
-        return {}
-
-    else:
-        logger.info(
-            "Surface mesh calculation is running for "
-            f"cycle {current_cycle}"
-        )
 
     # Lazily load zarr array for reference cycle
     # load well image as dask array e.g. for nuclear segmentation
-    r0_dask = da.from_zarr(f"{input_zarr_path}/labels/{label_name}/{level}")
+    r0_dask = da.from_zarr(f"{zarr_url}/labels/{label_name}/{level}")
 
     # Read ROIs of objects
-    r0_adata = ad.read_zarr(f"{input_zarr_path}/tables/{roi_table}")
+    r0_adata = ad.read_zarr(f"{zarr_url}/tables/{roi_table}")
 
     # Read Zarr metadata
-    r0_ngffmeta = load_NgffImageMeta(f"{input_zarr_path}/labels/{label_name}")
+    r0_ngffmeta = load_NgffImageMeta(f"{zarr_url}/labels/{label_name}")
     r0_xycoars = r0_ngffmeta.coarsening_xy # need to know when building new pyramids
     r0_pixmeta = r0_ngffmeta.get_pixel_sizes_zyx(level=level)
 
@@ -176,7 +148,7 @@ def surface_mesh(
         label_dtype = np.uint32
         output_label_name = label_name_obj + '_3d'
         output_roi_table_name = roi_table + '_3d'
-        store = zarr.storage.FSStore(f"{input_zarr_path}/labels/{output_label_name}/0")
+        store = zarr.storage.FSStore(f"{zarr_url}/labels/{output_label_name}/0")
 
         if len(shape) != 3 or len(chunks) != 3 or shape[0] == 1:
             raise ValueError('Expecting 3D image')
@@ -184,9 +156,9 @@ def surface_mesh(
         # Add metadata to labels group
         # Get the label_attrs correctly
         # Note that the new label metadata matches the nuc metadata
-        label_attrs = get_zattrs(zarr_url=f"{input_zarr_path}/labels/{label_name}")
+        label_attrs = get_zattrs(zarr_url=f"{zarr_url}/labels/{label_name}")
         _ = prepare_label_group(
-            image_group=zarr.group(input_zarr_path),
+            image_group=zarr.group(zarr_url),
             label_name=output_label_name,
             overwrite=True,
             label_attrs=label_attrs,
@@ -213,10 +185,10 @@ def surface_mesh(
 
     # nuclei are masked by parent object (e.g. organoid) to only select nuclei belonging to parent.
     # load well image as dask array for parent objects
-    r0_dask_parent = da.from_zarr(f"{input_zarr_path}/labels/{label_name_obj}/{level}")
+    r0_dask_parent = da.from_zarr(f"{zarr_url}/labels/{label_name_obj}/{level}")
 
     # Read Zarr metadata
-    r0_ngffmeta_parent = load_NgffImageMeta(f"{input_zarr_path}/labels/{label_name_obj}")
+    r0_ngffmeta_parent = load_NgffImageMeta(f"{zarr_url}/labels/{label_name_obj}")
     r0_xycoars_parent = r0_ngffmeta_parent.coarsening_xy
     r0_pixmeta_parent = r0_ngffmeta_parent.get_pixel_sizes_zyx(level=level)
 
@@ -321,7 +293,7 @@ def surface_mesh(
                                                     target_reduction=0.98,
                                                     show_progress=False)
 
-            save_transform_path = f"{input_zarr_path}/meshes/{label_name_obj}_from_{label_name}"
+            save_transform_path = f"{zarr_url}/meshes/{label_name_obj}_from_{label_name}"
             os.makedirs(save_transform_path, exist_ok=True)
             # save name is the organoid label id
             save_name = f"{int(r0_org_label)}.vtp"
@@ -348,7 +320,7 @@ def surface_mesh(
             # )
 
             # load dask from disk, will contain rois of the previously processed objects within for loop
-            new_label3d_dask = da.from_zarr(f"{input_zarr_path}/labels/{output_label_name}/0")
+            new_label3d_dask = da.from_zarr(f"{zarr_url}/labels/{output_label_name}/0")
             # load region of current object from disk, will include any previously processed neighboring objects
             seg_ondisk = load_region(
                 data_zyx=new_label3d_dask,
@@ -406,7 +378,7 @@ def surface_mesh(
     if save_labels:
 
         build_pyramid(
-            zarrurl=f"{input_zarr_path}/labels/{output_label_name}",
+            zarrurl=f"{zarr_url}/labels/{output_label_name}",
             overwrite=True,
             num_levels=r0_ngffmeta.num_levels,
             coarsening_xy=r0_ngffmeta.coarsening_xy,
@@ -414,11 +386,11 @@ def surface_mesh(
             aggregation_function=np.max,
         )
 
-        logger.info(f"Built a pyramid for the {input_zarr_path}/labels/{output_label_name} label image")
+        logger.info(f"Built a pyramid for the {zarr_url}/labels/{output_label_name} label image")
 
         bbox_table = format_roi_table(bbox_dataframe_list)
         # Write to zarr group
-        logger.info(f"Writing new bounding-box ROI table to {input_zarr_path}/tables/{output_roi_table_name}")
+        logger.info(f"Writing new bounding-box ROI table to {zarr_url}/tables/{output_roi_table_name}")
 
         table_attrs = {
             "type": "ngff:region_table",
@@ -427,14 +399,14 @@ def surface_mesh(
         }
 
         write_table(
-            zarr.group(input_zarr_path),
+            zarr.group(zarr_url),
             output_roi_table_name,
             bbox_table,
             overwrite=True,
             table_attrs=table_attrs,
         )
 
-    logger.info(f"End surface_mesh task for {input_zarr_path}/labels/{output_label_name}")
+    logger.info(f"End surface_mesh task for {zarr_url}/labels/{output_label_name}")
 
     return {}
 

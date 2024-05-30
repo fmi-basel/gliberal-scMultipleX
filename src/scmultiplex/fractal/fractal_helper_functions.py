@@ -65,7 +65,7 @@ def format_roi_table(bbox_dataframe_list):
     bbox_dtype = np.float32
     df_well = df_well.astype(bbox_dtype)
     # Convert to anndata
-    bbox_table = ad.AnnData(df_well, dtype=bbox_dtype)
+    bbox_table = ad.AnnData(df_well)
     bbox_table.obs = labels
 
     return bbox_table
