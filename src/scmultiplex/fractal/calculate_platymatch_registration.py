@@ -10,7 +10,7 @@
 """
 Calculates linking tables for segmented sub-objects (e.g. nuclei, cells) for segmented and linked objects in a well
 """
-from typing import Any
+from typing import Any, Optional
 
 import anndata as ad
 import dask.array as da
@@ -43,11 +43,12 @@ from skimage.measure import regionprops_table
 # rather than a relative way. Maybe we can create a pull request to switch those import statements to relative
 import scmultiplex
 from scmultiplex.fractal.fractal_helper_functions import extract_acq_info
+from scmultiplex.meshing.FilterFunctions import filter_small_sizes_per_round
 
 sys.path.append(os.path.join(scmultiplex.__path__[0], r'platymatch'))
 
 from platymatch.utils.utils import generate_affine_transformed_image
-from scmultiplex.linking.NucleiLinkingFunctions import run_affine, filter_small_sizes, run_ffd, remove_labels
+from scmultiplex.linking.NucleiLinkingFunctions import run_affine, run_ffd, remove_labels
 
 from traceback import print_exc
 
@@ -69,6 +70,8 @@ def calculate_platymatch_registration(
         save_transformation: bool = True,
         mask_by_parent: bool = True,
         calculate_ffd: bool = True,
+        volume_filter: bool = True,
+        volume_filter_threshold: Optional[float] = 0.05,
 
 ) -> dict[str, Any]:
     """
@@ -106,6 +109,11 @@ def calculate_platymatch_registration(
         calculate_ffd: if True, calculate free form deformation registration based on affine linking.
         seg_channel: Channel that was used for nuclear segmentation; requires either
             `wavelength_id` (e.g. `A01_C01`) or `label` (e.g. `DAPI`). Assume same across all rounds.
+        volume_filter: if True, performing volume filtering of nuclei to remove objects smaller
+            than specified volume_filter_threshold.
+        volume_filter_threshold: Multiplier that specifies cutoff for volumes below which nuclei are filtered out,
+            float in range [0,1], e.g. 0.05 means that 5% of median of nuclear volume distribution is used as cutoff.
+            Specify this value if volume filtering is desired. Default 0.05.
 
 
     """
@@ -358,15 +366,28 @@ def calculate_platymatch_registration(
         rx_props = (pd.DataFrame(rx_props,
                                  columns=['label', 'centroid-2', 'centroid-1', 'centroid-0', 'area'])).to_numpy()
 
-        # discard segmentations that have a volume less than 5% of median nuclear volume (segmented debris)
-        (rx_props, r0_props, moving_removed, fixed_removed, moving_filtered_size_mean, fixed_filtered_size_mean) = (
-            filter_small_sizes(rx_props, r0_props, column=-1, threshold=0.05))
+        if volume_filter:
+            # discard segmentations that have a volume less than fraction of median nuclear volume (segmented debris)
+            # reference round
+            (r0_props, fixed_removed, r0_removed_size_mean, r0_size_mean, r0_volume_cutoff) = (
+                filter_small_sizes_per_round(rx_props, column=-1, threshold=volume_filter_threshold))
 
-        logger.info(f"\nFiltered out {len(fixed_removed)} cells from REFERENCE round object {r0_org_label} that have a "
-                    f" mean volume of {fixed_filtered_size_mean} and correspond to labels \n {fixed_removed}"
-                    f"\n Filtered out {len(moving_removed)} cells from ALIGNMENT round object {rx_org_label}"
-                    f" that have a mean volume of {moving_filtered_size_mean} and correspond to labels "
-                    f"\n {moving_removed}")
+            logger.info(f"Performing volume filtering of object {r0_org_label} to "
+                        f"remove small debris below {r0_volume_cutoff} pix threshold")
+
+            logger.info(f"Filtered out {len(fixed_removed)} cells from object {r0_org_label} that have a "
+                        f" mean volume of {r0_removed_size_mean} and correspond to labels \n {fixed_removed}"
+                        )
+            # rx
+            (rx_props, moving_removed, rx_removed_size_mean, rx_size_mean, rx_volume_cutoff) = (
+                filter_small_sizes_per_round(rx_props, column=-1, threshold=volume_filter_threshold))
+
+            logger.info(f"Performing volume filtering of object {rx_org_label} to "
+                        f"remove small debris below {rx_volume_cutoff} pix threshold")
+
+            logger.info(f"Filtered out {len(moving_removed)} cells from object {rx_org_label} that have a "
+                        f" mean volume of {rx_removed_size_mean} and correspond to labels \n {moving_removed}"
+                        )
 
         # TODO add disconnected component detection here to remove nuclei that don't belong to main organoid
 

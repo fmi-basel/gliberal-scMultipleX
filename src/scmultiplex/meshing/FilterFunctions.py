@@ -21,7 +21,6 @@ from scmultiplex.linking.NucleiLinkingFunctions import calculate_quantiles
 warnings.filterwarnings("ignore")
 
 
-# TODO refactor calculate_platymatch_registration to also use this function instead of filter_small_sizes!
 def filter_small_sizes_per_round(props_numpy, column=-1, threshold=0.05):
     """
     props_np: numpy array, where each row corresponds to a nucleus and columns are regionprops measurements
