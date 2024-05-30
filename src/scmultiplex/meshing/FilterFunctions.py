@@ -18,7 +18,7 @@ from skimage.measure import regionprops_table
 
 from scmultiplex.linking.NucleiLinkingFunctions import calculate_quantiles
 
-warnings.filterwarnings("ignore")
+# warnings.filterwarnings("ignore")
 
 
 def filter_small_sizes_per_round(props_numpy, column=-1, threshold=0.05):

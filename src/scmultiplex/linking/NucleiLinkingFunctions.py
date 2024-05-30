@@ -44,7 +44,7 @@ from platymatch.utils.utils import (
     normalize_min_max_percentile,
 )
 
-warnings.filterwarnings("ignore")
+# warnings.filterwarnings("ignore")
 
 
 def calculate_stats(pc, column=-1):

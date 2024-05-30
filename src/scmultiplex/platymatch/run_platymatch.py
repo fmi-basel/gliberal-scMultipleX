@@ -15,7 +15,7 @@ from platymatch.estimate_transform.shape_context import get_unary, do_ransac_com
 from platymatch.utils.utils import get_centroid, get_mean_distance, generate_affine_transformed_image, \
     generate_ffd_transformed_image, normalize_min_max_percentile, compute_average_bg_intensity
 
-warnings.filterwarnings("ignore")
+# warnings.filterwarnings("ignore")
 
 # Typical Starter Code
 
