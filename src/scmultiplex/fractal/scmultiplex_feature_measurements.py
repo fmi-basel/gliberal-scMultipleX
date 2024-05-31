@@ -21,9 +21,11 @@ import fractal_tasks_core
 import numpy as np
 import pandas as pd
 import zarr
-
-from fractal_tasks_core.channels import get_channel_from_image_zarr, ChannelNotFoundError
-from fractal_tasks_core.channels import ChannelInputModel
+from fractal_tasks_core.channels import (
+    ChannelInputModel,
+    ChannelNotFoundError,
+    get_channel_from_image_zarr,
+)
 from fractal_tasks_core.ngff import load_NgffImageMeta
 from fractal_tasks_core.roi import (
     convert_ROI_table_to_indices,
@@ -43,7 +45,6 @@ logger = logging.getLogger(__name__)
 
 
 @validate_arguments
-# TODO To update to fractal 2 just replace the Default Fractal arguments
 def scmultiplex_feature_measurements(  # noqa: C901
     *,
     # Default arguments for fractal tasks:
@@ -169,9 +170,7 @@ def scmultiplex_feature_measurements(  # noqa: C901
             logger.info(f"Prepared input with {name=} and {input_channels[name]=}")
             logger.info(f"{input_image_arrays=}")
 
-    input_label_image = da.from_zarr(
-        f"{zarr_url}/labels/{label_image}/{label_level}"
-    )
+    input_label_image = da.from_zarr(f"{zarr_url}/labels/{label_image}/{label_level}")
 
     if input_channels:
         # Upsample the label image to match the intensity image
@@ -345,11 +344,12 @@ def scmultiplex_feature_measurements(  # noqa: C901
         output_table_name,
         measurement_table,
         overwrite=overwrite,
-        table_attrs=dict(type="feature_table",
-                         fractal_table_version="1",
-                         region=dict(path=f"../labels/{label_image}"),
-                         instance_key="label",
-                         )
+        table_attrs=dict(
+            type="feature_table",
+            fractal_table_version="1",
+            region=dict(path=f"../labels/{label_image}"),
+            instance_key="label",
+        ),
     )
 
 
