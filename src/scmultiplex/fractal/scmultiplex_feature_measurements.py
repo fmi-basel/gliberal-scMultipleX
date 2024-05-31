@@ -203,7 +203,7 @@ def scmultiplex_feature_measurements(  # noqa: C901
         s_z, e_z, s_y, e_y, s_x, e_x = indices[:]
         region = (slice(s_z, e_z), slice(s_y, e_y), slice(s_x, e_x))
 
-        logger.info(f"ROI {i_ROI+1}/{num_ROIs}: {region=}")
+        logger.debug(f"ROI {i_ROI+1}/{num_ROIs}: {region=}")
 
         # Define some constant values to be added as a separat column to
         # the obs table
@@ -224,7 +224,7 @@ def scmultiplex_feature_measurements(  # noqa: C901
             extra_values["ROI_label"] = current_label
 
         if label_img.shape[0] == 1:
-            logger.info("Label image is 2D only, processing with 2D options")
+            logger.debug("Label image is 2D only, processing with 2D options")
             label_img = np.squeeze(label_img, axis=0)
             real_spacing = full_res_pxl_sizes_zyx[-2:]
             is_2D = True
