@@ -23,8 +23,8 @@ single_input_channels = {"C01": ChannelInputModel(wavelength_id="A01_C01")}
 level = 0
 label_level = 0
 
-component_2D = "20200812-CardiomyocyteDifferentiation14-Cycle1_mip.zarr/B/03/0"
-component_3D = "20200812-CardiomyocyteDifferentiation14-Cycle1.zarr/B/03/0"
+image_path_2D = "20200812-CardiomyocyteDifferentiation14-Cycle1_mip.zarr/B/03/0"
+image_path_3D = "20200812-CardiomyocyteDifferentiation14-Cycle1.zarr/B/03/0"
 
 
 def load_features_for_well(table_path):
@@ -66,8 +66,7 @@ def test_2D_fractal_measurements(
     allow_duplicate_labels,
     expected_to_run,
 ):
-    base_path = tiny_zenodo_zarrs_base_path
-    component = component_2D
+    zarr_url = f"{tiny_zenodo_zarrs_base_path}/{image_path_2D}"
     try:
         output_table_name = f"table_{input_ROI_table}_{len(input_channels)}_{measure_morphology}_{level}_{label_level}"
     except TypeError:
@@ -80,10 +79,7 @@ def test_2D_fractal_measurements(
     if not expected_to_run:
         with pytest.raises(ValueError):
             scmultiplex_feature_measurements(
-                input_paths=[base_path],
-                output_path=base_path,
-                metadata=metadata_tiny_zenodo["metadata_2D"],
-                component=component,
+                zarr_url=zarr_url,
                 input_ROI_table=input_ROI_table,
                 input_channels=input_channels,
                 label_image=label_image,
@@ -95,10 +91,7 @@ def test_2D_fractal_measurements(
             )
     else:
         scmultiplex_feature_measurements(
-            input_paths=[base_path],
-            output_path=base_path,
-            metadata=metadata_tiny_zenodo["metadata_2D"],
-            component=component,
+            zarr_url=zarr_url,
             input_ROI_table=input_ROI_table,
             input_channels=input_channels,
             label_image=label_image,
@@ -110,7 +103,7 @@ def test_2D_fractal_measurements(
         )
 
         # Check & verify the output_table
-        ad_path = Path(base_path) / component / "tables" / output_table_name
+        ad_path = Path(zarr_url) / "tables" / output_table_name
         df = load_features_for_well(ad_path)
 
         if input_ROI_table == "well_ROI_table":
@@ -136,7 +129,7 @@ def test_2D_fractal_measurements(
 
         # Load expected table & compare
         expected_table_path = (
-            Path(base_path) / component / "tables" / f"expected_{output_table_name}"
+            Path(zarr_url) / "tables" / f"expected_{output_table_name}"
         )
         df_expected = load_features_for_well(expected_table_path)
         assert_frame_equal(df, df_expected)
@@ -169,8 +162,7 @@ def test_3D_fractal_measurements(
     allow_duplicate_labels,
     expected_to_run,
 ):
-    base_path = tiny_zenodo_zarrs_base_path
-    component = component_3D
+    zarr_url = f"{tiny_zenodo_zarrs_base_path}/{image_path_3D}"
     output_table_name = (
         f"table_{input_ROI_table}_{measure_morphology}_{level}_{label_level}"
     )
@@ -180,10 +172,7 @@ def test_3D_fractal_measurements(
     if not expected_to_run:
         with pytest.raises(ValueError):
             scmultiplex_feature_measurements(
-                input_paths=[base_path],
-                output_path=base_path,
-                metadata=metadata_tiny_zenodo["metadata_3D"],
-                component=component,
+                zarr_url=zarr_url,
                 input_ROI_table=input_ROI_table,
                 input_channels=input_channels,
                 label_image=label_image,
@@ -195,10 +184,7 @@ def test_3D_fractal_measurements(
             )
     else:
         scmultiplex_feature_measurements(
-            input_paths=[base_path],
-            output_path=base_path,
-            metadata=metadata_tiny_zenodo["metadata_3D"],
-            component=component,
+            zarr_url=zarr_url,
             input_ROI_table=input_ROI_table,
             input_channels=input_channels,
             label_image=label_image,
@@ -210,7 +196,7 @@ def test_3D_fractal_measurements(
         )
 
         # Check & verify the output_table
-        ad_path = Path(base_path) / component / "tables" / output_table_name
+        ad_path = Path(zarr_url) / "tables" / output_table_name
         df = load_features_for_well(ad_path)
 
         if input_ROI_table == "well_ROI_table":
@@ -233,7 +219,7 @@ def test_3D_fractal_measurements(
 
         # Load expected table & compare
         expected_table_path = (
-            Path(base_path) / component / "tables" / f"expected_{output_table_name}"
+            Path(zarr_url) / "tables" / f"expected_{output_table_name}"
         )
         df_expected = load_features_for_well(expected_table_path)
         assert_frame_equal(df, df_expected)
@@ -252,8 +238,7 @@ def test_masked_measurements(
 ):
     # Test measuring when using a ROI table with masks
     allow_duplicate_labels = False
-    base_path = tiny_zenodo_zarrs_base_path
-    component = component_2D
+    zarr_url = f"{tiny_zenodo_zarrs_base_path}/{image_path_2D}"
     input_ROI_table = "nuclei_ROI_table"
     measure_morphology = True
     output_table_name = f"table_masked_{input_ROI_table}_{len(input_channels)}_{measure_morphology}_{level}_{label_level}"
@@ -262,10 +247,7 @@ def test_masked_measurements(
     label_image = "nuclei"
 
     scmultiplex_feature_measurements(
-        input_paths=[base_path],
-        output_path=base_path,
-        metadata=metadata_tiny_zenodo["metadata_2D"],
-        component=component,
+        zarr_url=zarr_url,
         input_ROI_table=input_ROI_table,
         input_channels=input_channels,
         label_image=label_image,
@@ -277,7 +259,7 @@ def test_masked_measurements(
     )
 
     # Check & verify the output_table
-    ad_path = Path(base_path) / component / "tables" / output_table_name
+    ad_path = Path(zarr_url) / "tables" / output_table_name
     df = load_features_for_well(ad_path)
 
     assert len(df) == 1493
@@ -300,9 +282,7 @@ def test_masked_measurements(
     assert list(df.columns) == expected_columns
 
     # Load expected table & compare
-    expected_table_path = (
-        Path(base_path) / component / "tables" / f"expected_{output_table_name}"
-    )
+    expected_table_path = Path(zarr_url) / "tables" / f"expected_{output_table_name}"
     df_expected = load_features_for_well(expected_table_path)
     assert_frame_equal(df, df_expected)
 
@@ -323,18 +303,14 @@ def test_empty_label(
     measure_morphology,
 ):
     input_ROI_table = "well_ROI_table"
-    base_path = tiny_zenodo_zarrs_base_path
-    component = component_2D
+    zarr_url = f"{tiny_zenodo_zarrs_base_path}/{image_path_2D}"
     output_table_name = f"empty_{input_ROI_table}_{len(input_channels)}_{measure_morphology}_{level}_{label_level}"
 
     # Prepare fractal task
     label_image = "empty"
 
     scmultiplex_feature_measurements(
-        input_paths=[base_path],
-        output_path=base_path,
-        metadata=metadata_tiny_zenodo["metadata_2D"],
-        component=component,
+        zarr_url=zarr_url,
         input_ROI_table=input_ROI_table,
         input_channels=input_channels,
         label_image=label_image,
@@ -345,7 +321,7 @@ def test_empty_label(
     )
 
     # Check & verify the output_table
-    ad_path = Path(base_path) / component / "tables" / output_table_name
+    ad_path = Path(zarr_url) / "tables" / output_table_name
     adata = ad.read_zarr(ad_path)
     assert len(adata) == 0
     assert adata.shape == (0, 0)
@@ -365,8 +341,7 @@ def test_overwrite(
     input_channels = multi_input_channels
     measure_morphology = False
     allow_duplicate_labels = False
-    base_path = tiny_zenodo_zarrs_base_path
-    component = component_2D
+    zarr_url = f"{tiny_zenodo_zarrs_base_path}/{image_path_2D}"
     try:
         output_table_name = f"table_overwrite_{overwrite}"
     except TypeError:
@@ -377,10 +352,7 @@ def test_overwrite(
     # Prepare fractal task
     label_image = "nuclei"
     scmultiplex_feature_measurements(
-        input_paths=[base_path],
-        output_path=base_path,
-        metadata=metadata_tiny_zenodo["metadata_2D"],
-        component=component,
+        zarr_url=zarr_url,
         input_ROI_table=input_ROI_table,
         input_channels=input_channels,
         label_image=label_image,
@@ -394,10 +366,7 @@ def test_overwrite(
 
     if overwrite:
         scmultiplex_feature_measurements(
-            input_paths=[base_path],
-            output_path=base_path,
-            metadata=metadata_tiny_zenodo["metadata_2D"],
-            component=component,
+            zarr_url=zarr_url,
             input_ROI_table=input_ROI_table,
             input_channels=input_channels,
             label_image=label_image,
@@ -412,10 +381,7 @@ def test_overwrite(
     else:
         with pytest.raises(OverwriteNotAllowedError):
             scmultiplex_feature_measurements(
-                input_paths=[base_path],
-                output_path=base_path,
-                metadata=metadata_tiny_zenodo["metadata_2D"],
-                component=component,
+                zarr_url=zarr_url,
                 input_ROI_table=input_ROI_table,
                 input_channels=input_channels,
                 label_image=label_image,

@@ -35,7 +35,7 @@ from fractal_tasks_core.roi import (
 
 from skimage.measure import label, regionprops_table
 
-from scmultiplex.fractal.FractalHelperFunctions import get_zattrs
+from scmultiplex.fractal.fractal_helper_functions import get_zattrs
 from scmultiplex.linking.NucleiLinkingFunctions import remove_labels
 
 from scmultiplex.meshing.FilterFunctions import filter_small_sizes_per_round, mask_by_parent_object

@@ -13,8 +13,7 @@ Wrapper of scMultipleX measurements for Fractal
 """
 
 import logging
-from pathlib import Path
-from typing import Any, Dict, Sequence
+from typing import Dict
 
 import anndata as ad
 import dask.array as da
@@ -22,9 +21,11 @@ import fractal_tasks_core
 import numpy as np
 import pandas as pd
 import zarr
-
-from fractal_tasks_core.channels import get_channel_from_image_zarr, ChannelNotFoundError
-from fractal_tasks_core.channels import ChannelInputModel
+from fractal_tasks_core.channels import (
+    ChannelInputModel,
+    ChannelNotFoundError,
+    get_channel_from_image_zarr,
+)
 from fractal_tasks_core.ngff import load_NgffImageMeta
 from fractal_tasks_core.roi import (
     convert_ROI_table_to_indices,
@@ -47,10 +48,7 @@ logger = logging.getLogger(__name__)
 def scmultiplex_feature_measurements(  # noqa: C901
     *,
     # Default arguments for fractal tasks:
-    input_paths: Sequence[str],
-    output_path: str,
-    component: str,
-    metadata: Dict[str, Any],
+    zarr_url: str,
     # Task-specific arguments:
     label_image: str,
     output_table_name: str,
@@ -69,21 +67,8 @@ def scmultiplex_feature_measurements(  # noqa: C901
     measurements of intensities and morphologies
 
     Args:
-        input_paths: List of input paths where the image data is stored as
-            OME-Zarrs. Should point to the parent folder containing one or many
-            OME-Zarr files, not the actual OME-Zarr file. Example:
-            `["/some/path/"]`. This task only supports a single input path.
+        zarr_url: Path or url to the individual OME-Zarr image to be processed.
             (standard argument for Fractal tasks, managed by Fractal server).
-        output_path: This parameter is not used by this task.
-            (standard argument for Fractal tasks, managed by Fractal server).
-        component: Path to the OME-Zarr image in the OME-Zarr plate that is
-            processed. Example: `"some_plate.zarr/B/03/0"`.
-            (standard argument for Fractal tasks, managed by Fractal server).
-        metadata: dictionary containing metadata about the OME-Zarr. This task
-            requires the following elements to be present in the metadata.
-            `coarsening_xy (int)`: coarsening factor in XY of the downsampling
-            when building the pyramid. (standard argument for Fractal tasks,
-            managed by Fractal server).
         label_image: Name of the label image to use for measurements.
             Needs to exist in OME-Zarr file
         output_table_name: Name of the output AnnData table to save the
@@ -125,17 +110,11 @@ def scmultiplex_feature_measurements(  # noqa: C901
             "to measure at lower resolutions"
         )
 
-    # Pre-processing of task inputs
-    if len(input_paths) > 1:
-        raise NotImplementedError("We currently only support a single in_path")
-    in_path = Path(input_paths[0]).as_posix()
-
     # Read ROI table
-    zarrurl = f"{in_path}/{component}"
-    ROI_table = ad.read_zarr(f"{in_path}/{component}/tables/{input_ROI_table}")
+    ROI_table = ad.read_zarr(f"{zarr_url}/tables/{input_ROI_table}")
     # Load image metadata
-    ngff_image_meta = load_NgffImageMeta(zarrurl)
-    ngff_label_image_meta = load_NgffImageMeta(f"{zarrurl}/labels/{label_image}")
+    ngff_image_meta = load_NgffImageMeta(zarr_url)
+    ngff_label_image_meta = load_NgffImageMeta(f"{zarr_url}/labels/{label_image}")
     coarsening_xy = ngff_image_meta.coarsening_xy
 
     # Read pixel sizes from zattrs file
@@ -158,7 +137,7 @@ def scmultiplex_feature_measurements(  # noqa: C901
     )
     # Whether to use masking with ROIs
     use_ROI_masks = is_ROI_table_valid(
-        table_path=f"{in_path}/{component}/tables/{input_ROI_table}", use_masks=True
+        table_path=f"{zarr_url}/tables/{input_ROI_table}", use_masks=True
     )
     if not use_ROI_masks:
         overlap = find_overlaps_in_ROI_indices(list_indices)
@@ -169,13 +148,13 @@ def scmultiplex_feature_measurements(  # noqa: C901
             )
 
     input_image_arrays = {}
-    img_array = da.from_zarr(f"{in_path}/{component}/{level}")
+    img_array = da.from_zarr(f"{zarr_url}/{level}")
     # Loop over image inputs and assign corresponding channel of the image
     if input_channels:
         for name in input_channels.keys():
             try:
                 channel = get_channel_from_image_zarr(
-                    image_zarr_path=f"{in_path}/{component}",
+                    image_zarr_path=f"{zarr_url}",
                     wavelength_id=input_channels[name].wavelength_id,
                     label=input_channels[name].label,
                 )
@@ -191,9 +170,7 @@ def scmultiplex_feature_measurements(  # noqa: C901
             logger.info(f"Prepared input with {name=} and {input_channels[name]=}")
             logger.info(f"{input_image_arrays=}")
 
-    input_label_image = da.from_zarr(
-        f"{in_path}/{component}/labels/{label_image}/{label_level}"
-    )
+    input_label_image = da.from_zarr(f"{zarr_url}/labels/{label_image}/{label_level}")
 
     if input_channels:
         # Upsample the label image to match the intensity image
@@ -226,7 +203,7 @@ def scmultiplex_feature_measurements(  # noqa: C901
         s_z, e_z, s_y, e_y, s_x, e_x = indices[:]
         region = (slice(s_z, e_z), slice(s_y, e_y), slice(s_x, e_x))
 
-        logger.info(f"ROI {i_ROI+1}/{num_ROIs}: {region=}")
+        logger.debug(f"ROI {i_ROI+1}/{num_ROIs}: {region=}")
 
         # Define some constant values to be added as a separat column to
         # the obs table
@@ -247,7 +224,7 @@ def scmultiplex_feature_measurements(  # noqa: C901
             extra_values["ROI_label"] = current_label
 
         if label_img.shape[0] == 1:
-            logger.info("Label image is 2D only, processing with 2D options")
+            logger.debug("Label image is 2D only, processing with 2D options")
             label_img = np.squeeze(label_img, axis=0)
             real_spacing = full_res_pxl_sizes_zyx[-2:]
             is_2D = True
@@ -361,17 +338,18 @@ def scmultiplex_feature_measurements(  # noqa: C901
         measurement_table = ad.AnnData()
 
     # Write to zarr group
-    image_group = zarr.group(f"{in_path}/{component}")
+    image_group = zarr.group(f"{zarr_url}")
     write_table(
         image_group,
         output_table_name,
         measurement_table,
         overwrite=overwrite,
-        table_attrs=dict(type="feature_table",
-                         fractal_table_version="1",
-                         region=dict(path=f"../labels/{label_image}"),
-                         instance_key="label",
-                         )
+        table_attrs=dict(
+            type="feature_table",
+            fractal_table_version="1",
+            region=dict(path=f"../labels/{label_image}"),
+            instance_key="label",
+        ),
     )
 
 

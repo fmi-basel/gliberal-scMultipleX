@@ -44,7 +44,7 @@ from platymatch.utils.utils import (
     normalize_min_max_percentile,
 )
 
-warnings.filterwarnings("ignore")
+# warnings.filterwarnings("ignore")
 
 
 def calculate_stats(pc, column=-1):
@@ -104,37 +104,6 @@ def calculate_nucleus_size(moving_pc, fixed_pc):
     fixed_nuclei_size = calculate_size(fixed_nuclei_size_mean, fixed_nuclei_size_std)
 
     return moving_nuclei_size, fixed_nuclei_size
-
-
-def filter_small_sizes(moving_pc, fixed_pc, column=-1, threshold=0.05):
-    """
-    Filter out nuclei with small volumes, presumed to be debris.
-    Column: index of column in numpy array that correspond to volume measurement
-    Threshold: multiplier that specifies cutoff for volumes below which nuclei are filtered out, float in range [0,1],
-        e.g. 0.05 means that 5% of median of nuclear volume distribution is used as cutoff.
-    Return filtered numpy array (moving_pc_filtered, fixed_pc_filtered) as well as logging metrics.
-    """
-    moving_median, _ = calculate_quantiles(moving_pc, q=0.5, column=column)
-    fixed_median, _ = calculate_quantiles(fixed_pc, q=0.5, column=column)
-
-    # generate boolean arrays for filtering
-    moving_row_selection = moving_pc[:, column].transpose() > (threshold * moving_median)
-    fixed_row_selection = fixed_pc[:, column].transpose() > (threshold * fixed_median)
-
-    # filter pc to remove small nuclei
-    moving_pc_filtered = moving_pc[moving_row_selection, :]
-    fixed_pc_filtered = fixed_pc[fixed_row_selection, :]
-
-    # return nuclear ids of removed nuclei, assume nuclear labels are first column (column 0)
-    moving_removed = moving_pc[~moving_row_selection, 0]
-    fixed_removed = fixed_pc[~fixed_row_selection, 0]
-
-    # calculate mean of removed nuclear sizes
-    moving_filtered_size_mean = np.mean(moving_pc[~moving_row_selection, column])
-    fixed_filtered_size_mean = np.mean(fixed_pc[~fixed_row_selection, column])
-
-    return (moving_pc_filtered, fixed_pc_filtered, moving_removed, fixed_removed,
-            moving_filtered_size_mean, fixed_filtered_size_mean)
 
 
 def run_affine(moving_pc, fixed_pc, ransac_iterations, icp_iterations):
