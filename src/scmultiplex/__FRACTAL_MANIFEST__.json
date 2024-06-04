@@ -1,48 +1,617 @@
 {
-  "manifest_version": 1,
+  "manifest_version": "2",
   "task_list": [
     {
-      "name": "scMultipleX Measurements",
-      "executable": "fractal/scmultiplex_feature_measurements.py",
-      "input_type": "zarr",
-      "output_type": "zarr",
-      "default_args": {
-        "input_ROI_table": "well_ROI_table",
-        "level": 0,
-        "label_level": 0,
-        "measure_morphology": true
+      "name": "scMultiplex Calculate Object Linking",
+      "executable_non_parallel": "fractal/_image_based_registration_hcs_init.py",
+      "executable_parallel": "fractal/calculate_object_linking.py",
+      "meta_non_parallel": {
+        "cpus_per_task": 1,
+        "mem": 1000
       },
-      "meta": {
+      "meta_parallel": {
         "cpus_per_task": 4,
-        "mem": 16000,
-        "parallelization_level": "image"
+        "mem": 16000
       },
-      "args_schema": {
-        "title": "ScmultiplexFeatureMeasurements",
+      "args_schema_non_parallel": {
+        "title": "ImageBasedRegistrationHcsInit",
         "type": "object",
         "properties": {
-          "input_paths": {
-            "title": "Input Paths",
+          "zarr_urls": {
+            "title": "Zarr Urls",
             "type": "array",
             "items": {
               "type": "string"
             },
-            "description": "List of input paths where the image data is stored as OME-Zarrs. Should point to the parent folder containing one or many OME-Zarr files, not the actual OME-Zarr file. Example: `[\"/some/path/\"]`. This task only supports a single input path. (standard argument for Fractal tasks, managed by Fractal server)."
+            "description": "List of paths or urls to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
           },
-          "output_path": {
-            "title": "Output Path",
+          "zarr_dir": {
+            "title": "Zarr Dir",
             "type": "string",
-            "description": "This parameter is not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
+            "description": "path of the directory where the new OME-Zarrs will be created. Not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
           },
-          "component": {
-            "title": "Component",
+          "reference_acquisition": {
+            "title": "Reference Acquisition",
+            "default": 0,
+            "type": "integer",
+            "description": "Which acquisition to register against. Needs to match the acquisition metadata in the OME-Zarr image."
+          }
+        },
+        "required": [
+          "zarr_urls",
+          "zarr_dir"
+        ],
+        "additionalProperties": false
+      },
+      "args_schema_parallel": {
+        "title": "CalculateObjectLinking",
+        "type": "object",
+        "properties": {
+          "zarr_url": {
+            "title": "Zarr Url",
             "type": "string",
-            "description": "Path to the OME-Zarr image in the OME-Zarr plate that is processed. Example: `\"some_plate.zarr/B/03/0\"`. (standard argument for Fractal tasks, managed by Fractal server)."
+            "description": "Path or url to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
           },
-          "metadata": {
-            "title": "Metadata",
+          "init_args": {
+            "$ref": "#/definitions/InitArgsRegistration",
+            "title": "Init_Args",
+            "description": "Intialization arguments provided by `_image_based_registration_hcs_init`. They contain the reference_zarr_url that is used for registration. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "label_name": {
+            "title": "Label Name",
+            "type": "string",
+            "description": "Label name that will be used for label-based registration; e.g. `org` from object segmentation."
+          },
+          "roi_table": {
+            "title": "Roi Table",
+            "default": "well_ROI_table",
+            "type": "string",
+            "description": "Name of the well ROI table. Input ROI table must have single ROI entry; e.g. `well_ROI_table`"
+          },
+          "level": {
+            "title": "Level",
+            "default": 0,
+            "type": "integer",
+            "description": "Pyramid level of the image to be segmented. Choose `0` to process at full resolution."
+          },
+          "iou_cutoff": {
+            "title": "Iou Cutoff",
+            "default": 0.2,
+            "type": "number",
+            "description": "Float in range 0 to 1 to specify intersection over union cutoff. Object pairs that have an iou below this value are filtered out and stored in linking table."
+          }
+        },
+        "required": [
+          "zarr_url",
+          "init_args",
+          "label_name"
+        ],
+        "additionalProperties": false,
+        "definitions": {
+          "InitArgsRegistration": {
+            "title": "InitArgsRegistration",
+            "description": "Registration init args.",
             "type": "object",
-            "description": "dictionary containing metadata about the OME-Zarr. This task requires the following elements to be present in the metadata. `coarsening_xy (int)`: coarsening factor in XY of the downsampling when building the pyramid. (standard argument for Fractal tasks, managed by Fractal server)."
+            "properties": {
+              "reference_zarr_url": {
+                "title": "Reference Zarr Url",
+                "type": "string"
+              }
+            },
+            "required": [
+              "reference_zarr_url"
+            ]
+          }
+        }
+      },
+      "docs_info": "## _image_based_registration_hcs_init\nInitialized calculate registration task\n\nThis task prepares a parallelization list of all zarr_urls that need to be\nused to calculate the registration between acquisitions (all zarr_urls\nexcept the reference acquisition vs. the reference acquisition).\nThis task only works for HCS OME-Zarrs for 2 reasons: Only HCS OME-Zarrs\ncurrently have defined acquisition metadata to determine reference\nacquisitions. And we have only implemented the grouping of images for\nHCS OME-Zarrs by well (with the assumption that every well just has 1\nimage per acqusition).\n## calculate_object_linking\nCalculate object linking based on segmentation label map images\n\nThis task consists of 4 parts:\n\n1. Load the object segmentation images for each well (paired reference and alignment round)\n2. Calculate the shift transformation for the image pair\n3. Apply shifts to image pair and identify matching object labels given an iou cutoff threshold\n3. Store the identified matches as a linking table in alignment round directory\n\nParallelization level: image\n"
+    },
+    {
+      "name": "scMultiplex Calculate Linking Consensus",
+      "executable_non_parallel": "fractal/_init_group_by_well_for_multiplexing.py",
+      "executable_parallel": "fractal/calculate_linking_consensus.py",
+      "meta_non_parallel": {
+        "cpus_per_task": 1,
+        "mem": 1000
+      },
+      "meta_parallel": {
+        "cpus_per_task": 4,
+        "mem": 16000
+      },
+      "args_schema_non_parallel": {
+        "title": "InitGroupByWellForMultiplexing",
+        "type": "object",
+        "properties": {
+          "zarr_urls": {
+            "title": "Zarr Urls",
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of paths or urls to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "zarr_dir": {
+            "title": "Zarr Dir",
+            "type": "string",
+            "description": "path of the directory where the new OME-Zarrs will be created. Not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "reference_acquisition": {
+            "title": "Reference Acquisition",
+            "default": 0,
+            "type": "integer",
+            "description": "Which acquisition to register against. Uses the OME-NGFF HCS well metadata acquisition keys to find the reference acquisition."
+          }
+        },
+        "required": [
+          "zarr_urls",
+          "zarr_dir"
+        ],
+        "additionalProperties": false
+      },
+      "args_schema_parallel": {
+        "title": "CalculateLinkingConsensus",
+        "type": "object",
+        "properties": {
+          "zarr_url": {
+            "title": "Zarr Url",
+            "type": "string",
+            "description": "Path or url to the individual OME-Zarr image to be processed. Refers to the zarr_url of the reference acquisition. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "init_args": {
+            "$ref": "#/definitions/InitArgsRegistrationConsensus",
+            "title": "Init_Args",
+            "description": "Intialization arguments provided by `init_group_by_well_for_multiplexing`. It contains the zarr_url_list listing all the zarr_urls in the same well as the zarr_url of the reference acquisition that are being processed. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "roi_table": {
+            "title": "Roi Table",
+            "default": "org_match_table",
+            "type": "string",
+            "description": "Name of the ROI table over which the task loops to calculate the registration. Examples: `FOV_ROI_table` => loop over the field of views, `well_ROI_table` => process the whole well as one image."
+          }
+        },
+        "required": [
+          "zarr_url",
+          "init_args"
+        ],
+        "additionalProperties": false,
+        "definitions": {
+          "InitArgsRegistrationConsensus": {
+            "title": "InitArgsRegistrationConsensus",
+            "description": "Registration consensus init args.",
+            "type": "object",
+            "properties": {
+              "zarr_url_list": {
+                "title": "Zarr Url List",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "zarr_url_list"
+            ]
+          }
+        }
+      },
+      "docs_info": "## _init_group_by_well_for_multiplexing\nFinds images for all acquisitions per well.\n\nReturns the parallelization_list to run `find_registration_consensus`.\n## calculate_linking_consensus\nApplies pre-calculated registration to ROI tables.\n\nApply pre-calculated registration such that resulting ROIs contain\nthe consensus align region between all cycles.\n\nParallelization level: well\n"
+    },
+    {
+      "name": "scMultiplex Relabel by Linking Consensus",
+      "executable_non_parallel": "fractal/_image_based_registration_hcs_allrounds_init.py",
+      "executable_parallel": "fractal/relabel_by_linking_consensus.py",
+      "meta_non_parallel": {
+        "cpus_per_task": 1,
+        "mem": 1000
+      },
+      "meta_parallel": {
+        "cpus_per_task": 4,
+        "mem": 16000
+      },
+      "args_schema_non_parallel": {
+        "title": "ImageBasedRegistrationHcsAllroundsInit",
+        "type": "object",
+        "properties": {
+          "zarr_urls": {
+            "title": "Zarr Urls",
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of paths or urls to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "zarr_dir": {
+            "title": "Zarr Dir",
+            "type": "string",
+            "description": "path of the directory where the new OME-Zarrs will be created. Not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "reference_acquisition": {
+            "title": "Reference Acquisition",
+            "default": 0,
+            "type": "integer",
+            "description": "Which acquisition to register against. Needs to match the acquisition metadata in the OME-Zarr image."
+          }
+        },
+        "required": [
+          "zarr_urls",
+          "zarr_dir"
+        ],
+        "additionalProperties": false
+      },
+      "args_schema_parallel": {
+        "title": "RelabelByLinkingConsensus",
+        "type": "object",
+        "properties": {
+          "zarr_url": {
+            "title": "Zarr Url",
+            "type": "string",
+            "description": "Path or url to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "init_args": {
+            "$ref": "#/definitions/InitArgsRegistration",
+            "title": "Init_Args",
+            "description": "Intialization arguments provided by `_image_based_registration_hcs_init`. They contain the reference_zarr_url that is used for registration. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "label_name": {
+            "title": "Label Name",
+            "type": "string",
+            "description": "Label name to be relabeled; e.g. `org` or `nuc`."
+          },
+          "roi_table": {
+            "title": "Roi Table",
+            "default": "well_ROI_table",
+            "type": "string",
+            "description": "Name of the ROI table that is parent of label_name. For example segmented organoids or nuclei labels are usually unique across well and so `well_ROI_table` is used."
+          },
+          "consensus_table": {
+            "title": "Consensus Table",
+            "default": "org_match_table_consensus",
+            "type": "string",
+            "description": "Name of ROI table that contains consensus linking for label_name across all rounds"
+          },
+          "table_to_relabel": {
+            "title": "Table To Relabel",
+            "default": "org_ROI_table",
+            "type": "string",
+            "description": "Table name to relabel based on consensus linking. The table rows correspond to label_name, e.g. 'org_ROI_table' or 'nuc_ROI_table'"
+          }
+        },
+        "required": [
+          "zarr_url",
+          "init_args",
+          "label_name"
+        ],
+        "additionalProperties": false,
+        "definitions": {
+          "InitArgsRegistration": {
+            "title": "InitArgsRegistration",
+            "description": "Registration init args.",
+            "type": "object",
+            "properties": {
+              "reference_zarr_url": {
+                "title": "Reference Zarr Url",
+                "type": "string"
+              }
+            },
+            "required": [
+              "reference_zarr_url"
+            ]
+          }
+        }
+      },
+      "docs_info": "## _image_based_registration_hcs_allrounds_init\nInitialized calculate registration task\n\nSame as _image_based_registration_hcs_init.py only does not exclude reference round in zarr_url list;\nall rounds are processed.\n## relabel_by_linking_consensus\nRelabels image labels and ROI tables based on consensus linking.\n\nParallelization level: image\n"
+    },
+    {
+      "name": "scMultiplex Calculate Platymatch Registration",
+      "executable_non_parallel": "fractal/_image_based_registration_hcs_init.py",
+      "executable_parallel": "fractal/calculate_platymatch_registration.py",
+      "meta_non_parallel": {
+        "cpus_per_task": 1,
+        "mem": 1000
+      },
+      "meta_parallel": {
+        "cpus_per_task": 4,
+        "mem": 16000
+      },
+      "args_schema_non_parallel": {
+        "title": "ImageBasedRegistrationHcsInit",
+        "type": "object",
+        "properties": {
+          "zarr_urls": {
+            "title": "Zarr Urls",
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of paths or urls to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "zarr_dir": {
+            "title": "Zarr Dir",
+            "type": "string",
+            "description": "path of the directory where the new OME-Zarrs will be created. Not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "reference_acquisition": {
+            "title": "Reference Acquisition",
+            "default": 0,
+            "type": "integer",
+            "description": "Which acquisition to register against. Needs to match the acquisition metadata in the OME-Zarr image."
+          }
+        },
+        "required": [
+          "zarr_urls",
+          "zarr_dir"
+        ],
+        "additionalProperties": false
+      },
+      "args_schema_parallel": {
+        "title": "CalculatePlatymatchRegistration",
+        "type": "object",
+        "properties": {
+          "zarr_url": {
+            "title": "Zarr Url",
+            "type": "string",
+            "description": "Path or url to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "init_args": {
+            "$ref": "#/definitions/InitArgsRegistration",
+            "title": "Init_Args",
+            "description": "Intialization arguments provided by `_image_based_registration_hcs_init`. They contain the reference_zarr_url that is used for registration. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "seg_channel": {
+            "$ref": "#/definitions/ChannelInputModel",
+            "title": "Seg_Channel",
+            "description": "Channel that was used for nuclear segmentation; requires either `wavelength_id` (e.g. `A01_C01`) or `label` (e.g. `DAPI`). Assume same across all rounds."
+          },
+          "label_name_to_register": {
+            "title": "Label Name To Register",
+            "default": "nuc",
+            "type": "string",
+            "description": "Label name that will be used for label-based registration, e.g. `nuc`."
+          },
+          "label_name_obj": {
+            "title": "Label Name Obj",
+            "default": "org_linked",
+            "type": "string",
+            "description": "Label name of segmented objects that is parent of label_name_to_register e.g. `org_linked`."
+          },
+          "roi_table": {
+            "title": "Roi Table",
+            "default": "org_ROI_table_linked",
+            "type": "string",
+            "description": "Name of the ROI table over which the task loops to calculate the registration. e.g. linked consensus object table 'org_ROI_table_linked'"
+          },
+          "level": {
+            "title": "Level",
+            "default": 0,
+            "type": "integer",
+            "description": "Pyramid level of the labels to register. Choose `0` to process at full resolution."
+          },
+          "save_transformation": {
+            "title": "Save Transformation",
+            "default": true,
+            "type": "boolean",
+            "description": "if True, saves the transformation matrix on disk in subfolder 'transformations'"
+          },
+          "mask_by_parent": {
+            "title": "Mask By Parent",
+            "default": true,
+            "type": "boolean",
+            "description": "if True, nuclei are masked by parent object (e.g. organoid) to only select nuclei belonging to parent. Recommended to set to True when iterating over object (e.g. organoid) ROIs."
+          },
+          "calculate_ffd": {
+            "title": "Calculate Ffd",
+            "default": true,
+            "type": "boolean",
+            "description": "if True, calculate free form deformation registration based on affine linking."
+          },
+          "volume_filter": {
+            "title": "Volume Filter",
+            "default": true,
+            "type": "boolean",
+            "description": "if True, performing volume filtering of nuclei to remove objects smaller than specified volume_filter_threshold."
+          },
+          "volume_filter_threshold": {
+            "title": "Volume Filter Threshold",
+            "default": 0.05,
+            "type": "number",
+            "description": "Multiplier that specifies cutoff for volumes below which nuclei are filtered out, float in range [0,1], e.g. 0.05 means that 5% of median of nuclear volume distribution is used as cutoff. Specify this value if volume filtering is desired. Default 0.05."
+          }
+        },
+        "required": [
+          "zarr_url",
+          "init_args",
+          "seg_channel"
+        ],
+        "additionalProperties": false,
+        "definitions": {
+          "InitArgsRegistration": {
+            "title": "InitArgsRegistration",
+            "description": "Registration init args.",
+            "type": "object",
+            "properties": {
+              "reference_zarr_url": {
+                "title": "Reference Zarr Url",
+                "type": "string"
+              }
+            },
+            "required": [
+              "reference_zarr_url"
+            ]
+          },
+          "ChannelInputModel": {
+            "title": "ChannelInputModel",
+            "description": "A channel which is specified by either `wavelength_id` or `label`.",
+            "type": "object",
+            "properties": {
+              "wavelength_id": {
+                "title": "Wavelength Id",
+                "type": "string",
+                "description": "Unique ID for the channel wavelength, e.g. `A01_C01`."
+              },
+              "label": {
+                "title": "Label",
+                "type": "string",
+                "description": "Name of the channel."
+              }
+            }
+          }
+        }
+      },
+      "docs_info": "## _image_based_registration_hcs_init\nInitialized calculate registration task\n\nThis task prepares a parallelization list of all zarr_urls that need to be\nused to calculate the registration between acquisitions (all zarr_urls\nexcept the reference acquisition vs. the reference acquisition).\nThis task only works for HCS OME-Zarrs for 2 reasons: Only HCS OME-Zarrs\ncurrently have defined acquisition metadata to determine reference\nacquisitions. And we have only implemented the grouping of images for\nHCS OME-Zarrs by well (with the assumption that every well just has 1\nimage per acqusition).\n## calculate_platymatch_registration\nCalculate registration based on images\n\nThis task consists of 4 parts:\n\n1. Load the sub-object segmentation images for each well (paired reference and alignment round)\n2. Select sub-objects that belong to object region by loading with object ROI table and mask by object mask.\n   Object pair is defined by consensus linking. Filter the sub-objects to remove small debris that was segmented.\n3. Calculate affine and optionally the free-form deformation for each object pair\n4. Output: save the identified matches as a linking table in alignment round directory\n   and optionally the transformation matrix on disk.\n\nParallelization level: image\n"
+    },
+    {
+      "name": "scMultiplex Surface Mesh",
+      "executable_non_parallel": "fractal/_init_group_by_well_for_multiplexing.py",
+      "executable_parallel": "fractal/surface_mesh.py",
+      "meta_non_parallel": {
+        "cpus_per_task": 1,
+        "mem": 1000
+      },
+      "meta_parallel": {
+        "cpus_per_task": 4,
+        "mem": 16000
+      },
+      "args_schema_non_parallel": {
+        "title": "InitGroupByWellForMultiplexing",
+        "type": "object",
+        "properties": {
+          "zarr_urls": {
+            "title": "Zarr Urls",
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of paths or urls to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "zarr_dir": {
+            "title": "Zarr Dir",
+            "type": "string",
+            "description": "path of the directory where the new OME-Zarrs will be created. Not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "reference_acquisition": {
+            "title": "Reference Acquisition",
+            "default": 0,
+            "type": "integer",
+            "description": "Which acquisition to register against. Uses the OME-NGFF HCS well metadata acquisition keys to find the reference acquisition."
+          }
+        },
+        "required": [
+          "zarr_urls",
+          "zarr_dir"
+        ],
+        "additionalProperties": false
+      },
+      "args_schema_parallel": {
+        "title": "SurfaceMesh",
+        "type": "object",
+        "properties": {
+          "zarr_url": {
+            "title": "Zarr Url",
+            "type": "string",
+            "description": "Path or url to the individual OME-Zarr image to be processed. Refers to the zarr_url of the reference acquisition. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "init_args": {
+            "$ref": "#/definitions/InitArgsRegistrationConsensus",
+            "title": "Init_Args",
+            "description": "Intialization arguments provided by `init_group_by_well_for_multiplexing`. It contains the zarr_url_list listing all the zarr_urls in the same well as the zarr_url of the reference acquisition that are being processed. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "label_name": {
+            "title": "Label Name",
+            "default": "nuc",
+            "type": "string",
+            "description": "Label name that will be used for surface estimation, e.g. `nuc`."
+          },
+          "label_name_obj": {
+            "title": "Label Name Obj",
+            "default": "org_linked",
+            "type": "string",
+            "description": "Label name of segmented objects that is parent of label_name e.g. `org_consensus`."
+          },
+          "roi_table": {
+            "title": "Roi Table",
+            "default": "org_ROI_table_linked",
+            "type": "string",
+            "description": "Name of the ROI table over which the task loops to calculate the registration. e.g. consensus object table 'org_ROI_table_consensus'"
+          },
+          "level": {
+            "title": "Level",
+            "default": 0,
+            "type": "integer",
+            "description": "Pyramid level of the labels to register. Choose `0` to process at full resolution."
+          },
+          "expandby_factor": {
+            "title": "Expandby Factor",
+            "default": 0.6,
+            "type": "number",
+            "description": "multiplier that specifies pixels by which to expand each nuclear mask for merging, float in range [0,1 or higher], e.g. 0.2 means that 20% of mean of nuclear equivalent diameter is used."
+          },
+          "sigma_factor": {
+            "title": "Sigma Factor",
+            "default": 5,
+            "type": "number",
+            "description": "float that specifies sigma (standard deviation) for Gaussian kernel. Higher values correspond to more blurring. Recommended range 1-8."
+          },
+          "canny_threshold": {
+            "title": "Canny Threshold",
+            "default": 0.3,
+            "type": "number",
+            "description": "image values below this threshold are set to 0 after Gaussian blur. float in range [0,1]. Higher values result in tighter fit of mesh to nuclear surface"
+          },
+          "save_mesh": {
+            "title": "Save Mesh",
+            "default": true,
+            "type": "boolean",
+            "description": "if True, saves the vtk mesh on disk in subfolder 'meshes'. Filename corresponds to object label id"
+          },
+          "save_labels": {
+            "title": "Save Labels",
+            "default": true,
+            "type": "boolean",
+            "description": "if True, saves the calculated 3D label map as label map in 'labels' with suffix '_3d'"
+          }
+        },
+        "required": [
+          "zarr_url",
+          "init_args"
+        ],
+        "additionalProperties": false,
+        "definitions": {
+          "InitArgsRegistrationConsensus": {
+            "title": "InitArgsRegistrationConsensus",
+            "description": "Registration consensus init args.",
+            "type": "object",
+            "properties": {
+              "zarr_url_list": {
+                "title": "Zarr Url List",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "zarr_url_list"
+            ]
+          }
+        }
+      },
+      "docs_info": "## _init_group_by_well_for_multiplexing\nFinds images for all acquisitions per well.\n\nReturns the parallelization_list to run `find_registration_consensus`.\n## surface_mesh\nCalculate 3D surface mesh of parent object (e.g. tissue, organoid)\nfrom 3D cell-level segmentation of children (e.g. nuclei)\n\nThis task consists of 4 parts:\n\n1. Load the sub-object (e.g. nuc) segmentation images for each object of a given reference round; skip other rounds.\n    Select sub-objects (e.g. nuc) that belong to parent object region by masking by parent.\n    Filter the sub-objects to remove small debris that was segmented.\n2. Perform label fusion and edge detection to generate surface label image.\n3. Calculate surface mesh of label image using marching cubes algorithm.\n4. Output: save the (1) meshes (.vtp) per object id in meshes folder and (2) well label map as a new label in zarr.\n    Note that label map output may be clipped for objects that are dense and have overlapping pixels.\n    In this case, the 'winning' object in the overlap region is the one with higher label id.\n\nParallelization level: image\n"
+    },
+    {
+      "name": "scMultiplex Feature Measurements",
+      "executable_parallel": "fractal/scmultiplex_feature_measurements.py",
+      "meta_parallel": {
+        "cpus_per_task": 4,
+        "mem": 16000
+      },
+      "args_schema_parallel": {
+        "title": "ScmultiplexFeatureMeasurements",
+        "type": "object",
+        "properties": {
+          "zarr_url": {
+            "title": "Zarr Url",
+            "type": "string",
+            "description": "Path or url to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
           },
           "label_image": {
             "title": "Label Image",
@@ -100,10 +669,7 @@
           }
         },
         "required": [
-          "input_paths",
-          "output_path",
-          "component",
-          "metadata",
+          "zarr_url",
           "label_image",
           "output_table_name"
         ],
@@ -128,458 +694,7 @@
           }
         }
       },
-      "docs_info": "Measurements of intensities and morphologies\n\nWrapper task for scmultiplex measurements for Fractal to generate\nmeasurements of intensities and morphologies",
-      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
-    },
-    {
-      "name": "scMultipleX Calculate Object Linking",
-      "executable": "fractal/calculate_object_linking.py",
-      "input_type": "zarr",
-      "output_type": "zarr",
-      "meta": {
-        "cpus_per_task": 4,
-        "mem": 16000,
-        "parallelization_level": "image"
-      },
-      "args_schema": {
-        "title": "CalculateObjectLinking",
-        "type": "object",
-        "properties": {
-          "input_paths": {
-            "title": "Input Paths",
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "List of input paths where the image data is stored as OME-Zarrs. Should point to the parent folder containing one or many OME-Zarr files, not the actual OME-Zarr file. Example: `[\"/some/path/\"]`. This task only supports a single input path. (standard argument for Fractal tasks, managed by Fractal server)."
-          },
-          "output_path": {
-            "title": "Output Path",
-            "type": "string",
-            "description": "This parameter is not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
-          },
-          "component": {
-            "title": "Component",
-            "type": "string",
-            "description": "Path to the OME-Zarr image in the OME-Zarr plate that is processed. Example: `\"some_plate.zarr/B/03/0\"`. (standard argument for Fractal tasks, managed by Fractal server)."
-          },
-          "metadata": {
-            "title": "Metadata",
-            "type": "object",
-            "description": "This parameter is not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
-          },
-          "label_name": {
-            "title": "Label Name",
-            "type": "string",
-            "description": "Label name that will be used for label-based registration; e.g. `org` from object segmentation."
-          },
-          "roi_table": {
-            "title": "Roi Table",
-            "default": "well_ROI_table",
-            "type": "string",
-            "description": "Name of the well ROI table. Input ROI table must have single ROI entry; e.g. `well_ROI_table`"
-          },
-          "reference_cycle": {
-            "title": "Reference Cycle",
-            "default": 0,
-            "type": "integer",
-            "description": "Which cycle to register against. Defaults to 0, which is the first OME-Zarr image in the well (usually the first cycle that was provided)."
-          },
-          "level": {
-            "title": "Level",
-            "default": 0,
-            "type": "integer",
-            "description": "Pyramid level of the image to be segmented. Choose `0` to process at full resolution."
-          },
-          "iou_cutoff": {
-            "title": "Iou Cutoff",
-            "default": 0.2,
-            "type": "number",
-            "description": "Float in range 0 to 1 to specify intersection over union cutoff. Object pairs that have an iou below this value are filtered out and stored in linking table."
-          }
-        },
-        "required": [
-          "input_paths",
-          "output_path",
-          "component",
-          "metadata",
-          "label_name"
-        ],
-        "additionalProperties": false
-      },
-      "docs_info": "Calculate object linking based on segmentation label map images\n\nThis task consists of 4 parts:\n\n1. Load the object segmentation images for each well (paired reference and alignment round)\n2. Calculate the shift transformation for the image pair\n3. Apply shifts to image pair and identify matching object labels given an iou cutoff threshold\n3. Store the identified matches as a linking table in alignment round directory\n\nParallelization level: image",
-      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
-    },
-    {
-      "name": "scMultipleX Calculate Linking Consensus",
-      "executable": "fractal/calculate_linking_consensus.py",
-      "input_type": "zarr",
-      "output_type": "zarr",
-      "meta": {
-        "cpus_per_task": 4,
-        "mem": 16000,
-        "parallelization_level": "well"
-      },
-      "args_schema": {
-        "title": "CalculateLinkingConsensus",
-        "type": "object",
-        "properties": {
-          "input_paths": {
-            "title": "Input Paths",
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "List of input paths where the image data is stored as OME-Zarrs. Should point to the parent folder containing one or many OME-Zarr files, not the actual OME-Zarr file. Example: `[\"/some/path/\"]`. This task only supports a single input path. (standard argument for Fractal tasks, managed by Fractal server)."
-          },
-          "output_path": {
-            "title": "Output Path",
-            "type": "string",
-            "description": "This parameter is not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
-          },
-          "component": {
-            "title": "Component",
-            "type": "string",
-            "description": "Path to the OME-Zarr image in the OME-Zarr plate that is processed. Example: `\"some_plate.zarr/B/03`. (standard argument for Fractal tasks, managed by Fractal server)."
-          },
-          "metadata": {
-            "title": "Metadata",
-            "type": "object",
-            "description": "This parameter is not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
-          },
-          "roi_table": {
-            "title": "Roi Table",
-            "default": "org_match_table",
-            "type": "string",
-            "description": "Name of the ROI table over which the task loops to calculate the registration. Examples: `FOV_ROI_table` => loop over the field of views, `well_ROI_table` => process the whole well as one image."
-          },
-          "reference_cycle": {
-            "title": "Reference Cycle",
-            "default": 0,
-            "type": "integer",
-            "description": "Which cycle to register against. Defaults to 0, which is the first OME-Zarr image in the well, usually the first cycle that was provided"
-          }
-        },
-        "required": [
-          "input_paths",
-          "output_path",
-          "component",
-          "metadata"
-        ],
-        "additionalProperties": false
-      },
-      "docs_info": "Applies pre-calculated registration to ROI tables.\n\nApply pre-calculated registration such that resulting ROIs contain\nthe consensus align region between all cycles.\n\nParallelization level: well",
-      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
-    },
-    {
-      "name": "scMultipleX Relabel by Linking Consensus",
-      "executable": "fractal/relabel_by_linking_consensus.py",
-      "input_type": "zarr",
-      "output_type": "zarr",
-      "meta": {
-        "cpus_per_task": 4,
-        "mem": 16000,
-        "parallelization_level": "image"
-      },
-      "args_schema": {
-        "title": "RelabelByLinkingConsensus",
-        "type": "object",
-        "properties": {
-          "input_paths": {
-            "title": "Input Paths",
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "List of input paths where the image data is stored as OME-Zarrs. Should point to the parent folder containing one or many OME-Zarr files, not the actual OME-Zarr file. Example: `[\"/some/path/\"]`. This task only supports a single input path. (standard argument for Fractal tasks, managed by Fractal server)."
-          },
-          "output_path": {
-            "title": "Output Path",
-            "type": "string",
-            "description": "This parameter is not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
-          },
-          "component": {
-            "title": "Component",
-            "type": "string",
-            "description": "Path to the OME-Zarr image in the OME-Zarr plate that is processed. Example: `\"some_plate.zarr/B/03/0\"`. (standard argument for Fractal tasks, managed by Fractal server)."
-          },
-          "metadata": {
-            "title": "Metadata",
-            "type": "object",
-            "description": "This parameter is not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
-          },
-          "label_name": {
-            "title": "Label Name",
-            "type": "string",
-            "description": "Label name to be relabeled; e.g. `org` or `nuc`."
-          },
-          "roi_table": {
-            "title": "Roi Table",
-            "default": "well_ROI_table",
-            "type": "string",
-            "description": "Name of the ROI table that is parent of label_name. For example segmented organoids or nuclei labels are usually unique across well and so `well_ROI_table` is used."
-          },
-          "consensus_table": {
-            "title": "Consensus Table",
-            "default": "org_match_table_consensus",
-            "type": "string",
-            "description": "Name of ROI table that contains consensus linking for label_name across all rounds"
-          },
-          "table_to_relabel": {
-            "title": "Table To Relabel",
-            "default": "org_ROI_table",
-            "type": "string",
-            "description": "Table name to relabel based on consensus linking. The table rows correspond to label_name, e.g. 'org_ROI_table' or 'nuc_ROI_table'"
-          },
-          "reference_cycle": {
-            "title": "Reference Cycle",
-            "default": 0,
-            "type": "integer",
-            "description": "Which cycle to register against. Defaults to 0, which is the first OME-Zarr image in the well (usually the first cycle that was provided)."
-          }
-        },
-        "required": [
-          "input_paths",
-          "output_path",
-          "component",
-          "metadata",
-          "label_name"
-        ],
-        "additionalProperties": false
-      },
-      "docs_info": "Relabels image labels and ROI tables based on consensus linking.\n\nParallelization level: image",
-      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
-    },
-    {
-      "name": "Calculate Platymatch Registration",
-      "executable": "fractal/calculate_platymatch_registration.py",
-      "input_type": "zarr",
-      "output_type": "zarr",
-      "meta": {
-        "cpus_per_task": 8,
-        "mem": 32000,
-        "parallelization_level": "image"
-      },
-      "args_schema": {
-        "title": "CalculatePlatymatchRegistration",
-        "type": "object",
-        "properties": {
-          "input_paths": {
-            "title": "Input Paths",
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "List of input paths where the image data is stored as OME-Zarrs. Should point to the parent folder containing one or many OME-Zarr files, not the actual OME-Zarr file. Example: `[\"/some/path/\"]`. This task only supports a single input path. (standard argument for Fractal tasks, managed by Fractal server)."
-          },
-          "output_path": {
-            "title": "Output Path",
-            "type": "string",
-            "description": "This parameter is not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
-          },
-          "component": {
-            "title": "Component",
-            "type": "string",
-            "description": "Path to the OME-Zarr image in the OME-Zarr plate that is processed. Example: `\"some_plate.zarr/B/03/1\"`. (standard argument for Fractal tasks, managed by Fractal server)."
-          },
-          "metadata": {
-            "title": "Metadata",
-            "type": "object",
-            "description": "This parameter is not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
-          },
-          "label_name_to_register": {
-            "title": "Label Name To Register",
-            "default": "nuc",
-            "type": "string",
-            "description": "Label name that will be used for label-based registration, e.g. `nuc`."
-          },
-          "label_name_obj": {
-            "title": "Label Name Obj",
-            "default": "org_linked",
-            "type": "string",
-            "description": "Label name of segmented objects that is parent of label_name_to_register e.g. `org_linked`."
-          },
-          "roi_table": {
-            "title": "Roi Table",
-            "default": "org_ROI_table_linked",
-            "type": "string",
-            "description": "Name of the ROI table over which the task loops to calculate the registration. e.g. linked consensus object table 'org_ROI_table_linked'"
-          },
-          "reference_cycle": {
-            "title": "Reference Cycle",
-            "default": 0,
-            "type": "integer",
-            "description": "Which cycle to register against. Defaults to 0, which is the first OME-Zarr image in the well (usually the first cycle that was provided)."
-          },
-          "level": {
-            "title": "Level",
-            "default": 0,
-            "type": "integer",
-            "description": "Pyramid level of the labels to register. Choose `0` to process at full resolution."
-          },
-          "save_transformation": {
-            "title": "Save Transformation",
-            "default": true,
-            "type": "boolean",
-            "description": "if True, saves the transformation matrix on disk in subfolder 'transformations'"
-          },
-          "mask_by_parent": {
-            "title": "Mask By Parent",
-            "default": true,
-            "type": "boolean",
-            "description": "if True, nuclei are masked by parent object (e.g. organoid) to only select nuclei belonging to parent. Recommended to set to True when iterating over object (e.g. organoid) ROIs."
-          },
-          "calculate_ffd": {
-            "title": "Calculate Ffd",
-            "default": true,
-            "type": "boolean",
-            "description": "if True, calculate free form deformation registration based on affine linking."
-          },
-          "seg_channel": {
-            "$ref": "#/definitions/ChannelInputModel",
-            "title": "Seg_Channel",
-            "description": "Channel that was used for nuclear segmentation; requires either `wavelength_id` (e.g. `A01_C01`) or `label` (e.g. `DAPI`). Assume same across all rounds."
-          }
-        },
-        "required": [
-          "input_paths",
-          "output_path",
-          "component",
-          "metadata",
-          "seg_channel"
-        ],
-        "additionalProperties": false,
-        "definitions": {
-          "ChannelInputModel": {
-            "title": "ChannelInputModel",
-            "description": "A channel which is specified by either `wavelength_id` or `label`.",
-            "type": "object",
-            "properties": {
-              "wavelength_id": {
-                "title": "Wavelength Id",
-                "type": "string",
-                "description": "Unique ID for the channel wavelength, e.g. `A01_C01`."
-              },
-              "label": {
-                "title": "Label",
-                "type": "string",
-                "description": "Name of the channel."
-              }
-            }
-          }
-        }
-      },
-      "docs_info": "Calculate registration based on images\n\nThis task consists of 4 parts:\n\n1. Load the sub-object segmentation images for each well (paired reference and alignment round)\n2. Select sub-objects that belong to object region by loading with object ROI table and mask by object mask.\n   Object pair is defined by consensus linking. Filter the sub-objects to remove small debris that was segmented.\n3. Calculate affine and optionally the free-form deformation for each object pair\n4. Output: save the identified matches as a linking table in alignment round directory\n   and optionally the transformation matrix on disk.\n\nParallelization level: image",
-      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
-    },
-    {
-      "name": "scMultipleX Surface Mesh",
-      "executable": "fractal/surface_mesh.py",
-      "input_type": "zarr",
-      "output_type": "zarr",
-      "meta": {
-        "cpus_per_task": 4,
-        "mem": 16000,
-        "parallelization_level": "image"
-      },
-      "args_schema": {
-        "title": "SurfaceMesh",
-        "type": "object",
-        "properties": {
-          "input_paths": {
-            "title": "Input Paths",
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "List of input paths where the image data is stored as OME-Zarrs. Should point to the parent folder containing one or many OME-Zarr files, not the actual OME-Zarr file. Example: `[\"/some/path/\"]`. This task only supports a single input path. (standard argument for Fractal tasks, managed by Fractal server)."
-          },
-          "output_path": {
-            "title": "Output Path",
-            "type": "string",
-            "description": "This parameter is not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
-          },
-          "component": {
-            "title": "Component",
-            "type": "string",
-            "description": "Path to the OME-Zarr image in the OME-Zarr plate that is processed. Example: `\"some_plate.zarr/B/03/1\"`. (standard argument for Fractal tasks, managed by Fractal server)."
-          },
-          "metadata": {
-            "title": "Metadata",
-            "type": "object",
-            "description": "This parameter is not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
-          },
-          "label_name": {
-            "title": "Label Name",
-            "default": "nuc",
-            "type": "string",
-            "description": "Label name that will be used for surface estimation, e.g. `nuc`."
-          },
-          "label_name_obj": {
-            "title": "Label Name Obj",
-            "default": "org_consensus",
-            "type": "string",
-            "description": "Label name of segmented objects that is parent of label_name e.g. `org_consensus`."
-          },
-          "roi_table": {
-            "title": "Roi Table",
-            "default": "org_ROI_table_consensus",
-            "type": "string",
-            "description": "Name of the ROI table over which the task loops to calculate the registration. e.g. consensus object table 'org_ROI_table_consensus'"
-          },
-          "reference_cycle": {
-            "title": "Reference Cycle",
-            "default": 0,
-            "type": "integer",
-            "description": "Which cycle to use for surface mesh calculation. Defaults to 0, which is the first OME-Zarr image in the well (usually the first cycle that was provided)."
-          },
-          "level": {
-            "title": "Level",
-            "default": 0,
-            "type": "integer",
-            "description": "Pyramid level of the labels to register. Choose `0` to process at full resolution."
-          },
-          "expandby_factor": {
-            "title": "Expandby Factor",
-            "default": 0.6,
-            "type": "number",
-            "description": "multiplier that specifies pixels by which to expand each nuclear mask for merging, float in range [0,1 or higher], e.g. 0.2 means that 20% of mean of nuclear equivalent diameter is used."
-          },
-          "sigma_factor": {
-            "title": "Sigma Factor",
-            "default": 5,
-            "type": "number",
-            "description": "float that specifies sigma (standard deviation) for Gaussian kernel. Higher values correspond to more blurring. Recommended range 1-8."
-          },
-          "canny_threshold": {
-            "title": "Canny Threshold",
-            "default": 0.3,
-            "type": "number",
-            "description": "image values below this threshold are set to 0 after Gaussian blur. float in range [0,1]. Higher values result in tighter fit of mesh to nuclear surface"
-          },
-          "save_mesh": {
-            "title": "Save Mesh",
-            "default": true,
-            "type": "boolean",
-            "description": "if True, saves the vtk mesh on disk in subfolder 'meshes'. Filename corresponds to object label id"
-          },
-          "save_labels": {
-            "title": "Save Labels",
-            "default": true,
-            "type": "boolean",
-            "description": "if True, saves the calculated 3D label map as label map in 'labels' with suffix '_3d'"
-          }
-        },
-        "required": [
-          "input_paths",
-          "output_path",
-          "component",
-          "metadata"
-        ],
-        "additionalProperties": false
-      },
-      "docs_info": "Calculate 3D surface mesh of parent object (e.g. tissue, organoid)\nfrom 3D cell-level segmentation of children (e.g. nuclei)\n\nThis task consists of 4 parts:\n\n1. Load the sub-object (e.g. nuc) segmentation images for each object of a given reference round; skip other rounds.\n    Select sub-objects (e.g. nuc) that belong to parent object region by masking by parent.\n    Filter the sub-objects to remove small debris that was segmented.\n2. Perform label fusion and edge detection to generate surface label image.\n3. Calculate surface mesh of label image using marching cubes algorithm.\n4. Output: save the (1) meshes (.vtp) per object id in meshes folder and (2) well label map as a new label in zarr.\n    Note that label map output may be clipped for objects that are dense and have overlapping pixels.\n    In this case, the 'winning' object in the overlap region is the one with higher label id.\n\nParallelization level: image",
-      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+      "docs_info": "## scmultiplex_feature_measurements\nMeasurements of intensities and morphologies\n\nWrapper task for scmultiplex measurements for Fractal to generate\nmeasurements of intensities and morphologies\n"
     }
   ],
   "has_args_schemas": true,

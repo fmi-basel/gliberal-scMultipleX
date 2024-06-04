@@ -56,7 +56,7 @@ TASK_LIST = [
     ),
     ParallelTask(
         name="scMultiplex Feature Measurements",
-        executable="tasks/scmultiplex_feature_measurements.py",
-        meta={"cpus_per_task": 1, "mem": 4000},
+        executable="fractal/scmultiplex_feature_measurements.py",
+        meta={"cpus_per_task": 4, "mem": 16000},
     ),
 ]

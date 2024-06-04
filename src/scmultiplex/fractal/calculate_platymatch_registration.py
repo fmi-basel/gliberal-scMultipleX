@@ -71,7 +71,7 @@ def calculate_platymatch_registration(
         mask_by_parent: bool = True,
         calculate_ffd: bool = True,
         volume_filter: bool = True,
-        volume_filter_threshold: Optional[float] = 0.05,
+        volume_filter_threshold: float = 0.05,
 
 ) -> dict[str, Any]:
     """
