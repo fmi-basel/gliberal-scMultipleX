@@ -190,3 +190,13 @@ def export_vtk_polydata(path, polydata):
     writer.SetCompressorTypeToZLib()
     writer.SetCompressionLevel(9)
     writer.Write()
+
+def export_stl_polydata(path, polydata):
+    '''Exports stl polydata as *.vtp'''
+
+    writer = vtk.vtkSTLWriter()
+    writer.SetFileName(path)
+    writer.SetInputData(polydata)
+    writer.Write()
+
+

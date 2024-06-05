@@ -43,7 +43,8 @@ from scmultiplex.fractal.fractal_helper_functions import get_zattrs, convert_ind
 
 from scmultiplex.meshing.FilterFunctions import equivalent_diam, mask_by_parent_object, \
     calculate_mean_volume
-from scmultiplex.meshing.MeshFunctions import labels_to_mesh, export_vtk_polydata
+from scmultiplex.meshing.MeshFunctions import labels_to_mesh, export_vtk_polydata, \
+    export_stl_polydata
 
 logger = logging.getLogger(__name__)
 
@@ -296,8 +297,8 @@ def surface_mesh(
             save_transform_path = f"{zarr_url}/meshes/{label_name_obj}_from_{label_name}"
             os.makedirs(save_transform_path, exist_ok=True)
             # save name is the organoid label id
-            save_name = f"{int(r0_org_label)}.vtp"
-            export_vtk_polydata(os.path.join(save_transform_path, save_name), mesh_polydata_organoid)
+            save_name = f"{int(r0_org_label)}.stl"
+            export_stl_polydata(os.path.join(save_transform_path, save_name), mesh_polydata_organoid)
 
         ##############
         # Save labels and make ROI table ###
