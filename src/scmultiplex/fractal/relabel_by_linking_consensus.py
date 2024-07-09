@@ -12,7 +12,7 @@ Relabels image labels and ROI tables based on consensus linking.
 """
 import logging
 from pathlib import Path
-from typing import Any
+import pandas as pd
 
 import anndata as ad
 import dask.array as da
@@ -39,7 +39,6 @@ def relabel_by_linking_consensus(
         init_args: InitArgsRegistration,
         # Task-specific arguments
         label_name: str,
-        roi_table: str = "well_ROI_table",
         consensus_table: str = "org_match_table_consensus",
         table_to_relabel: str = "org_ROI_table",
 ):
@@ -56,11 +55,10 @@ def relabel_by_linking_consensus(
             reference_zarr_url that is used for registration.
             (standard argument for Fractal tasks, managed by Fractal server).
         label_name: Label name to be relabeled; e.g. `org` or `nuc`.
-        roi_table: Name of the ROI table that is parent of label_name. For example segmented
-            organoids or nuclei labels are usually unique across well and so `well_ROI_table` is used.
-        consensus_table: Name of ROI table that contains consensus linking for label_name across all rounds
+        consensus_table: Name of consensus matching table that specifies consensus matches across rounds,
+            typically stored in reference round zarr.
         table_to_relabel: Table name to relabel based on consensus linking. The table rows correspond
-            to label_name, e.g. 'org_ROI_table' or 'nuc_ROI_table'
+            to specified 'Label name', e.g. 'org_ROI_table' or 'nuc_ROI_table'
     """
     # Refactor lines below to make single function for loading?
     # parameter for 'run on reference cycle' true or false; here is True
@@ -77,7 +75,7 @@ def relabel_by_linking_consensus(
     logger.info(
         f"Running for {zarr_url=}. \n"
         f"Relabeling {table_to_relabel=} with labeled objects "
-        f"{label_name=} for each region in {roi_table=} \n"
+        f"{label_name=} \n"
         f"based on consensus table {consensus_table} in reference round {ref_acquisition} directory."
     )
 
@@ -100,7 +98,10 @@ def relabel_by_linking_consensus(
     # note that label IDs in ROI tables are strings, so need to convert floats in linking tables to int then str
     id_rx = consensus_adata[:, [moving_colname]].to_df()
     id_list = id_rx[moving_colname].tolist()
-    id_list = [str(int(x)) for x in id_list]
+    id_list = [str(int(x)) for x in id_list] # list of strings of integers
+
+    # make sure that labels are stored as strings of integers
+    rx_label_adata.obs['label'] = pd.to_numeric(rx_label_adata.obs['label']).astype(int).astype(str)
 
     # filter ROI table by rx IDs that have been linked across all rounds i.e. discard non-consensus labels
     # make new table only for the linked IDs
@@ -114,7 +115,7 @@ def relabel_by_linking_consensus(
     bdata.obs['label'] = bdata.obs['label'].map(matching_dict)
     # reset label index
     bdata.obs.reset_index(drop=True, inplace=True)
-    bdata.obs.index = bdata.obs.index.map(str) # anndata wants indexes as trings!
+    bdata.obs.index = bdata.obs.index.map(str) # anndata wants indexes as strings!
 
     # logger.info(bdata.obs)
 
@@ -209,7 +210,7 @@ def relabel_by_linking_consensus(
 
     if count_output != bdata.n_obs:
         raise ValueError(
-            "Label count in relabelled image must match length of relabelled table"
+            f"Label count of {count_output} in relabelled image must match length of relabelled table of {bdata.n_obs}"
         )
 
 
