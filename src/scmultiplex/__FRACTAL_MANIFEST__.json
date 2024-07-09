@@ -72,13 +72,13 @@
             "title": "Level",
             "default": 0,
             "type": "integer",
-            "description": "Pyramid level of the image to be segmented. Choose `0` to process at full resolution."
+            "description": "Pyramid level of the image to be processed. Choose `0` to process at full resolution."
           },
           "iou_cutoff": {
             "title": "Iou Cutoff",
             "default": 0.2,
             "type": "number",
-            "description": "Float in range 0 to 1 to specify intersection over union cutoff. Object pairs that have an iou below this value are filtered out and stored in linking table."
+            "description": "Float in range 0 to 1 to specify intersection over union cutoff. Object pairs that have an iou below this value are filtered out and not stored in linking table."
           }
         },
         "required": [
@@ -166,7 +166,7 @@
             "title": "Roi Table",
             "default": "org_match_table",
             "type": "string",
-            "description": "Name of the ROI table over which the task loops to calculate the registration. Examples: `FOV_ROI_table` => loop over the field of views, `well_ROI_table` => process the whole well as one image."
+            "description": "Name of the matching table used to calculate consensus across multiplexing rounds. Typically, this matching table is the output of a linking task, e.g. org_match_table or nuc_match_table. This table must be present in all rounds except for reference round."
           }
         },
         "required": [
@@ -257,23 +257,17 @@
             "type": "string",
             "description": "Label name to be relabeled; e.g. `org` or `nuc`."
           },
-          "roi_table": {
-            "title": "Roi Table",
-            "default": "well_ROI_table",
-            "type": "string",
-            "description": "Name of the ROI table that is parent of label_name. For example segmented organoids or nuclei labels are usually unique across well and so `well_ROI_table` is used."
-          },
           "consensus_table": {
             "title": "Consensus Table",
             "default": "org_match_table_consensus",
             "type": "string",
-            "description": "Name of ROI table that contains consensus linking for label_name across all rounds"
+            "description": "Name of consensus matching table that specifies consensus matches across rounds, typically stored in reference round zarr."
           },
           "table_to_relabel": {
             "title": "Table To Relabel",
             "default": "org_ROI_table",
             "type": "string",
-            "description": "Table name to relabel based on consensus linking. The table rows correspond to label_name, e.g. 'org_ROI_table' or 'nuc_ROI_table'"
+            "description": "Table name to relabel based on consensus linking. The table rows correspond to specified 'Label name', e.g. 'org_ROI_table' or 'nuc_ROI_table'"
           }
         },
         "required": [
