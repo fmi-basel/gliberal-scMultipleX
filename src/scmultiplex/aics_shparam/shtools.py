@@ -7,7 +7,7 @@ from skimage import transform as sktrans
 from skimage import filters as skfilters
 from skimage import morphology as skmorpho
 from scipy import interpolate as sciinterp
-from vtk.util import numpy_support as vtknp
+from vtkmodules.util import numpy_support as vtknp
 from sklearn import decomposition as skdecomp
 
 
@@ -19,6 +19,7 @@ def get_mesh_from_image(
     sigma: float = 0,
     lcc: bool = True,
     translate_to_origin: bool = True,
+    spacing: tuple = None, #zyx
 ):
     """Converts a numpy array into a vtkImageData and then into a 3d mesh
     using vtkContourFilter. The input is assumed to be binary and the
@@ -59,6 +60,9 @@ def get_mesh_from_image(
     translate_to_origin : bool, optional
         Wheather or not translate the mesh to the origin (0,0,0),
         default is True.
+    spacing : tuple of floats, optional
+        Numpy array spacing in (z,y,x). If None assumes voxel isotropy,
+        else accounts for anisotropic spacings, e.g. (2,1,1) means z-distance is two times greater than xy distance.
     """
 
     img = image.copy()
@@ -79,6 +83,7 @@ def get_mesh_from_image(
 
     # Smooth binarize the input image and binarize
     if sigma > 0:
+        # TODO: sigma in z-dim should be scaled by anisotropy
         img = skfilters.gaussian(img.astype(np.float32), sigma=(sigma, sigma, sigma))
 
         img[img < 1.0 / np.exp(1.0)] = 0
@@ -103,6 +108,10 @@ def get_mesh_from_image(
 
     # Create vtkImageData
     imgdata = vtk.vtkImageData()
+
+    if spacing:
+        imgdata.SetSpacing(spacing[::-1])
+
     imgdata.SetDimensions(img.shape)
 
     img = img.transpose(2, 1, 0)

@@ -1,7 +1,7 @@
 import warnings
 import pyshtools
 import numpy as np
-from vtk.util import numpy_support
+from vtkmodules.util import numpy_support
 from skimage import transform as sktrans
 from scipy import interpolate as spinterp
 
@@ -15,6 +15,7 @@ def get_shcoeffs(
     compute_lcc: bool = True,
     alignment_2d: bool = True,
     make_unique: bool = False,
+    spacing: tuple = None,
 ):
     """
     Compute spherical harmonics coefficients that describe an object stored as
@@ -70,6 +71,9 @@ def get_shcoeffs(
         Whether the image should be aligned in 2d. Default is True.
     make_unique : bool
         Set true to make sure the alignment rotation is unique.
+    spacing : tuple of floats, optional
+        Numpy array spacing in (z,y,x). If None assumes voxel isotropy,
+        else accounts for anisotropic spacings, e.g. (2,1,1) means z-distance is two times greater than xy distance.
 
     Notes
     -----
@@ -128,9 +132,10 @@ def get_shcoeffs(
         image_ = image_.squeeze()
 
     # Converting the input image into a mesh using regular marching cubes
-    mesh, image_, centroid = shtools.get_mesh_from_image(image=image_, sigma=sigma)
+    #TODO: missing lcc parameter!
+    mesh, image_, centroid = shtools.get_mesh_from_image(image=image_, sigma=sigma, spacing=spacing)
 
-    if not image_[tuple([int(u) for u in centroid[::-1]])]:
+    if not image_[tuple([int(u) for u in tuple(c / s for c, s in zip(centroid[::-1], spacing))])]:
         warnings.warn(
             "Mesh centroid seems to fall outside the object. This indicates\
         the mesh may not be a manifold suitable for spherical harmonics\
