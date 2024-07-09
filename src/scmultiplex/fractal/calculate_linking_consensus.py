@@ -50,10 +50,10 @@ def calculate_linking_consensus(
             zarr_url_list listing all the zarr_urls in the same well as the
             zarr_url of the reference acquisition that are being processed.
             (standard argument for Fractal tasks, managed by Fractal server).
-        roi_table: Name of the ROI table over which the task loops to
-            calculate the registration. Examples: `FOV_ROI_table` => loop over
-            the field of views, `well_ROI_table` => process the whole well as
-            one image.
+        roi_table: Name of the matching table used to calculate consensus across
+            multiplexing rounds. Typically, this matching table is the output of a linking task,
+            e.g. org_match_table or nuc_match_table. This table must be present in all rounds
+            except for reference round.
 
     """
     # TODO: test this task on sample data with more than two rounds

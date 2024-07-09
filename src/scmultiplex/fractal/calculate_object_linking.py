@@ -71,10 +71,10 @@ def calculate_object_linking(
             registration; e.g. `org` from object segmentation.
         roi_table: Name of the well ROI table. Input ROI table must have single ROI entry;
             e.g. `well_ROI_table`
-        level: Pyramid level of the image to be segmented. Choose `0` to
+        level: Pyramid level of the image to be processed. Choose `0` to
             process at full resolution.
         iou_cutoff: Float in range 0 to 1 to specify intersection over union cutoff.
-            Object pairs that have an iou below this value are filtered out and stored in linking table.
+            Object pairs that have an iou below this value are filtered out and not stored in linking table.
     """
 
     logger.info(
