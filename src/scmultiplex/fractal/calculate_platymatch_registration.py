@@ -302,8 +302,8 @@ def calculate_platymatch_registration(
                     f"and alignment object label {rx_org_label}")
 
         if r0_org_label != rx_org_label:
-            raise ValueError(f'Label mismatch between reference object {r0_org_label} '
-                             f'and alignment object {rx_org_label}. \n'
+            raise ValueError(f'Label mismatch between reference object {r0_org_label} of round {ref_acquisition}'
+                             f'and alignment object {rx_org_label} of round {zarr_acquisition}. \n'
                              f'Platymatch registration must be run on consensus-linked objects')
 
         # load nuclear label image for object in r0
@@ -372,21 +372,22 @@ def calculate_platymatch_registration(
             (r0_props, fixed_removed, r0_removed_size_mean, r0_size_mean, r0_volume_cutoff) = (
                 filter_small_sizes_per_round(rx_props, column=-1, threshold=volume_filter_threshold))
 
-            logger.info(f"Performing volume filtering of object {r0_org_label} to "
+            logger.info(f"Performing volume filtering of object {r0_org_label} of round {ref_acquisition} to "
                         f"remove small debris below {r0_volume_cutoff} pix threshold")
 
-            logger.info(f"Filtered out {len(fixed_removed)} cells from object {r0_org_label} that have a "
-                        f" mean volume of {r0_removed_size_mean} and correspond to labels \n {fixed_removed}"
+            logger.info(f"Filtered out {len(fixed_removed)} cells from object {r0_org_label} of round {ref_acquisition}"
+                        f"that have a mean volume of {r0_removed_size_mean} and correspond to labels \n {fixed_removed}"
                         )
             # rx
             (rx_props, moving_removed, rx_removed_size_mean, rx_size_mean, rx_volume_cutoff) = (
                 filter_small_sizes_per_round(rx_props, column=-1, threshold=volume_filter_threshold))
 
-            logger.info(f"Performing volume filtering of object {rx_org_label} to "
+            logger.info(f"Performing volume filtering of object {rx_org_label} of round {zarr_acquisition} to "
                         f"remove small debris below {rx_volume_cutoff} pix threshold")
 
-            logger.info(f"Filtered out {len(moving_removed)} cells from object {rx_org_label} that have a "
-                        f" mean volume of {rx_removed_size_mean} and correspond to labels \n {moving_removed}"
+            logger.info(f"Filtered out {len(moving_removed)} cells from object {rx_org_label} of round "
+                        f"{zarr_acquisition} that have a mean volume of {rx_removed_size_mean} and correspond "
+                        f"to labels \n {moving_removed}"
                         )
 
         # TODO add disconnected component detection here to remove nuclei that don't belong to main organoid
@@ -394,9 +395,17 @@ def calculate_platymatch_registration(
         ##############
         # Calculate affine linking with Platymatch ###
         ##############
+
+        # if insufficient nuclear count, skip this organoid pair
+        if r0_props.shape[0] <= 3 or rx_props.shape[0] <= 3:
+            logger.info(f"Skipping organoid pair [ reference object {r0_org_label} of round {ref_acquisition}, "
+                        f"alignment object {rx_org_label} of round {zarr_acquisition} ] of shape "
+                        f"[{r0_props.shape[0]}, {rx_props.shape[0]}] due to insufficient child object count. ")
+            continue
+
         try:
             logger.info(f"Trying affine matching for reference object label {r0_org_label} "
-                        f"and alignment object label {rx_org_label}")
+                        f"and alignment object label {rx_org_label} of round {zarr_acquisition}")
 
             (affine_matches, transform_affine) = run_affine(
                 rx_props,
