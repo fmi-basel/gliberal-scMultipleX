@@ -278,8 +278,12 @@ def calculate_platymatch_registration(
     ##############
 
     # TODO add check that adata is numerically increasing incrementally
-    r0_labels = r0_adata.obs_vector('label')
-    rx_labels = rx_adata.obs_vector('label')
+    r0_labels = r0_adata.obs_vector('label') #unsorted, match row order
+    rx_labels = rx_adata.obs_vector('label') #unsorted, match row order
+
+    # sort labels numerically; if labels were remapped during organoid registration, may not be in order
+    r0_labels_sorted = r0_labels[r0_labels.astype(float).argsort()]
+    rx_labels_sorted = rx_labels[rx_labels.astype(float).argsort()]
 
     # initialize variables
     compute = True  # convert to numpy array form dask
@@ -290,33 +294,36 @@ def calculate_platymatch_registration(
 
     # TODO make possible to run on FOV roi table as well
     # for each object in r0...
-    for row in r0_adata.obs_names:
+    for r0_org_label, rx_org_label in zip(r0_labels_sorted, rx_labels_sorted):
 
         transform_affine = None # clear transform from previous organoid pair
 
-        row_int = int(row)
-        r0_org_label = r0_labels[row_int]
-        rx_org_label = rx_labels[row_int]
+        if r0_org_label != rx_org_label:
+            raise ValueError(f'Label mismatch between reference object {r0_org_label} of round {ref_acquisition}'
+                             f'and alignment object {rx_org_label} of round {zarr_acquisition}. \n'
+                             f'Platymatch registration must be run on consensus-linked objects')
+
+        if len(np.where(r0_labels == r0_org_label)[0]) > 1 or len(np.where(rx_labels == rx_org_label)[0]) > 1:
+            raise ValueError(f'Organoid label values are not unique')
 
         logger.info(f"Loading images for reference object label {r0_org_label} "
                     f"and alignment object label {rx_org_label}")
 
-        if r0_org_label != rx_org_label:
-            raise ValueError(f'Label mismatch between reference object {r0_org_label} '
-                             f'and alignment object {rx_org_label}. \n'
-                             f'Platymatch registration must be run on consensus-linked objects')
+        # identify index that corresponds to label id
+        r0_rowid = np.where(r0_labels == r0_org_label)[0][0]
+        rx_rowid = np.where(rx_labels == rx_org_label)[0][0]
 
         # load nuclear label image for object in r0
         r0 = load_region(
             data_zyx=r0_dask,
-            region=convert_indices_to_regions(r0_idlist[row_int]),
+            region=convert_indices_to_regions(r0_idlist[r0_rowid]),
             compute=compute,
         )
 
         # load nuclear label image for matched object in rx
         rx = load_region(
             data_zyx=rx_dask,
-            region=convert_indices_to_regions(rx_idlist[row_int]),
+            region=convert_indices_to_regions(rx_idlist[rx_rowid]),
             compute=compute,
         )
 
@@ -324,14 +331,14 @@ def calculate_platymatch_registration(
             # load object label image for object in r0
             r0_parent = load_region(
                 data_zyx=r0_dask_parent,
-                region=convert_indices_to_regions(r0_idlist_parent[row_int]),
+                region=convert_indices_to_regions(r0_idlist_parent[r0_rowid]),
                 compute=compute,
             )
 
             # load object label image for object in rx
             rx_parent = load_region(
                 data_zyx=rx_dask_parent,
-                region=convert_indices_to_regions(rx_idlist_parent[row_int]),
+                region=convert_indices_to_regions(rx_idlist_parent[rx_rowid]),
                 compute=compute,
             )
 
@@ -372,21 +379,22 @@ def calculate_platymatch_registration(
             (r0_props, fixed_removed, r0_removed_size_mean, r0_size_mean, r0_volume_cutoff) = (
                 filter_small_sizes_per_round(rx_props, column=-1, threshold=volume_filter_threshold))
 
-            logger.info(f"Performing volume filtering of object {r0_org_label} to "
+            logger.info(f"Performing volume filtering of object {r0_org_label} of round {ref_acquisition} to "
                         f"remove small debris below {r0_volume_cutoff} pix threshold")
 
-            logger.info(f"Filtered out {len(fixed_removed)} cells from object {r0_org_label} that have a "
-                        f" mean volume of {r0_removed_size_mean} and correspond to labels \n {fixed_removed}"
+            logger.info(f"Filtered out {len(fixed_removed)} cells from object {r0_org_label} of round {ref_acquisition}"
+                        f"that have a mean volume of {r0_removed_size_mean} and correspond to labels \n {fixed_removed}"
                         )
             # rx
             (rx_props, moving_removed, rx_removed_size_mean, rx_size_mean, rx_volume_cutoff) = (
                 filter_small_sizes_per_round(rx_props, column=-1, threshold=volume_filter_threshold))
 
-            logger.info(f"Performing volume filtering of object {rx_org_label} to "
+            logger.info(f"Performing volume filtering of object {rx_org_label} of round {zarr_acquisition} to "
                         f"remove small debris below {rx_volume_cutoff} pix threshold")
 
-            logger.info(f"Filtered out {len(moving_removed)} cells from object {rx_org_label} that have a "
-                        f" mean volume of {rx_removed_size_mean} and correspond to labels \n {moving_removed}"
+            logger.info(f"Filtered out {len(moving_removed)} cells from object {rx_org_label} of round "
+                        f"{zarr_acquisition} that have a mean volume of {rx_removed_size_mean} and correspond "
+                        f"to labels \n {moving_removed}"
                         )
 
         # TODO add disconnected component detection here to remove nuclei that don't belong to main organoid
@@ -394,9 +402,17 @@ def calculate_platymatch_registration(
         ##############
         # Calculate affine linking with Platymatch ###
         ##############
+
+        # if insufficient nuclear count, skip this organoid pair
+        if r0_props.shape[0] <= 3 or rx_props.shape[0] <= 3:
+            logger.info(f"Skipping organoid pair [ reference object {r0_org_label} of round {ref_acquisition}, "
+                        f"alignment object {rx_org_label} of round {zarr_acquisition} ] of shape "
+                        f"[{r0_props.shape[0]}, {rx_props.shape[0]}] due to insufficient child object count. ")
+            continue
+
         try:
             logger.info(f"Trying affine matching for reference object label {r0_org_label} "
-                        f"and alignment object label {rx_org_label}")
+                        f"and alignment object label {rx_org_label} of round {zarr_acquisition}")
 
             (affine_matches, transform_affine) = run_affine(
                 rx_props,
@@ -420,7 +436,7 @@ def calculate_platymatch_registration(
                 save_transform_path = f"{zarr_url}/transforms/{roi_table}_{label_name_to_register}_affine"
                 os.makedirs(save_transform_path, exist_ok=True)
                 # saving name is row in obs_names of tables anndata; so matches with input tables ROI naming
-                save_name = f"{row}.npy"
+                save_name = f"{r0_org_label}.npy"
                 np.save(f"{save_transform_path}/{save_name}", transform_affine, allow_pickle=False)
 
         except Exception as e:
@@ -442,14 +458,14 @@ def calculate_platymatch_registration(
             # load nuclear raw image for object in r0
             r0_channel_raw = load_region(
                 data_zyx=r0_dask_raw,
-                region=convert_indices_to_regions(r0_idlist_raw[row_int]),
+                region=convert_indices_to_regions(r0_idlist_raw[r0_rowid]),
                 compute=compute,
             )
 
             # load nuclear raw image for object in rx
             rx_channel_raw = load_region(
                 data_zyx=rx_dask_raw,
-                region=convert_indices_to_regions(rx_idlist_raw[row_int]),
+                region=convert_indices_to_regions(rx_idlist_raw[rx_rowid]),
                 compute=compute,
             )
 
@@ -499,7 +515,7 @@ def calculate_platymatch_registration(
                     save_transform_path = f"{zarr_url}/transforms/{roi_table}_{label_name_to_register}_ffd"
                     os.makedirs(save_transform_path, exist_ok=True)
                     # saving name is row in obs_names of tables anndata; so matches with input tables ROI naming
-                    save_name = f"{row}.tfm"
+                    save_name = f"{r0_org_label}.tfm"
                     sitk.WriteTransform(transform_ffd, f"{save_transform_path}/{save_name}")
 
             except Exception as e:
