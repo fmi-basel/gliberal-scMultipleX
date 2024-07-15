@@ -143,12 +143,13 @@ def surface_mesh(
 
     # initialize new zarr for 3d object label image
     # save as same dimensions as nuclear labels from which they are calculated
+    output_label_name = label_name_obj + '_3d'
+    output_roi_table_name = roi_table + '_3d'
+
     if save_labels:
         shape = r0_dask.shape
         chunks = r0_dask.chunksize
         label_dtype = np.uint32
-        output_label_name = label_name_obj + '_3d'
-        output_roi_table_name = roi_table + '_3d'
         store = zarr.storage.FSStore(f"{zarr_url}/labels/{output_label_name}/0")
 
         if len(shape) != 3 or len(chunks) != 3 or shape[0] == 1:
