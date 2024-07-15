@@ -8,7 +8,8 @@
 #
 
 """
-Calculates linking tables for segmented sub-objects (e.g. nuclei, cells) for segmented and linked objects in a well
+Calculates label-based linking between pairs of multiplexing rounds for segmented objects (e.g. nuclei, cells)
+that are children of linked parent objects (e.g. organoids)
 """
 from typing import Any, Optional
 
@@ -75,7 +76,7 @@ def calculate_platymatch_registration(
 
 ) -> dict[str, Any]:
     """
-    Calculate registration based on images
+    Calculate point-cloud-based registration with PlatyMatch.
 
     This task consists of 4 parts:
 
@@ -114,8 +115,6 @@ def calculate_platymatch_registration(
         volume_filter_threshold: Multiplier that specifies cutoff for volumes below which nuclei are filtered out,
             float in range [0,1], e.g. 0.05 means that 5% of median of nuclear volume distribution is used as cutoff.
             Specify this value if volume filtering is desired. Default 0.05.
-
-
     """
 
     r0_zarr_path = init_args.reference_zarr_url
