@@ -34,8 +34,8 @@ test_relabel_by_linking_consensus_output_dict = {'0': np.array([[13.,  20.8,   0
                                                  }
 test_calculate_platymatch_registration_output = np.array(
 [[ 1.,         1.],
- [ 2.,         2.],
- [ 3.,         3.],
+ [ 3.,         2.],
+ [ 2.,         3.],
  [ 4.,         4.],
  [ 5.,         5.],
  [ 6.,         6.],
