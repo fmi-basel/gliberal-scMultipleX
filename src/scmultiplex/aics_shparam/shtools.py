@@ -83,8 +83,12 @@ def get_mesh_from_image(
 
     # Smooth binarize the input image and binarize
     if sigma > 0:
-        # TODO: sigma in z-dim should be scaled by anisotropy
-        img = skfilters.gaussian(img.astype(np.float32), sigma=(sigma, sigma, sigma))
+        # scale sigma by anisotropic spacing
+        if spacing:
+            sigma_scaled = tuple([sigma * (1 / x) for x in spacing])
+            img = skfilters.gaussian(img.astype(np.float32), sigma=sigma_scaled)
+        else:
+            img = skfilters.gaussian(img.astype(np.float32), sigma=(sigma, sigma, sigma))
 
         img[img < 1.0 / np.exp(1.0)] = 0
         img[img > 0] = 1
