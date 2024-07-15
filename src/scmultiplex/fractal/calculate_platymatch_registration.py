@@ -117,15 +117,17 @@ def calculate_platymatch_registration(
 
 
     """
-    logger.info(
-        f"Running for {zarr_url=}. \n"
-        f"Calculating translation registration per {roi_table=} for "
-        f"{label_name_to_register=}."
-    )
 
     r0_zarr_path = init_args.reference_zarr_url
     zarr_acquisition = extract_acq_info(zarr_url)
     ref_acquisition = extract_acq_info(r0_zarr_path)
+
+    logger.info(
+        f"Running for {zarr_url=} \n"
+        f"relative to reference round {r0_zarr_path} \n"
+        f"Calculating translation registration per {roi_table=} for "
+        f"{label_name_to_register=}."
+    )
 
     # Lazily load zarr array
     # Reference (e.g. R0, fixed) vs. alignment (e.g. RX, moving)
@@ -377,24 +379,21 @@ def calculate_platymatch_registration(
             # discard segmentations that have a volume less than fraction of median nuclear volume (segmented debris)
             # reference round
             (r0_props, fixed_removed, r0_removed_size_mean, r0_size_mean, r0_volume_cutoff) = (
-                filter_small_sizes_per_round(rx_props, column=-1, threshold=volume_filter_threshold))
+                filter_small_sizes_per_round(r0_props, column=-1, threshold=volume_filter_threshold))
 
-            logger.info(f"Performing volume filtering of object {r0_org_label} of round {ref_acquisition} to "
-                        f"remove small debris below {r0_volume_cutoff} pix threshold")
-
-            logger.info(f"Filtered out {len(fixed_removed)} cells from object {r0_org_label} of round {ref_acquisition}"
-                        f"that have a mean volume of {r0_removed_size_mean} and correspond to labels \n {fixed_removed}"
+            logger.info(f"Volume filtering removed {len(fixed_removed)} cell(s) from object {r0_org_label} of round "
+                        f"{ref_acquisition} that have a volume below the calculated {r0_volume_cutoff} pixel threshold"
+                        f"\n Removed labels have a mean volume of {r0_removed_size_mean} and are the label id(s): "
+                        f"\n {fixed_removed}"
                         )
             # rx
             (rx_props, moving_removed, rx_removed_size_mean, rx_size_mean, rx_volume_cutoff) = (
                 filter_small_sizes_per_round(rx_props, column=-1, threshold=volume_filter_threshold))
 
-            logger.info(f"Performing volume filtering of object {rx_org_label} of round {zarr_acquisition} to "
-                        f"remove small debris below {rx_volume_cutoff} pix threshold")
-
-            logger.info(f"Filtered out {len(moving_removed)} cells from object {rx_org_label} of round "
-                        f"{zarr_acquisition} that have a mean volume of {rx_removed_size_mean} and correspond "
-                        f"to labels \n {moving_removed}"
+            logger.info(f"Volume filtering removed {len(moving_removed)} cell(s) from object {rx_org_label} of round "
+                        f"{zarr_acquisition} that have a volume below the calculated {rx_volume_cutoff} pixel threshold"
+                        f"\n Removed labels have a mean volume of {rx_removed_size_mean} and are the label id(s): "
+                        f"\n {moving_removed}"
                         )
 
         # TODO add disconnected component detection here to remove nuclei that don't belong to main organoid
