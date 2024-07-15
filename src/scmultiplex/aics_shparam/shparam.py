@@ -1,6 +1,7 @@
 import warnings
 import pyshtools
 import numpy as np
+from vtk import vtkPolyData
 from vtkmodules.util import numpy_support
 from skimage import transform as sktrans
 from scipy import interpolate as spinterp
@@ -153,6 +154,40 @@ def get_shcoeffs(
     # Translate and update mesh normals
     mesh = shtools.update_mesh_points(mesh, x, y, z)
 
+    coeffs_dict, grid_rec, grid_down = calculate_spherical_harmonics(mesh=mesh, lmax=lmax)
+
+    return (coeffs_dict, grid_rec), (image_, mesh, grid_down, transform)
+
+
+def calculate_spherical_harmonics(
+    mesh: vtkPolyData,
+    lmax: int,
+):
+    """Calculates spherical harmonics.
+
+    Parameters
+    ----------
+    mesh : vtkPolyData
+        Mesh in VTK format to be updated.
+    lmax : int
+        Order of the spherical harmonics parametrization. The higher the order
+        the more shape details are represented.
+    Returns
+    -------
+    coeffs_dict : dict
+        Dictionary with the spherical harmonics coefficients and the mean square
+        error between input and its parametrization
+    grid_rec : ndarray
+        Parametric grid representing sh parametrization
+    grid_down : ndarray
+        Parametric grid representing input object.
+    """
+    # Get coordinates of mesh points
+    coords = numpy_support.vtk_to_numpy(mesh.GetPoints().GetData())
+    x = coords[:, 0]
+    y = coords[:, 1]
+    z = coords[:, 2]
+
     # Cartesian to spherical coordinates convertion
     rad = np.sqrt(x**2 + y**2 + z**2)
     lat = np.arccos(np.divide(z, rad, out=np.zeros_like(rad), where=(rad != 0)))
@@ -190,4 +225,4 @@ def get_shcoeffs(
 
     coeffs_dict = dict(zip(keys, coeffs.flatten()))
 
-    return (coeffs_dict, grid_rec), (image_, mesh, grid_down, transform)
+    return coeffs_dict, grid_rec, grid_down
