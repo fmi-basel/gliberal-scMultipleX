@@ -192,7 +192,7 @@ def export_vtk_polydata(path, polydata):
     writer.Write()
 
 def export_stl_polydata(path, polydata):
-    '''Exports stl polydata as *.vtp'''
+    '''Exports vtk polydata as *.stl'''
 
     writer = vtk.vtkSTLWriter()
     writer.SetFileName(path)
