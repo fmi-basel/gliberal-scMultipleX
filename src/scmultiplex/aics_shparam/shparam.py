@@ -133,8 +133,7 @@ def get_shcoeffs(
         image_ = image_.squeeze()
 
     # Converting the input image into a mesh using regular marching cubes
-    #TODO: missing lcc parameter!
-    mesh, image_, centroid = shtools.get_mesh_from_image(image=image_, sigma=sigma, spacing=spacing)
+    mesh, image_, centroid = shtools.get_mesh_from_image(image=image_, sigma=sigma, lcc=compute_lcc, spacing=spacing)
 
     if not image_[tuple([int(u) for u in tuple(c / s for c, s in zip(centroid[::-1], spacing))])]:
         warnings.warn(
