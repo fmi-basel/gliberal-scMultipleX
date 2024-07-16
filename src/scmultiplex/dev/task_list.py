@@ -50,7 +50,7 @@ TASK_LIST = [
     CompoundTask(
         name="scMultiplex Surface Mesh",
         executable_init="fractal/_init_group_by_well_for_multiplexing.py",
-        executable="fractal/surface_mesh.py",
+        executable="fractal/surface_mesh_multiscale.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
         meta={"cpus_per_task": 4, "mem": 16000},
     ),
