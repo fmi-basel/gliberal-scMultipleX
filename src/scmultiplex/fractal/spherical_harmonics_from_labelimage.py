@@ -1,4 +1,4 @@
-# Copyright 2023 (C) Friedrich Miescher Institute for Biomedical Research and
+# Copyright 2024 (C) Friedrich Miescher Institute for Biomedical Research and
 # University of Zurich
 #
 # Original authors:
@@ -6,8 +6,7 @@
 #
 
 """
-Calculates 3D surface mesh of parent object (e.g. tissue, organoid)
-from 3D cell-level segmentation of children (e.g. nuclei)
+Calculates spherical harmonics of input label image.
 """
 from typing import Any
 
@@ -40,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 
 @validate_arguments
-def spherical_harmonics_aics(
+def spherical_harmonics_from_labelimage(
         *,
         # Fractal arguments
         zarr_url: str,
@@ -54,7 +53,7 @@ def spherical_harmonics_aics(
 
 ) -> dict[str, Any]:
     """
-    Calculate spherical harmonics of object and optionally save surface mesh as stl file.
+    Calculate spherical harmonics of labeled object and optionally save surface mesh as stl file.
 
     Args:
         zarr_url: Path or url to the individual OME-Zarr image to be processed.
@@ -194,6 +193,6 @@ if __name__ == "__main__":
     from fractal_tasks_core.tasks._utils import run_fractal_task
 
     run_fractal_task(
-        task_function=spherical_harmonics_aics,
+        task_function=spherical_harmonics_from_labelimage,
         logger_name=logger.name,
     )
