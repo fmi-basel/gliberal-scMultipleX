@@ -6,34 +6,23 @@
 #
 
 """
-Calculates spherical harmonics of input meshes.
+Calculate spherical harmonics of input meshes using aics_shparam.
 """
-from typing import Any
 
 import anndata as ad
-import dask.array as da
 import logging
-import numpy as np
 import os
 import pandas as pd
-
 import zarr
-from vtkmodules.util import numpy_support
+
 from fractal_tasks_core.tables import write_table
 from fractal_tasks_core.tasks.io_models import InitArgsRegistrationConsensus
 from pydantic.decorator import validate_arguments
-
-from fractal_tasks_core.ngff import load_NgffImageMeta
-from fractal_tasks_core.roi import (
-    check_valid_ROI_indices,
-    convert_indices_to_regions,
-    convert_ROI_table_to_indices,
-    load_region)
+from typing import Any
+from vtkmodules.util import numpy_support
 
 from scmultiplex.fractal.fractal_helper_functions import format_roi_table
-
 from scmultiplex.meshing.MeshFunctions import export_stl_polydata, read_stl_polydata
-
 from scmultiplex.aics_shparam.shparam import calculate_spherical_harmonics
 from scmultiplex.aics_shparam import shtools
 
@@ -54,7 +43,17 @@ def spherical_harmonics_from_mesh(
         save_reconstructed_mesh: bool = True,
 ) -> dict[str, Any]:
     """
-    Calculate spherical harmonics and reconstruction error of pre-computed meshes.
+    Calculate spherical harmonics of input meshes using aics_shparam.
+
+    This task consists of 5 parts:
+
+    1. Load meshes (.stl) from zarr structure that have been previously generated
+        (e.g. using Surface Mesh Multiscale task)
+    2. Compute spherical harmonics of mesh using aics_shparam
+    3. Compute reconstruction error (mse) of computed harmonics
+    4. Optionally generate reconstructed mesh from the calculated harmonics
+    5. Output: save the (1) spherical harmonic coefficients and mse error as feature table
+        (2) reconstructed meshes (.stl) per object id in a new meshes folder within zarr structure
 
     Args:
         zarr_url: Path or url to the individual OME-Zarr image to be processed.
@@ -164,7 +163,7 @@ def spherical_harmonics_from_mesh(
     image_group = zarr.group(f"{zarr_url}")
     table_attrs = {
         "type": "feature_table",
-        "fractal_table_version" : "1",
+        "fractal_table_version": "1",
         "region": {"path": f"../meshes/{mesh_name}"},
         "instance_key": "label",
     }

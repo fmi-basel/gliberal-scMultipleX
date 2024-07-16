@@ -6,9 +6,8 @@
 #
 
 """
-Calculates spherical harmonics of input label image.
+Calculate spherical harmonics of 3D input label image using aics_shparam.
 """
-from typing import Any
 
 import anndata as ad
 import dask.array as da
@@ -16,23 +15,21 @@ import logging
 import numpy as np
 import os
 import pandas as pd
-
 import zarr
+
 from fractal_tasks_core.tables import write_table
 from fractal_tasks_core.tasks.io_models import InitArgsRegistrationConsensus
-from pydantic.decorator import validate_arguments
-
 from fractal_tasks_core.ngff import load_NgffImageMeta
 from fractal_tasks_core.roi import (
     check_valid_ROI_indices,
     convert_indices_to_regions,
     convert_ROI_table_to_indices,
     load_region)
+from pydantic.decorator import validate_arguments
+from typing import Any
 
 from scmultiplex.fractal.fractal_helper_functions import format_roi_table
-
 from scmultiplex.meshing.MeshFunctions import export_stl_polydata
-
 from scmultiplex.aics_shparam import shparam
 
 logger = logging.getLogger(__name__)
@@ -53,7 +50,17 @@ def spherical_harmonics_from_labelimage(
 
 ) -> dict[str, Any]:
     """
-    Calculate spherical harmonics of labeled object and optionally save surface mesh as stl file.
+    Calculate spherical harmonics of 3D input label image using aics_shparam.
+
+    This task consists of 5 parts:
+
+    1. Load 3D label image based on provided label name and ROI table
+    2. Compute 3D mesh with vtkContourFilter using aics_shparam functions
+    3. Compute spherical harmonics of mesh using aics_shparam
+    4. Compute reconstruction error (mse) of computed harmonics
+    5. Optionally generate reconstructed mesh from the calculated harmonics
+    6. Output: save the (1) spherical harmonic coefficients and mse error as feature table
+        (2) reconstructed meshes (.stl) per object id in a new meshes folder within zarr structure
 
     Args:
         zarr_url: Path or url to the individual OME-Zarr image to be processed.
@@ -140,8 +147,6 @@ def spherical_harmonics_from_labelimage(
                                                                                    spacing=spacing)
         coeffs.update({'label': r0_org_label})
         df_coeffs.append(coeffs)
-        # Compute spherical harmonics coefficients of shape and store them
-        # in a pandas dataframe.
 
         ##############
         # Save mesh (optional) ###
@@ -184,7 +189,7 @@ def spherical_harmonics_from_labelimage(
         table_attrs=table_attrs,
     )
 
-    logger.info(f"End spherical_harmonics_aics task for {zarr_url=}")
+    logger.info(f"End spherical_harmonics_from_labelimage task for {zarr_url=}")
 
     return {}
 
