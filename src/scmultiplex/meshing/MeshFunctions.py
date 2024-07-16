@@ -199,4 +199,12 @@ def export_stl_polydata(path, polydata):
     writer.SetInputData(polydata)
     writer.Write()
 
+def read_stl_polydata(fpath):
+    """Load .stl mesh from disk and return as vtkPolyData object"""
+    reader = vtk.vtkSTLReader()
+    reader.SetFileName(fpath)
+    reader.Update()
+    polydata = reader.GetOutput()
+    return polydata
+
 
