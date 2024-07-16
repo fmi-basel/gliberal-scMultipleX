@@ -1,4 +1,4 @@
-# Copyright 2023 (C) Friedrich Miescher Institute for Biomedical Research and
+# Copyright 2024 (C) Friedrich Miescher Institute for Biomedical Research and
 # University of Zurich
 #
 # Original authors:
@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 
 
 @validate_arguments
-def surface_mesh(
+def surface_mesh_multiscale(
         *,
         # Fractal arguments
         zarr_url: str,
@@ -71,18 +71,18 @@ def surface_mesh(
     Calculate 3D surface mesh of parent object (e.g. tissue, organoid)
     from 3D cell-level segmentation of children (e.g. nuclei)
 
+    Recommended to run on child objects that have been filtered to remove debris and disconnected components
+    (e.g. following cleanup_3d_segmentation task)
+
     This task consists of 4 parts:
 
     1. Load the sub-object (e.g. nuc) segmentation images for each object of a given reference round; skip other rounds.
         Select sub-objects (e.g. nuc) that belong to parent object region by masking by parent.
-        Filter the sub-objects to remove small debris that was segmented.
     2. Perform label fusion and edge detection to generate surface label image.
-    3. Calculate surface mesh of label image using marching cubes algorithm.
-    4. Output: save the (1) meshes (.vtp) per object id in meshes folder and (2) well label map as a new label in zarr.
+    3. Calculate surface mesh of label image using vtkDiscreteFlyingEdges3D algorithm.
+    4. Output: save the (1) meshes (.stl) per object id in meshes folder and (2) well label map as a new label in zarr.
         Note that label map output may be clipped for objects that are dense and have overlapping pixels.
         In this case, the 'winning' object in the overlap region is the one with higher label id.
-
-    Parallelization level: image
 
     Args:
         zarr_url: Path or url to the individual OME-Zarr image to be processed.
@@ -273,7 +273,7 @@ def surface_mesh(
         edges_canny = label(remove_small_objects(edges_canny, int(expandby_pix/2)))
 
         logger.info(
-            f"Calculated surface mesh for object label {r0_org_label} using parameters:"
+            f"Successfully calculated surface mesh for object label {r0_org_label} using parameters:"
             f"\n\texpanded by {expandby_pix} pix, \n\teroded by {iterations*2} pix, "
             f"\n\tgaussian blurred with sigma = {sigma}"
         )
@@ -408,18 +408,15 @@ def surface_mesh(
             table_attrs=table_attrs,
         )
 
-    logger.info(f"End surface_mesh task for {zarr_url}/labels/{output_label_name}")
+    logger.info(f"End surface_mesh_multiscale task for {zarr_url}/labels/{output_label_name}")
 
     return {}
 
 
 if __name__ == "__main__":
     from fractal_tasks_core.tasks._utils import run_fractal_task
-    # from multiprocessing import freeze_support
-    #
-    # freeze_support()
 
     run_fractal_task(
-        task_function=surface_mesh,
+        task_function=surface_mesh_multiscale,
         logger_name=logger.name,
     )

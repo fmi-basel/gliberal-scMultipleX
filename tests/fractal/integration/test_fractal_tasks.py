@@ -12,7 +12,7 @@ from scmultiplex.fractal.calculate_linking_consensus import calculate_linking_co
 from scmultiplex.fractal.calculate_object_linking import calculate_object_linking
 from scmultiplex.fractal.calculate_platymatch_registration import calculate_platymatch_registration
 from scmultiplex.fractal.relabel_by_linking_consensus import relabel_by_linking_consensus
-from scmultiplex.fractal.surface_mesh_multiscale import surface_mesh
+from scmultiplex.fractal.surface_mesh_multiscale import surface_mesh_multiscale
 
 name_3d = '220605_151046.zarr'
 name_mip = '220605_151046_mip.zarr'
@@ -192,7 +192,7 @@ def test_surface_mesh(linking_zenodo_zarrs, name=name_3d):
         label_name = "nuc"
         roi_table = "org_ROI_table"
 
-        surface_mesh(
+        surface_mesh_multiscale(
             zarr_url=zarr_url,
             init_args=init_args,
             label_name=label_name,
