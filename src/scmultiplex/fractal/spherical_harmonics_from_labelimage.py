@@ -30,7 +30,7 @@ from typing import Any
 
 from scmultiplex.fractal.fractal_helper_functions import format_roi_table
 from scmultiplex.meshing.MeshFunctions import export_stl_polydata
-from scmultiplex.aics_shparam import shparam
+from scmultiplex.aics_shparam import shparam, shtools
 
 logger = logging.getLogger(__name__)
 
@@ -44,15 +44,15 @@ def spherical_harmonics_from_labelimage(
         # Task-specific arguments
         label_name: str = "org_3d",
         roi_table: str = "org_ROI_table_3d",
-        level: int = 0,
         lmax: int = 2,
         save_mesh: bool = True,
+        save_reconstructed_mesh: bool = True,
 
 ) -> dict[str, Any]:
     """
     Calculate spherical harmonics of 3D input label image using aics_shparam.
 
-    This task consists of 5 parts:
+    This task consists of 6 parts:
 
     1. Load 3D label image based on provided label name and ROI table
     2. Compute 3D mesh with vtkContourFilter using aics_shparam functions
@@ -74,10 +74,11 @@ def spherical_harmonics_from_labelimage(
         label_name: Label for which spherical harmonics are calculated
         roi_table: Name of the ROI table over which the task loops to
             calculate the registration. e.g. consensus object table 'org_ROI_table_consensus'
-        level: Pyramid level of the labels to register. Choose `0` to
-            process at full resolution.
         lmax: Maximum degree of the spherical harmonics coefficients
-        save_mesh: if True, saves the vtk mesh on disk in subfolder 'meshes'. Filename corresponds to object label id
+        save_mesh: If True, saves the computed surface mesh (with vtkContourFilter in aics_shparam functions)
+            on disk in subfolder 'meshes'. Filename corresponds to object label id
+        save_reconstructed_mesh: If true, reconstruct mesh from spherical harmonics and save as stl in
+            meshes zarr directory. Filename corresponds to object label id
 
     """
     logger.info(
@@ -88,76 +89,92 @@ def spherical_harmonics_from_labelimage(
 
     # Lazily load zarr array for reference cycle
     # load well image as dask array e.g. for nuclear segmentation
-    r0_dask = da.from_zarr(f"{zarr_url}/labels/{label_name}/{level}")
+    daska = da.from_zarr(f"{zarr_url}/labels/{label_name}/0")
 
     # Read ROIs of objects
-    r0_adata = ad.read_zarr(f"{zarr_url}/tables/{roi_table}")
+    adata = ad.read_zarr(f"{zarr_url}/tables/{roi_table}")
 
     # Read Zarr metadata
-    r0_ngffmeta = load_NgffImageMeta(f"{zarr_url}/labels/{label_name}")
-    r0_xycoars = r0_ngffmeta.coarsening_xy # need to know when building new pyramids
-    r0_pixmeta = r0_ngffmeta.get_pixel_sizes_zyx(level=level)
+    ngffmeta = load_NgffImageMeta(f"{zarr_url}/labels/{label_name}")
+    xycoars = ngffmeta.coarsening_xy # need to know when building new pyramids
+    pixmeta = ngffmeta.get_pixel_sizes_zyx(level=0)
 
     # Create list of indices for 3D ROIs spanning the entire Z direction
-    r0_idlist = convert_ROI_table_to_indices(
-        r0_adata,
-        level=level,
-        coarsening_xy=r0_xycoars,
-        full_res_pxl_sizes_zyx=r0_pixmeta,
+    idlist = convert_ROI_table_to_indices(
+        adata,
+        level=0,
+        coarsening_xy=xycoars,
+        full_res_pxl_sizes_zyx=pixmeta,
     )
 
-    check_valid_ROI_indices(r0_idlist, roi_table)
+    check_valid_ROI_indices(idlist, roi_table)
 
-    r0_labels = r0_adata.obs_vector('label')
+    labels = adata.obs_vector('label')
     # initialize variables
     compute = True  # convert to numpy array from dask
 
-    if len(r0_idlist) == 0:
+    if len(idlist) == 0:
         logger.warning("Well contains no objects")
 
     df_coeffs = []
     # for every object in ROI table...
-    for row in r0_adata.obs_names:
+    for row in adata.obs_names:
         row_int = int(row)
-        r0_org_label = r0_labels[row_int]
-        region = convert_indices_to_regions(r0_idlist[row_int])
+        org_label = labels[row_int]
+        region = convert_indices_to_regions(idlist[row_int])
 
         # load label image for object
         seg = load_region(
-            data_zyx=r0_dask,
+            data_zyx=daska,
             region=region,
             compute=compute,
         )
 
         #Mask to remove any neighboring organoids
         #TODO: Improve this during the NGIO refactor, very basic masking here to select the desired organoid label
-        seg[seg != float(r0_org_label)] = 0
+        seg[seg != float(org_label)] = 0
 
         ##############
         # Compute mesh and spherical harmonics coefficients  ###
         ##############
 
-        spacing = tuple(np.array(r0_pixmeta) / r0_pixmeta[1])  # z,y,x e.g. (2.78, 1, 1)
-        print('spacing', spacing)
+        spacing = tuple(np.array(pixmeta) / pixmeta[1])  # z,y,x e.g. (2.78, 1, 1)
 
-        ((coeffs, grid_rec),
-         (image_, mesh_polydata_organoid, grid, transform)) = shparam.get_shcoeffs(image=seg,
-                                                                                   lmax=lmax,
-                                                                                   sigma=5,
-                                                                                   spacing=spacing)
-        coeffs.update({'label': r0_org_label})
+        ((coeffs, grid_rec), (image_, mesh, grid_down, transform)) = shparam.get_shcoeffs(image=seg,
+                                                                                          lmax=lmax,
+                                                                                          sigma=5,
+                                                                                          spacing=spacing)
+
+        # Calculate reconstruction error
+        mse = shtools.get_reconstruction_error(grid_down, grid_rec)
+        coeffs.update({'mse': mse, 'label': org_label})
         df_coeffs.append(coeffs)
+
+        logger.info(f"Successfully calculated harmonics for label {org_label}.")
 
         ##############
         # Save mesh (optional) ###
         ##############
 
+        # Save mesh calculated from label image as .stl
         if save_mesh:
             save_mesh_path = f"{zarr_url}/meshes/{roi_table}_shaics"
             os.makedirs(save_mesh_path, exist_ok=True)
             # save name is the organoid label id
-            save_name = f"{int(r0_org_label)}.stl"
-            export_stl_polydata(os.path.join(save_mesh_path, save_name), mesh_polydata_organoid)
+            save_name = f"{int(org_label)}.stl"
+            export_stl_polydata(os.path.join(save_mesh_path, save_name), mesh)
+            logger.info(f"Saved surface mesh for object label {org_label}.")
+
+        # Save mesh reconstructed from spherical harmonics as .stl
+        if save_reconstructed_mesh:
+            # Reconstruct mesh from grid
+            mesh_rec = shtools.get_reconstruction_from_grid(grid_rec)
+            save_transform_path = f"{zarr_url}/meshes/{roi_table}_shaics_reconstructed"
+            os.makedirs(save_transform_path, exist_ok=True)
+            # save name is the organoid label id
+            save_name = f"{int(org_label)}.stl"
+            export_stl_polydata(os.path.join(save_transform_path, save_name), mesh_rec)
+            logger.info(f"Saved reconstructed mesh for object label {org_label}.")
 
 
     ##############
