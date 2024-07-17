@@ -63,6 +63,9 @@ def surface_mesh_multiscale(
         sigma_factor: float = 5,
         canny_threshold: float = 0.3,
         save_mesh: bool = True,
+        smoothing_iterations: int = 30,
+        passband: float = 0.01,
+        target_reduction: float = 0.98,
         save_labels: bool = True,
 
 ) -> dict[str, Any]:
@@ -78,7 +81,10 @@ def surface_mesh_multiscale(
     1. Load the sub-object (e.g. nuc) segmentation images for each object of a given reference round; skip other rounds.
         Select sub-objects (e.g. nuc) that belong to parent object region by masking by parent.
     2. Perform label fusion and edge detection to generate surface label image.
-    3. Calculate surface mesh of label image using vtkDiscreteFlyingEdges3D algorithm.
+    3. Calculate surface mesh of label image using vtkDiscreteFlyingEdges3D algorithm. Smoothing is applied with
+        vtkWindowedSincPolyDataFilter and tuned with 2 task parameters: smoothing_iterations and passband.
+        The number of triangles in the mesh is optionally reduced with vtkQuadricDecimation filter to form a good
+        approximation to the original geometry and is tuned with task parameter target_reduction.
     4. Output: save the (1) meshes (.stl) per object id in meshes folder and (2) well label map as a new label in zarr.
         Note that label map output may be clipped for objects that are dense and have overlapping pixels.
         In this case, the 'winning' object in the overlap region is the one with higher label id.
@@ -106,6 +112,19 @@ def surface_mesh_multiscale(
         canny_threshold: image values below this threshold are set to 0 after Gaussian blur. float in range [0,1].
             Higher values result in tighter fit of mesh to nuclear surface
         save_mesh: if True, saves the vtk mesh on disk in subfolder 'meshes'. Filename corresponds to object label id
+        smoothing_iterations: the number of smoothing iterations during surface mesh smoothing with
+            vtkWindowedSincPolyDataFilter determines the maximum number of smoothing passes.
+            This number corresponds to the degree of the polynomial that is used to approximate the windowed sinc
+            function. Usually 10-20 iteration are sufficient. Higher values have little effect on smoothing.
+            For further details see VTK vtkWindowedSincPolyDataFilter documentation.
+        passband: float in range [0,2] that specifies the PassBand for the windowed sinc filter in
+            vtkWindowedSincPolyDataFilter during mesh smoothing. Lower passband values produce more smoothing, due to
+            filtering of higher frequencies. For further details see VTK vtkWindowedSincPolyDataFilter documentation.
+        target_reduction: float in range [0,1]. Target reduction is used during mesh decimation via
+            vtkQuadricDecimation to reduce the number of triangles in a triangle mesh, forming a good approximation to
+            the original geometry. target_reduction is expressed as the fraction of the
+            original number of triangles in mesh. Note the actual reduction may be less depending on triangulation and
+            topological constraints. For further details see VTK vtkQuadricDecimation documentation.
         save_labels: if True, saves the calculated 3D label map as label map in 'labels' with suffix '_3d'
 
     """
@@ -297,13 +316,10 @@ def surface_mesh_multiscale(
             # Make mesh with vtkDiscreteFlyingEdges3D algorithm
             spacing = tuple(np.array(r0_pixmeta) / r0_pixmeta[1])  # z,y,x e.g. (2.78, 1, 1)
 
-            # target reduction is expressed as the fraction of the original number of triangles
-            # note the actual reduction may be less depending on triangulation and topological constraints
-            # target reduction is thus proportional to organoid dimensions
             mesh_polydata_organoid = labels_to_mesh(edges_canny, spacing,
-                                                    smoothing_iterations=100,
-                                                    pass_band_param=0.01,
-                                                    target_reduction=0.98,
+                                                    smoothing_iterations=smoothing_iterations,
+                                                    pass_band_param=passband,
+                                                    target_reduction=target_reduction,
                                                     show_progress=False)
 
             save_transform_path = f"{zarr_url}/meshes/{label_name_obj}_from_{label_name}"
