@@ -97,15 +97,16 @@ def surface_mesh_multiscale(
             zarr_url_list listing all the zarr_urls in the same well as the
             zarr_url of the reference acquisition that are being processed.
             (standard argument for Fractal tasks, managed by Fractal server).
-        label_name: Label name that will be used for surface estimation, e.g. `nuc`.
-        label_name_obj: Label name of segmented objects that is parent of
-            label_name e.g. `org_consensus`.
-        roi_table: Name of the ROI table over which the task loops to
-            calculate the registration. e.g. consensus object table 'org_ROI_table_consensus'
+        label_name: Label name of child objects that will be used for multiscale surface estimation, e.g. `nuc`.
+        label_name_obj: Label name of segmented objects that are parents of
+            label_name e.g. `org`.
+        roi_table: Name of the ROI table that corresponds to label_name_obj. The task loops over ROIs in this table
+            to load the corresponding child objects.
         expandby_factor: multiplier that specifies pixels by which to expand each nuclear mask for merging,
-            float in range [0,1 or higher], e.g. 0.2 means that 20% of mean of nuclear equivalent diameter is used.
-        sigma_factor: float that specifies sigma (standard deviation) for Gaussian kernel. Higher
-            values correspond to more blurring. Recommended range 1-8.
+            float in range [0, 1 or higher], e.g. 0.2 means that 20% of mean of nuclear equivalent diameter is used.
+        sigma_factor: float that specifies sigma (standard deviation, in pixels) for Gaussian kernel used for blurring
+            to smoothen label image prior to edge detection. Higher values correspond to more blurring.
+            Recommended range 1-8.
         canny_threshold: image values below this threshold are set to 0 after Gaussian blur. float in range [0,1].
             Higher values result in tighter fit of mesh to nuclear surface
         save_mesh: if True, saves the vtk mesh on disk in subfolder 'meshes'. Filename corresponds to object label id
