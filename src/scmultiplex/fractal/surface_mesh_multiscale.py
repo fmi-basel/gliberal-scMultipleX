@@ -58,7 +58,6 @@ def surface_mesh_multiscale(
         label_name: str = "nuc",
         label_name_obj: str = "org_linked",
         roi_table: str = "org_ROI_table_linked",
-        level: int = 0,
         expandby_factor: float = 0.6,
         sigma_factor: float = 5,
         canny_threshold: float = 0.3,
@@ -103,8 +102,6 @@ def surface_mesh_multiscale(
             label_name e.g. `org_consensus`.
         roi_table: Name of the ROI table over which the task loops to
             calculate the registration. e.g. consensus object table 'org_ROI_table_consensus'
-        level: Pyramid level of the labels to register. Choose `0` to
-            process at full resolution.
         expandby_factor: multiplier that specifies pixels by which to expand each nuclear mask for merging,
             float in range [0,1 or higher], e.g. 0.2 means that 20% of mean of nuclear equivalent diameter is used.
         sigma_factor: float that specifies sigma (standard deviation) for Gaussian kernel. Higher
@@ -133,6 +130,9 @@ def surface_mesh_multiscale(
         f"Calculating surface mesh per {roi_table=} for "
         f"{label_name=}."
     )
+
+    # always use highest resolution label
+    level = 0
 
     # Lazily load zarr array for reference cycle
     # load well image as dask array e.g. for nuclear segmentation
