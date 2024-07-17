@@ -38,8 +38,7 @@ from skimage.measure import label
 from skimage.morphology import disk, remove_small_objects
 from skimage.segmentation import expand_labels
 
-from scmultiplex.fractal.fractal_helper_functions import get_zattrs, convert_indices_to_origin_zyx, format_roi_table, \
-    extract_acq_info
+from scmultiplex.fractal.fractal_helper_functions import get_zattrs, convert_indices_to_origin_zyx, format_roi_table
 
 from scmultiplex.meshing.FilterFunctions import equivalent_diam, mask_by_parent_object, \
     calculate_mean_volume
@@ -272,6 +271,18 @@ def surface_mesh_multiscale(
 
         edges_canny = label(remove_small_objects(edges_canny, int(expandby_pix/2)))
 
+        # Check whether new label map has a single value, otherwise result is not saved
+        maxvalue = np.amax(edges_canny)
+        if maxvalue != 1:
+            if maxvalue == 0:
+                logger.warning(f'No 3D label and mesh saved for object {r0_org_label}. '
+                               f'Result of canny edge detection is empty')
+                continue
+            else:  # for max values greater than 1 or less than 0
+                logger.warning(f'No 3D label and mesh saved for object {r0_org_label}. Detected {maxvalue} labels. '
+                               f'Is the shape composed of {maxvalue} distinct objects?')
+                continue
+
         logger.info(
             f"Successfully calculated surface mesh for object label {r0_org_label} using parameters:"
             f"\n\texpanded by {expandby_pix} pix, \n\teroded by {iterations*2} pix, "
@@ -283,7 +294,7 @@ def surface_mesh_multiscale(
         ##############
 
         if save_mesh:
-            # Make mesh with marching cubes
+            # Make mesh with vtkDiscreteFlyingEdges3D algorithm
             spacing = tuple(np.array(r0_pixmeta) / r0_pixmeta[1])  # z,y,x e.g. (2.78, 1, 1)
 
             # target reduction is expressed as the fraction of the original number of triangles
@@ -334,13 +345,6 @@ def surface_mesh_multiscale(
             if seg_ondisk.shape != edges_canny.shape:
                 raise ValueError('Computed label image must match image dimensions of bounding box during saving')
 
-            # check that new label map is binary
-            maxvalue = np.amax(edges_canny)
-            if maxvalue != 1:
-                if maxvalue == 0:
-                    logger.warning('Result of canny edge detection is empty')
-                else: # for max values greater than 1 or less than 0
-                    raise ValueError('Result of canny edge detection must be binary, check normalization')
 
             # convert edge detection label image value to match object label id
             edges_canny_label = edges_canny * int(r0_org_label)
