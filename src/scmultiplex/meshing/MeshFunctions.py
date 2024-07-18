@@ -189,6 +189,19 @@ def add_mesh_points_attribute(mesh, attribute_name, label_mapping):
     scalars.SetName(attribute_name)
     mesh.GetPointData().AddArray(scalars)
 
+
+def get_mass_properties(polydata):
+    """
+    Get volume and surface area of input vtk polydata mesh object.
+    """
+    massProperties = vtk.vtkMassProperties()
+    massProperties.SetInputData(polydata)
+
+    volume = massProperties.GetVolume()
+    surface_area = massProperties.GetSurfaceArea()
+
+    return volume, surface_area
+
 # adjust_edge_curvatures is from https://examples.vtk.org/site/Python/PolyData/CurvaturesAdjustEdges/
 def adjust_edge_curvatures(source, curvature_name, epsilon=1.0e-08):
     """

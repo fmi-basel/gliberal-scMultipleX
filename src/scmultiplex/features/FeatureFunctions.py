@@ -106,6 +106,8 @@ def convex_hull_centroid_dif(prop_2D, spacing):
 def circularity(prop_2D):
     """Return the circularity of object
     Perfect circle has a circularity of 1; lower circularity means deviates from perfect circle
+    Circularity is defined as the ratio of sample area / circle area, where sample area is the measured object area and
+     circle area is the area of the circle that has the identical perimeter as the measured labeled object.
     """
     return 4 * math.pi * (prop_2D.area / np.square(prop_2D.perimeter))
 
@@ -238,3 +240,27 @@ def centroid_weighted_correct(labeled_obj):
     centroid_local = labeled_obj.centroid_weighted_local
     return tuple(idx + slc.start * spc
                      for idx, slc, spc in zip(centroid_local, labeled_obj.slice, labeled_obj._spacing))
+
+
+def equivalent_surface_area(volume):
+    """
+    Calculate the surface area of a sphere with a given volume.
+    """
+    if volume < 0:
+        raise ValueError('Cannot calculate radius of sphere with a negative volume')
+
+    radius = (0.75 * volume * (1/math.pi)) ** (1. / 3.)
+    equivalent_sa = 4 * math.pi * (radius ** 2.)
+
+    return equivalent_sa
+
+def sphericity(volume, surface_area):
+    """
+    Return object sphericity given the measured object volume and surface area. Perfect sphere has a sphericity of 1;
+    higher sphericity means that object shape deviates from a sphere. Sphericity is defined as the
+    ratio of measured object surface area to the surface area of a sphere with an identical volume.
+    """
+    equivalent_sa = equivalent_surface_area(volume)
+    if equivalent_sa == 0:
+        raise ValueError('Cannot calculate sphericity for object with volume = 0')
+    return surface_area / equivalent_surface_area(volume)

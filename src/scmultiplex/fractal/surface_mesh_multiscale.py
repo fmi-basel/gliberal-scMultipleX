@@ -38,12 +38,13 @@ from skimage.measure import label
 from skimage.morphology import disk, remove_small_objects
 from skimage.segmentation import expand_labels
 
+from scmultiplex.features.FeatureFunctions import sphericity
 from scmultiplex.fractal.fractal_helper_functions import get_zattrs, convert_indices_to_origin_zyx, format_roi_table
 
 from scmultiplex.meshing.FilterFunctions import equivalent_diam, mask_by_parent_object, \
     calculate_mean_volume
 from scmultiplex.meshing.MeshFunctions import labels_to_mesh, export_vtk_polydata, \
-    export_stl_polydata, get_gaussian_curvatures
+    export_stl_polydata, get_gaussian_curvatures, get_mass_properties
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,7 @@ def surface_mesh_multiscale(
         sigma_factor: float = 5,
         canny_threshold: float = 0.3,
         calculate_mesh: bool = True,
+        calculate_mesh_features: bool = True,
         calculate_curvature: bool = True,
         smoothing_iterations: int = 30,
         passband: float = 0.01,
@@ -112,6 +114,7 @@ def surface_mesh_multiscale(
             Higher values result in tighter fit of mesh to nuclear surface
         calculate_mesh: if True, saves the mesh as .stl on disk in meshes/[labelname] folder within zarr structure. Filename
             corresponds to object label id
+        calculate_mesh_features: if True, calculate mesh features and flag suspicious meshes.
         calculate_curvature: if True, calculate Gaussian curvature at each mesh point and save as .vtp mesh
             on disk within meshes/[labelname]_curvature folder in zarr structure. Filename
             corresponds to object label id. Only runs if calculate_mesh = True. 
@@ -125,8 +128,9 @@ def surface_mesh_multiscale(
             filtering of higher frequencies. For further details see VTK vtkWindowedSincPolyDataFilter documentation.
         target_reduction: float in range [0,1]. Target reduction is used during mesh decimation via
             vtkQuadricDecimation to reduce the number of triangles in a triangle mesh, forming a good approximation to
-            the original geometry. target_reduction is expressed as the fraction of the
-            original number of triangles in mesh. Note the actual reduction may be less depending on triangulation and
+            the original geometry. Values closer to 1 indicate larger reduction and smaller mesh file size. Note that
+            target_reduction is expressed as the fraction of the original number of triangles in mesh and so is
+            proportional to original mesh size. Note the actual reduction may be less depending on triangulation and
             topological constraints. For further details see VTK vtkQuadricDecimation documentation.
         save_labels: if True, saves the calculated 3D label map as label map in 'labels' with suffix '_3d'
 
@@ -232,6 +236,8 @@ def surface_mesh_multiscale(
     compute = True  # convert to numpy array from dask
 
     # for each parent object (e.g. organoid) in r0...
+    sphericity_flag = 0
+    object_count = 0
     for row in r0_adata.obs_names:
         row_int = int(row)
         r0_org_label = r0_labels[row_int]
@@ -307,7 +313,7 @@ def surface_mesh_multiscale(
                 logger.warning(f'No 3D label and mesh saved for object {r0_org_label}. Detected {maxvalue} labels. '
                                f'Is the shape composed of {maxvalue} distinct objects?')
                 continue
-
+        object_count += 1
         logger.info(
             f"Successfully calculated surface mesh for object label {r0_org_label} using parameters:"
             f"\n\texpanded by {expandby_pix} pix, \n\teroded by {iterations*2} pix, "
@@ -333,6 +339,18 @@ def surface_mesh_multiscale(
             # Save name is the organoid label id
             save_name = f"{int(r0_org_label)}.stl"
             export_stl_polydata(os.path.join(save_transform_path, save_name), mesh_polydata_organoid)
+
+            # TODO: save as feature table
+            if calculate_mesh_features:
+                volume, surface_area = get_mass_properties(mesh_polydata_organoid)
+                sphr = sphericity(volume, surface_area)
+
+                if sphr > 1.2:
+                    logger.warning(
+                        f"Detected high sphericity = {np.round(sphr,3)} for object {r0_org_label}. "
+                        f"Check mesh quality."
+                    )
+                    sphericity_flag += 1
 
             if calculate_curvature:
                 # Calculate curvature
@@ -443,6 +461,15 @@ def surface_mesh_multiscale(
             overwrite=True,
             table_attrs=table_attrs,
         )
+
+    if calculate_mesh & calculate_mesh_features:
+        # Check how many objects out of well have a sphericity flag
+        logger.info(f"{sphericity_flag} out of {object_count} meshed objects are flagged for high sphericity, "
+                    f"which can indicate a highly complex mesh surface.")
+        if sphericity_flag > 0.1 * object_count:
+            # if more than 10% of objects have a sphericity flag, raise warning
+            logger.warning(f"Detected high fraction of suspicious organoid meshes in well. Inspect mesh quality "
+                           f"and tune task parameters for label expansion and mesh smoothing accordingly. ")
 
     logger.info(f"End surface_mesh_multiscale task for {zarr_url}/labels/{output_label_name}")
 
