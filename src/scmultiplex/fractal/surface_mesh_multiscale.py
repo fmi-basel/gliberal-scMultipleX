@@ -43,7 +43,7 @@ from scmultiplex.fractal.fractal_helper_functions import get_zattrs, convert_ind
 from scmultiplex.meshing.FilterFunctions import equivalent_diam, mask_by_parent_object, \
     calculate_mean_volume
 from scmultiplex.meshing.MeshFunctions import labels_to_mesh, export_vtk_polydata, \
-    export_stl_polydata
+    export_stl_polydata, get_gaussian_curvatures
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,8 @@ def surface_mesh_multiscale(
         expandby_factor: float = 0.6,
         sigma_factor: float = 5,
         canny_threshold: float = 0.3,
-        save_mesh: bool = True,
+        calculate_mesh: bool = True,
+        calculate_curvature: bool = True,
         smoothing_iterations: int = 30,
         passband: float = 0.01,
         target_reduction: float = 0.98,
@@ -109,7 +110,11 @@ def surface_mesh_multiscale(
             Recommended range 1-8.
         canny_threshold: image values below this threshold are set to 0 after Gaussian blur. float in range [0,1].
             Higher values result in tighter fit of mesh to nuclear surface
-        save_mesh: if True, saves the vtk mesh on disk in subfolder 'meshes'. Filename corresponds to object label id
+        calculate_mesh: if True, saves the mesh as .stl on disk in meshes/[labelname] folder within zarr structure. Filename
+            corresponds to object label id
+        calculate_curvature: if True, calculate Gaussian curvature at each mesh point and save as .vtp mesh
+            on disk within meshes/[labelname]_curvature folder in zarr structure. Filename
+            corresponds to object label id. Only runs if calculate_mesh = True. 
         smoothing_iterations: the number of smoothing iterations during surface mesh smoothing with
             vtkWindowedSincPolyDataFilter determines the maximum number of smoothing passes.
             This number corresponds to the degree of the polynomial that is used to approximate the windowed sinc
@@ -313,7 +318,7 @@ def surface_mesh_multiscale(
         # Calculate and save mesh  ###
         ##############
 
-        if save_mesh:
+        if calculate_mesh:
             # Make mesh with vtkDiscreteFlyingEdges3D algorithm
             spacing = tuple(np.array(r0_pixmeta) / r0_pixmeta[1])  # z,y,x e.g. (2.78, 1, 1)
 
@@ -322,12 +327,22 @@ def surface_mesh_multiscale(
                                                     pass_band_param=passband,
                                                     target_reduction=target_reduction,
                                                     show_progress=False)
-
+            # Save mesh
             save_transform_path = f"{zarr_url}/meshes/{label_name_obj}_from_{label_name}"
             os.makedirs(save_transform_path, exist_ok=True)
-            # save name is the organoid label id
+            # Save name is the organoid label id
             save_name = f"{int(r0_org_label)}.stl"
             export_stl_polydata(os.path.join(save_transform_path, save_name), mesh_polydata_organoid)
+
+            if calculate_curvature:
+                # Calculate curvature
+                polydata_curv, scalar_range, curvatures_numpy = get_gaussian_curvatures(mesh_polydata_organoid)
+                # Save mesh
+                save_transform_path = f"{zarr_url}/meshes/{label_name_obj}_from_{label_name}_curvature"
+                os.makedirs(save_transform_path, exist_ok=True)
+                # Save name is the organoid label id
+                save_name_curv = f"{int(r0_org_label)}.vtp"
+                export_vtk_polydata(os.path.join(save_transform_path, save_name_curv), polydata_curv)
 
         ##############
         # Save labels and make ROI table ###
