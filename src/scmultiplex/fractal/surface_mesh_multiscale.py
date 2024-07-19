@@ -42,7 +42,7 @@ from scmultiplex.features.FeatureFunctions import sphericity
 from scmultiplex.fractal.fractal_helper_functions import get_zattrs, convert_indices_to_origin_zyx, format_roi_table
 
 from scmultiplex.meshing.FilterFunctions import equivalent_diam, mask_by_parent_object, \
-    calculate_mean_volume
+    calculate_mean_volume, load_border_values, remove_border
 from scmultiplex.meshing.MeshFunctions import labels_to_mesh, export_vtk_polydata, \
     export_stl_polydata, get_gaussian_curvatures, get_mass_properties
 
@@ -289,20 +289,33 @@ def surface_mesh_multiscale(
         edges_canny = np.zeros_like(blurred)
         # threshold
         blurred[blurred < canny_threshold] = 0  # was 0.15, 0.3
-        for i, zslice in enumerate(blurred):
 
+        padded_zslice_count = 0
+        for i, zslice in enumerate(blurred):
+            padded = False
             if np.count_nonzero(zslice) == 0:  # if all values are 0, skip this zslice
                 continue
             else:
-                # TODO add zero-padding here prior to edge detection? Test in jpnb first. Then remove pad.
+                image_border = load_border_values(zslice)
+                # Pad z-slice border with 0 so that Canny filter generates a closed surface when there are non-zero
+                # values at edge
+                if np.any(image_border):
+                    zslice = np.pad(zslice, 1)
+                    padded_zslice_count += 1
+                    padded = True
+
                 edges = canny(zslice)
-                edges_canny[i, :, :] = binary_fill_holes(edges)
+                edges = binary_fill_holes(edges)
+                if padded:
+                    edges = remove_border(edges)
+                edges_canny[i, :, :] = edges
+
 
         edges_canny = (edges_canny * 255).astype(np.uint8)
 
         edges_canny = label(remove_small_objects(edges_canny, int(expandby_pix/2)))
 
-        # Check whether new label map has a single value, otherwise result is not saved
+        # Check whether new label map has a single value, otherwise result is discarded and object skipped
         maxvalue = np.amax(edges_canny)
         if maxvalue != 1:
             if maxvalue == 0:
@@ -313,13 +326,18 @@ def surface_mesh_multiscale(
                 logger.warning(f'No 3D label and mesh saved for object {r0_org_label}. Detected {maxvalue} labels. '
                                f'Is the shape composed of {maxvalue} distinct objects?')
                 continue
-        object_count += 1
+
         logger.info(
-            f"Successfully calculated surface mesh for object label {r0_org_label} using parameters:"
+            f"Successfully calculated 3D label map for object label {r0_org_label} using parameters:"
             f"\n\texpanded by {expandby_pix} pix, \n\teroded by {iterations*2} pix, "
-            f"\n\tgaussian blurred with sigma = {sigma}"
+            f"\n\tgaussian blurred with sigma = {np.round(sigma,1)}"
         )
 
+        if padded_zslice_count > 0:
+            logger.info(f'Object {r0_org_label} has non-zero pixels touching image border. Image processing '
+                           f'completed successfully, however consider reducing sigma_factor '
+                           f'or increasing the canny_threshold to reduce risk of cropping shape edges.')
+        object_count += 1
         ##############
         # Calculate and save mesh  ###
         ##############
@@ -328,7 +346,9 @@ def surface_mesh_multiscale(
             # Make mesh with vtkDiscreteFlyingEdges3D algorithm
             spacing = tuple(np.array(r0_pixmeta) / r0_pixmeta[1])  # z,y,x e.g. (2.78, 1, 1)
 
-            mesh_polydata_organoid = labels_to_mesh(edges_canny, spacing,
+            # Pad border with 0 so that the mesh forms a manifold
+            edges_canny_padded = np.pad(edges_canny, 1)
+            mesh_polydata_organoid = labels_to_mesh(edges_canny_padded, spacing,
                                                     smoothing_iterations=smoothing_iterations,
                                                     pass_band_param=passband,
                                                     target_reduction=target_reduction,
@@ -339,6 +359,8 @@ def surface_mesh_multiscale(
             # Save name is the organoid label id
             save_name = f"{int(r0_org_label)}.stl"
             export_stl_polydata(os.path.join(save_transform_path, save_name), mesh_polydata_organoid)
+
+            logger.info(f"Successfully generated surface mesh for object label {r0_org_label}")
 
             # TODO: save as feature table
             if calculate_mesh_features:

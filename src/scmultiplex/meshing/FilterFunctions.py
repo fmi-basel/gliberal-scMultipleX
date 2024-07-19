@@ -136,5 +136,26 @@ def mask_by_parent_object(seg, parent_dask, parent_idlist_parentmeta, row_int, p
     return seg_masked
 
 
+def load_border_values(nparray):
+    """
+    Load edge (border) values of a 2-dim numpy array
+    Return: 1-d numpy array of edge values
+    """
+    if len(nparray.shape) != 2:
+        raise ValueError("Expecting 2-dimensional image (z-slice) as input")
+    alist = [nparray[0, :], nparray[1:, -1], nparray[-1, :-1], nparray[1:-1, 0]]
+    edge_values = np.concatenate(alist)
+    return edge_values
+
+
+def remove_border(nparray):
+    """
+    Remove edge (border) values from a 2-dim numpy array, e.g. to reverse padding
+    Return: 2-d numpy array with edge values removed
+    """
+    if len(nparray.shape) != 2:
+        raise ValueError("Expecting 2-dimensional image (z-slice) as input")
+    return nparray[1:-1, 1:-1]
+
 
 
