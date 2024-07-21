@@ -43,8 +43,7 @@ from scmultiplex.fractal.fractal_helper_functions import get_zattrs, convert_ind
 
 from scmultiplex.meshing.FilterFunctions import equivalent_diam, mask_by_parent_object, \
     calculate_mean_volume, load_border_values, remove_border
-from scmultiplex.meshing.MeshFunctions import labels_to_mesh, export_vtk_polydata, \
-    export_stl_polydata, get_gaussian_curvatures, get_mass_properties
+from scmultiplex.meshing.MeshFunctions import labels_to_mesh, export_stl_polydata, get_mass_properties
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +62,6 @@ def surface_mesh_multiscale(
         sigma_factor: float = 5,
         canny_threshold: float = 0.3,
         calculate_mesh: bool = True,
-        calculate_mesh_features: bool = True,
-        calculate_curvature: bool = True,
         polynomial_degree: int = 30,
         passband: float = 0.01,
         feature_angle: int = 160,
@@ -117,10 +114,6 @@ def surface_mesh_multiscale(
             Higher values result in tighter fit of mesh to nuclear surface
         calculate_mesh: if True, saves the mesh as .stl on disk in meshes/[labelname] folder within zarr structure.
             Filename corresponds to object label id
-        calculate_mesh_features: if True, calculate mesh features and flag suspicious meshes.
-        calculate_curvature: if True, calculate Gaussian curvature at each mesh point and save as .vtp mesh
-            on disk within meshes/[labelname]_curvature folder in zarr structure. Filename
-            corresponds to object label id. Only runs if calculate_mesh = True. 
         polynomial_degree: the number of polynomial degrees during surface mesh smoothing with
             vtkWindowedSincPolyDataFilter determines the maximum number of smoothing passes.
             This number corresponds to the degree of the polynomial that is used to approximate the windowed sinc
@@ -381,27 +374,15 @@ def surface_mesh_multiscale(
 
             logger.info(f"Successfully generated surface mesh for object label {r0_org_label}")
 
-            # TODO: save as feature table
-            if calculate_mesh_features:
-                volume, surface_area = get_mass_properties(mesh_polydata_organoid)
-                sphr = sphericity(volume, surface_area)
+            volume, surface_area = get_mass_properties(mesh_polydata_organoid)
+            sphr = sphericity(volume, surface_area)
 
-                if sphr > 1.2:
-                    logger.warning(
-                        f"Detected high sphericity = {np.round(sphr,3)} for object {r0_org_label}. "
-                        f"Check mesh quality."
-                    )
-                    sphericity_flag += 1
-
-            if calculate_curvature:
-                # Calculate curvature
-                polydata_curv, scalar_range, curvatures_numpy = get_gaussian_curvatures(mesh_polydata_organoid)
-                # Save mesh
-                save_transform_path = f"{zarr_url}/meshes/{label_name_obj}_from_{label_name}_curvature"
-                os.makedirs(save_transform_path, exist_ok=True)
-                # Save name is the organoid label id
-                save_name_curv = f"{int(r0_org_label)}.vtp"
-                export_vtk_polydata(os.path.join(save_transform_path, save_name_curv), polydata_curv)
+            if sphr > 1.2:
+                logger.warning(
+                    f"Detected high sphericity = {np.round(sphr,3)} for object {r0_org_label}. "
+                    f"Check mesh quality."
+                )
+                sphericity_flag += 1
 
         ##############
         # Save labels and make ROI table ###
