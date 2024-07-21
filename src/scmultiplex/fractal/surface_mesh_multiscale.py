@@ -65,9 +65,11 @@ def surface_mesh_multiscale(
         calculate_mesh: bool = True,
         calculate_mesh_features: bool = True,
         calculate_curvature: bool = True,
-        smoothing_iterations: int = 30,
+        polynomial_degree: int = 30,
         passband: float = 0.01,
+        feature_angle: int = 160,
         target_reduction: float = 0.98,
+        smoothing_iterations: int = 1,
         save_labels: bool = True,
 
 ) -> dict[str, Any]:
@@ -84,7 +86,8 @@ def surface_mesh_multiscale(
         Select sub-objects (e.g. nuc) that belong to parent object region by masking by parent.
     2. Perform label fusion and edge detection to generate surface label image.
     3. Calculate surface mesh of label image using vtkDiscreteFlyingEdges3D algorithm. Smoothing is applied with
-        vtkWindowedSincPolyDataFilter and tuned with 2 task parameters: smoothing_iterations and passband.
+        vtkWindowedSincPolyDataFilter and tuned with 4 task parameters: passband, smoothing_iterations, feature_angle,
+        polynomial_degree (minimal effect).
         The number of triangles in the mesh is optionally reduced with vtkQuadricDecimation filter to form a good
         approximation to the original geometry and is tuned with task parameter target_reduction.
     4. Output: save the (1) meshes (.stl) per object id in meshes folder and (2) well label map as a new label in zarr.
@@ -118,7 +121,7 @@ def surface_mesh_multiscale(
         calculate_curvature: if True, calculate Gaussian curvature at each mesh point and save as .vtp mesh
             on disk within meshes/[labelname]_curvature folder in zarr structure. Filename
             corresponds to object label id. Only runs if calculate_mesh = True. 
-        smoothing_iterations: the number of smoothing iterations during surface mesh smoothing with
+        polynomial_degree: the number of polynomial degrees during surface mesh smoothing with
             vtkWindowedSincPolyDataFilter determines the maximum number of smoothing passes.
             This number corresponds to the degree of the polynomial that is used to approximate the windowed sinc
             function. Usually 10-20 iteration are sufficient. Higher values have little effect on smoothing.
@@ -126,12 +129,26 @@ def surface_mesh_multiscale(
         passband: float in range [0,2] that specifies the PassBand for the windowed sinc filter in
             vtkWindowedSincPolyDataFilter during mesh smoothing. Lower passband values produce more smoothing, due to
             filtering of higher frequencies. For further details see VTK vtkWindowedSincPolyDataFilter documentation.
+        feature_angle: int in range [0,180] that specifies the feature angle for sharp edge identification used
+            for vtk FeatureEdgeSmoothing. Higher values result in more smoothened edges in mesh.
+            For further details see VTK vtkWindowedSincPolyDataFilter documentation.
         target_reduction: float in range [0,1]. Target reduction is used during mesh decimation via
             vtkQuadricDecimation to reduce the number of triangles in a triangle mesh, forming a good approximation to
             the original geometry. Values closer to 1 indicate larger reduction and smaller mesh file size. Note that
             target_reduction is expressed as the fraction of the original number of triangles in mesh and so is
             proportional to original mesh size. Note the actual reduction may be less depending on triangulation and
             topological constraints. For further details see VTK vtkQuadricDecimation documentation.
+        smoothing_iterations: the number of iterations that mesh smoothing and decimation is run.
+            If smoothing_iterations > 1, the decimated result is used as input for subsequent smoothing rounds.
+            Recommended to start with 1 iteration and increase if resulting smoothing is insufficient. For each
+            iteration after the first, the passband is reduced and feature_angle is increased incrementally to
+            enhance smoothing. Specifically, the passband is reduced by factor 1/(2^n),
+            and the feature_angle is increased by an increment of (5 * n), where n = iteration round (n=0
+            is the first iteration). The target_reduction is fixed to 0.1 smoothing_iterations > 1.
+            For example if user inputs (0.01, 160, 0.98) for (passband, feature_angle, target_reduction), the second
+            iteration will use parameters (0.005, 165, 0.1), the third (0.0025, 170, 0.1), etc. Maximum feature_angle
+            is capped at 180. Note that additional iterations usually do not significantly add to processing time as
+            the number of mesh verteces is typically significantly reduced after the first decimation iteration.
         save_labels: if True, saves the calculated 3D label map as label map in 'labels' with suffix '_3d'
 
     """
@@ -349,9 +366,12 @@ def surface_mesh_multiscale(
             # Pad border with 0 so that the mesh forms a manifold
             edges_canny_padded = np.pad(edges_canny, 1)
             mesh_polydata_organoid = labels_to_mesh(edges_canny_padded, spacing,
-                                                    smoothing_iterations=smoothing_iterations,
+                                                    polynomial_degree=polynomial_degree,
                                                     pass_band_param=passband,
+                                                    feature_angle=feature_angle,
                                                     target_reduction=target_reduction,
+                                                    smoothing_iterations=smoothing_iterations,
+                                                    margin=5,
                                                     show_progress=False)
             # Save mesh
             save_transform_path = f"{zarr_url}/meshes/{label_name_obj}_from_{label_name}"

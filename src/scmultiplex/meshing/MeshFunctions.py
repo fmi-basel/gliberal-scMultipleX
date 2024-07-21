@@ -46,48 +46,14 @@ def numpy_img_to_vtk(img, spacing, origin=(0., 0., 0.), deep_copy=True):
     return imageVTK
 
 
-def extract_smooth_mesh(imageVTK,
-                        label_range,
-                        smoothing_iterations=30,
-                        pass_band_param=0.01,
-                        target_reduction=0.95):
-    '''Extract mesh/contour for labels in imageVTK, smooth and decimate.
-
-    Multiple labels can be extracted at once, however touching labels
-    will share vertices and the label ids are lost during smoothing/decimation.
-    Processing is slow for small objects in a large volume and should be cropped beforehand.
-
-    Args:
-        imageVTK: vtk image data
-        label_range: range of labels to extract. A tuple (l,l) will extract
-            a mesh for a single label id l
-        smoothing_iterations: number of iterations for vtkWindowedSincPolyDataFilter
-        pass_band_param: pass band param in range [0.,2.] for vtkWindowedSincPolyDataFilter.
-            Lower value remove higher frequencies.
-        target_reduction: target reduction for vtkQuadricDecimation
-    '''
-
-    n_contours = label_range[1] - label_range[0] + 1
-
-    # alternative vtkDiscreteMarchingCubes is slower and creates some weird missalignment lines when applied to tight crops
-    dfe = vtk.vtkDiscreteFlyingEdges3D()
-    dfe.SetInputData(imageVTK)
-    dfe.ComputeScalarsOff(
-    )  # numpy image labels --> cells (faces) scalar values
-    dfe.ComputeNormalsOff()
-    dfe.ComputeGradientsOff()
-    dfe.InterpolateAttributesOff()
-    dfe.GenerateValues(n_contours, label_range[0],
-                       label_range[1])  # numContours, rangeStart, rangeEnd
-    dfe.Update()
-
+def smooth_me(vtkalgorithmoutput, smoothing_iterations, pass_band_param, feature_angle, target_reduction):
     smoother = vtk.vtkWindowedSincPolyDataFilter()
-    smoother.SetInputConnection(dfe.GetOutputPort())
+    smoother.SetInputConnection(vtkalgorithmoutput)
     smoother.SetNumberOfIterations(
         smoothing_iterations)  # this has little effect on the error!
     smoother.BoundarySmoothingOff()
-    smoother.FeatureEdgeSmoothingOff()
-    # smoother.SetFeatureAngle(120)
+    smoother.FeatureEdgeSmoothingOn()
+    smoother.SetFeatureAngle(feature_angle)
     smoother.SetPassBand(
         pass_band_param)  # from 0 to 2, 2 keeps high frequencies
     smoother.NonManifoldSmoothingOn()
@@ -103,17 +69,85 @@ def extract_smooth_mesh(imageVTK,
     decimate.SetTargetReduction(target_reduction)
     decimate.VolumePreservationOn()
     decimate.Update()
+    return decimate
 
-    return decimate.GetOutput()
+
+def extract_smooth_mesh(imageVTK,
+                        label_range,
+                        polynomial_degree=30,
+                        pass_band_param=0.01,
+                        feature_angle=160,
+                        target_reduction=0.98,
+                        smoothing_iterations=1):
+    """Extract mesh/contour for labels in imageVTK, smooth and decimate.
+
+    Multiple labels can be extracted at once, however touching labels
+    will share vertices and the label ids are lost during smoothing/decimation.
+    Processing is slow for small objects in a large volume and should be cropped beforehand.
+
+    Args:
+        imageVTK: vtk image data
+        label_range: range of labels to extract. A tuple (l,l) will extract
+            a mesh for a single label id l
+        polynomial_degree: number of iterations for vtkWindowedSincPolyDataFilter
+        pass_band_param: pass band param in range [0.,2.] for vtkWindowedSincPolyDataFilter.
+            Lower value remove higher frequencies.
+        feature_angle: feature angle for sharp edge identification used
+            for vtk FeatureEdgeSmoothing
+        target_reduction: target reduction for vtkQuadricDecimation
+        smoothing_iterations: the number of iterations that mesh smoothing and decimation is run
+    """
+    n_contours = label_range[1] - label_range[0] + 1
+
+    # alternative vtkDiscreteMarchingCubes is slower and creates some weird missalignment lines when applied to tight crops
+    dfe = vtk.vtkDiscreteFlyingEdges3D()
+    dfe.SetInputData(imageVTK)
+    dfe.ComputeScalarsOff(
+    )  # numpy image labels --> cells (faces) scalar values
+    dfe.ComputeNormalsOff()
+    dfe.ComputeGradientsOff()
+    dfe.InterpolateAttributesOff()
+    dfe.GenerateValues(n_contours, label_range[0],
+                       label_range[1])  # numContours, rangeStart, rangeEnd
+    dfe.Update()
+
+    algorithmoutput = dfe.GetOutputPort()
+
+    for n in range(smoothing_iterations):
+        # after first iteration, use a fixed target reduction that almost entirely preserves number of triangles (0.1)
+        # scale pass_band_param and feature_angle with iteration to increase smoothing
+        tr = target_reduction
+        pbp = pass_band_param
+        fa = feature_angle
+
+        if n > 0:
+            tr = 0.1
+            pbp = pbp / (2 ** n)
+            fa = fa + (5 * n)
+
+        # cap feature_angle at 180 degrees
+        if fa > 180:
+            fa = 180
+
+        decimated = smooth_me(algorithmoutput, polynomial_degree, pbp, fa, tr)
+
+        if n == (smoothing_iterations - 1):
+            output = decimated.GetOutput()
+            return output
+        else:
+            algorithmoutput = decimated.GetOutputPort()
+            continue
 
 
 def labels_to_mesh(labels,
                    spacing,
-                   smoothing_iterations=30,
-                   pass_band_param=0.01,
-                   target_reduction=0.95,
-                   margin=5,
-                   show_progress=True):
+                   polynomial_degree,
+                   pass_band_param,
+                   feature_angle,
+                   target_reduction,
+                   smoothing_iterations,
+                   margin,
+                   show_progress=False):
     '''Extract mesh/contour for a labels provided as a numpy array, smooth and decimate.
 
     Meshes are exctracted one label at a time one object crop.
@@ -124,7 +158,10 @@ def labels_to_mesh(labels,
         smoothing_iterations: number of iterations for vtkWindowedSincPolyDataFilter
         pass_band_param: pass band param in range [0.,2.] for vtkWindowedSincPolyDataFilter.
             Lower value remove higher frequencies.
+        feature_angle: feature angle for sharp edge identification used
+            for vtk FeatureEdgeSmoothing
         target_reduction: target reduction for vtkQuadricDecimation
+        smoothing_iterations: the number of iterations that mesh smoothing and decimation is run
         margin: margin bounding box used to crop each label. Needs at least margin=1 to extract
         closed contours (i.e. label should not touch the bounding box), slightly more for the
         smoothing operation.
@@ -146,9 +183,11 @@ def labels_to_mesh(labels,
             origin = tuple(sl.start * s for sl, s in zip(loc, spacing))
             imageVTK = numpy_img_to_vtk(crop, spacing, origin, deep_copy=False)
             instance_mesh = extract_smooth_mesh(imageVTK, (1, 1),
-                                                smoothing_iterations,
+                                                polynomial_degree,
                                                 pass_band_param,
-                                                target_reduction)
+                                                feature_angle,
+                                                target_reduction,
+                                                smoothing_iterations)
 
             # add the label id as point data
             scalars = numpy_support.numpy_to_vtk(
@@ -201,6 +240,7 @@ def get_mass_properties(polydata):
     surface_area = massProperties.GetSurfaceArea()
 
     return volume, surface_area
+
 
 # adjust_edge_curvatures is from https://examples.vtk.org/site/Python/PolyData/CurvaturesAdjustEdges/
 def adjust_edge_curvatures(source, curvature_name, epsilon=1.0e-08):
