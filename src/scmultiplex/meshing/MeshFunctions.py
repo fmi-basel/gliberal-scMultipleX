@@ -25,7 +25,7 @@ from scipy.ndimage import find_objects
 
 
 def numpy_img_to_vtk(img, spacing, origin=(0., 0., 0.), deep_copy=True):
-    '''Converts a numpy array to vtk image data.
+    """Converts a numpy array to vtk image data.
 
     Args:
         img: numpy array
@@ -33,7 +33,7 @@ def numpy_img_to_vtk(img, spacing, origin=(0., 0., 0.), deep_copy=True):
         origin: origin point in physical coordinates
         deep_copy: if False memory will be shared with the original numpy array.
         It requires keeping a handle on the numpy array to prevent garbage collection.
-    '''
+    """
 
     vtk_data = numpy_support.numpy_to_vtk(num_array=img.ravel(order='C'),
                                           deep=deep_copy)
@@ -99,7 +99,8 @@ def extract_smooth_mesh(imageVTK,
     """
     n_contours = label_range[1] - label_range[0] + 1
 
-    # alternative vtkDiscreteMarchingCubes is slower and creates some weird missalignment lines when applied to tight crops
+    # alternative vtkDiscreteMarchingCubes is slower and creates some wierd missalignment lines when applied to
+    # tight crops
     dfe = vtk.vtkDiscreteFlyingEdges3D()
     dfe.SetInputData(imageVTK)
     dfe.ComputeScalarsOff(
@@ -148,13 +149,14 @@ def labels_to_mesh(labels,
                    smoothing_iterations,
                    margin,
                    show_progress=False):
-    '''Extract mesh/contour for a labels provided as a numpy array, smooth and decimate.
+    """Extract mesh/contour for a labels provided as a numpy array, smooth and decimate.
 
-    Meshes are exctracted one label at a time one object crop.
+    Meshes are extracted one label at a time one object crop.
 
     Args:
-        imageVTK: vtk image data
+        labels: numpy array of 3D segmentation
         spacing: tuple defining the px/voxel size
+        polynomial_degree: number of iterations for vtkWindowedSincPolyDataFilter
         smoothing_iterations: number of iterations for vtkWindowedSincPolyDataFilter
         pass_band_param: pass band param in range [0.,2.] for vtkWindowedSincPolyDataFilter.
             Lower value remove higher frequencies.
@@ -166,7 +168,7 @@ def labels_to_mesh(labels,
         closed contours (i.e. label should not touch the bounding box), slightly more for the
         smoothing operation.
         show_progress: display a progress bar. Useful for images containing many labels
-    '''
+    """
 
     appendFilter = vtk.vtkAppendPolyData()
 
@@ -205,14 +207,14 @@ def labels_to_mesh(labels,
 
 
 def add_mesh_points_attribute(mesh, attribute_name, label_mapping):
-    '''Adds points attribute to vtk polydata.
+    """Adds points attribute to vtk polydata.
 
     Args:
         mesh: vtk polydata
         attribute_name: name of the attribute to be added
         label_mapping: dict mapping label ids (vtk PointData) to the new attribute (ScalarArray).
 
-    '''
+    """
     # mesh: polydata
 
     # turn labels_mapping into numpy look up table
@@ -360,6 +362,7 @@ def adjust_edge_curvatures(source, curvature_name, epsilon=1.0e-08):
         source.GetPointData().SetActiveScalars(curvature_name)
     return
 
+
 # TODO: generalize to also calculate 'Mean_Curvature'.
 def get_gaussian_curvatures(polydata, curvature_type='Gauss_Curvature'):
     """
@@ -381,7 +384,7 @@ def get_gaussian_curvatures(polydata, curvature_type='Gauss_Curvature'):
     polydata.GetPointData().AddArray(curvatures.GetOutput().GetPointData().GetAbstractArray(curvature_type))
     scalar_range = polydata.GetPointData().GetScalars(curvature_type).GetRange()
 
-    polydata.GetPointData().SetActiveScalars(curvature_type) # visualize curvature when load into viewer
+    polydata.GetPointData().SetActiveScalars(curvature_type)  # visualize curvature when load into viewer
     np_source = dsa.WrapDataObject(polydata)
     curvatures_numpy = np_source.PointData[curvature_type]
 
@@ -406,7 +409,7 @@ def get_curv_derivative(polydata):
 
 
 def export_vtk_polydata(path, polydata):
-    '''Exports vtk polydata as *.vtp'''
+    """Exports vtk polydata as *.vtp"""
 
     writer = vtk.vtkXMLPolyDataWriter()
     writer.SetFileName(path)
@@ -415,13 +418,15 @@ def export_vtk_polydata(path, polydata):
     writer.SetCompressionLevel(9)
     writer.Write()
 
+
 def export_stl_polydata(path, polydata):
-    '''Exports vtk polydata as *.stl'''
+    """Exports vtk polydata as *.stl"""
 
     writer = vtk.vtkSTLWriter()
     writer.SetFileName(path)
     writer.SetInputData(polydata)
     writer.Write()
+
 
 def read_stl_polydata(fpath):
     """Load .stl mesh from disk and return as vtkPolyData object"""
@@ -430,5 +435,3 @@ def read_stl_polydata(fpath):
     reader.Update()
     polydata = reader.GetOutput()
     return polydata
-
-

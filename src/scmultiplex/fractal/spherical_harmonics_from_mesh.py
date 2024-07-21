@@ -65,7 +65,8 @@ def spherical_harmonics_from_mesh(
             zarr_url of the reference acquisition that are being processed.
             (standard argument for Fractal tasks, managed by Fractal server).
         mesh_name: Mesh folder name for which spherical harmonics are to be calculated
-        roi_table: Name of the ROI table that corresponds to labels of meshed objects, e.g. org_ROI_table_3d
+        roi_table: Name of the ROI table that corresponds to labels of meshed objects, only used for indexing
+            objects e.g. org_ROI_table_3d
         lmax: Maximum degree of the spherical harmonics coefficients
         translate_to_origin: If true, translate centroid of mesh to origin prior to spherical harmonic decomposition.
             Recommended set to True

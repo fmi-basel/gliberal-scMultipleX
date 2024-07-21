@@ -115,8 +115,8 @@ def surface_mesh_multiscale(
             Recommended range 1-8.
         canny_threshold: image values below this threshold are set to 0 after Gaussian blur. float in range [0,1].
             Higher values result in tighter fit of mesh to nuclear surface
-        calculate_mesh: if True, saves the mesh as .stl on disk in meshes/[labelname] folder within zarr structure. Filename
-            corresponds to object label id
+        calculate_mesh: if True, saves the mesh as .stl on disk in meshes/[labelname] folder within zarr structure.
+            Filename corresponds to object label id
         calculate_mesh_features: if True, calculate mesh features and flag suspicious meshes.
         calculate_curvature: if True, calculate Gaussian curvature at each mesh point and save as .vtp mesh
             on disk within meshes/[labelname]_curvature folder in zarr structure. Filename
@@ -170,7 +170,7 @@ def surface_mesh_multiscale(
 
     # Read Zarr metadata
     r0_ngffmeta = load_NgffImageMeta(f"{zarr_url}/labels/{label_name}")
-    r0_xycoars = r0_ngffmeta.coarsening_xy # need to know when building new pyramids
+    r0_xycoars = r0_ngffmeta.coarsening_xy  # need to know when building new pyramids
     r0_pixmeta = r0_ngffmeta.get_pixel_sizes_zyx(level=level)
 
     # Create list of indices for 3D ROIs spanning the entire Z direction
@@ -327,7 +327,6 @@ def surface_mesh_multiscale(
                     edges = remove_border(edges)
                 edges_canny[i, :, :] = edges
 
-
         edges_canny = (edges_canny * 255).astype(np.uint8)
 
         edges_canny = label(remove_small_objects(edges_canny, int(expandby_pix/2)))
@@ -352,8 +351,8 @@ def surface_mesh_multiscale(
 
         if padded_zslice_count > 0:
             logger.info(f'Object {r0_org_label} has non-zero pixels touching image border. Image processing '
-                           f'completed successfully, however consider reducing sigma_factor '
-                           f'or increasing the canny_threshold to reduce risk of cropping shape edges.')
+                        f'completed successfully, however consider reducing sigma_factor '
+                        f'or increasing the canny_threshold to reduce risk of cropping shape edges.')
         object_count += 1
         ##############
         # Calculate and save mesh  ###
@@ -410,7 +409,8 @@ def surface_mesh_multiscale(
 
         if save_labels:
             # store labels as new label map in zarr
-            # note that pixels of overlap in the case where two meshes are touching are overwritten by the last written object
+            # note that pixels of overlap in the case where two meshes are touching are overwritten by the last
+            # written object
             # thus meshes are the most accurate representation of surface, labels may be cropped
 
             # # TODO delete
@@ -436,7 +436,6 @@ def surface_mesh_multiscale(
             # check that dimensions of rois match
             if seg_ondisk.shape != edges_canny.shape:
                 raise ValueError('Computed label image must match image dimensions of bounding box during saving')
-
 
             # convert edge detection label image value to match object label id
             edges_canny_label = edges_canny * int(r0_org_label)

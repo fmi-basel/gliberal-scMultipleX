@@ -5,9 +5,6 @@
 # Author: Nicole Repina              <nicole.repina@fmi.ch>                  #
 #                                                                            #
 ##############################################################################
-
-import warnings
-
 import numpy as np
 import pandas as pd
 import math
@@ -156,6 +153,3 @@ def remove_border(nparray):
     if len(nparray.shape) != 2:
         raise ValueError("Expecting 2-dimensional image (z-slice) as input")
     return nparray[1:-1, 1:-1]
-
-
-

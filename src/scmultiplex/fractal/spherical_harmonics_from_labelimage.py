@@ -96,7 +96,7 @@ def spherical_harmonics_from_labelimage(
 
     # Read Zarr metadata
     ngffmeta = load_NgffImageMeta(f"{zarr_url}/labels/{label_name}")
-    xycoars = ngffmeta.coarsening_xy # need to know when building new pyramids
+    xycoars = ngffmeta.coarsening_xy  # need to know when building new pyramids
     pixmeta = ngffmeta.get_pixel_sizes_zyx(level=0)
 
     # Create list of indices for 3D ROIs spanning the entire Z direction
@@ -130,8 +130,8 @@ def spherical_harmonics_from_labelimage(
             compute=compute,
         )
 
-        #Mask to remove any neighboring organoids
-        #TODO: Improve this during the NGIO refactor, very basic masking here to select the desired organoid label
+        # Mask to remove any neighboring organoids
+        # TODO: Improve this during the NGIO refactor, very basic masking here to select the desired organoid label
         seg[seg != float(org_label)] = 0
 
         ##############
@@ -176,7 +176,6 @@ def spherical_harmonics_from_labelimage(
             export_stl_polydata(os.path.join(save_transform_path, save_name), mesh_rec)
             logger.info(f"Saved reconstructed mesh for object label {org_label}.")
 
-
     ##############
     # Save spherical harmonics as measurement table  ###
     ##############
@@ -193,7 +192,7 @@ def spherical_harmonics_from_labelimage(
     image_group = zarr.group(f"{zarr_url}")
     table_attrs = {
         "type": "feature_table",
-        "fractal_table_version" : "1",
+        "fractal_table_version": "1",
         "region": {"path": f"../labels/{label_name}"},
         "instance_key": "label",
     }

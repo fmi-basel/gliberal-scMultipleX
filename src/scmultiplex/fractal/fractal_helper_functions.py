@@ -23,6 +23,7 @@ def read_table_and_attrs(zarr_url: Path, roi_table):
     table_attrs = get_zattrs(table_url)
     return table, table_attrs
 
+
 # TODO update relabel_by_linking_consensus task to use these functions
 def get_zattrs(zarr_url):
     with zarr.open(zarr_url, mode="r") as zarr_img:
@@ -85,8 +86,7 @@ def are_linking_table_columns_valid(*, table: ad.AnnData, reference_cycle: int, 
     """
     # Hard constraint: table columns must include some expected ones
     columns = ["R" + str(reference_cycle) + "_label",
-               "R" + str(alignment_cycle) + "_label"
-    ]
+               "R" + str(alignment_cycle) + "_label"]
     for column in columns:
         if column not in table.var_names:
             raise ValueError(f"Column {column} is not present in linking table")
@@ -119,7 +119,7 @@ def extract_acq_info(zarr_url):
     zarr_acquisition = None
 
     zarr_pathname = Path(zarr_url).name
-    wellmeta = load_NgffWellMeta(str(Path(zarr_url).parent)).well.images #list of dictionaries for each round
+    wellmeta = load_NgffWellMeta(str(Path(zarr_url).parent)).well.images  # list of dictionaries for each round
     for img in wellmeta:
         if img.path == zarr_pathname:
             zarr_acquisition = img.acquisition
@@ -127,5 +127,3 @@ def extract_acq_info(zarr_url):
         raise ValueError(f"{zarr_url=} well metadata does not contain expected path and acquisition naming")
 
     return zarr_acquisition
-
-
