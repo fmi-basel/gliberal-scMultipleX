@@ -9,6 +9,7 @@
 
 
 import numpy as np
+from scipy.spatial.distance import cdist
 from tqdm import tqdm
 import vtk
 from vtkmodules.util import numpy_support
@@ -231,6 +232,38 @@ def add_mesh_points_attribute(mesh, attribute_name, label_mapping):
     mesh.GetPointData().AddArray(scalars)
 
 
+def get_convex_hull(polydata):
+    """Get convex hull of input mesh using vtkHull()"""
+    hull = vtk.vtkHull()
+    hull.SetInputData(polydata)
+    hull.AddCubeFacePlanes()  # generate bounding box
+    hull.AddRecursiveSpherePlanes(5)
+    hull.Update()
+    clean = vtk.vtkStaticCleanPolyData()
+    clean.SetInputConnection(hull.GetOutputPort())
+    clean.Update()
+    tri = vtk.vtkTriangleFilter()
+    tri.SetInputConnection(clean.GetOutputPort())
+    tri.Update()
+    return tri.GetOutput()
+
+
+def get_bounding_box(polydata):
+    """Get convex hull of input mesh using vtkHull()"""
+    hull = vtk.vtkHull()
+    hull.SetInputData(polydata)
+    hull.AddCubeFacePlanes()  # generate bounding box
+    hull.Update()
+    clean = vtk.vtkStaticCleanPolyData()
+    clean.SetInputConnection(hull.GetOutputPort())
+    clean.Update()
+    tri = vtk.vtkTriangleFilter()
+    tri.SetInputConnection(clean.GetOutputPort())
+    tri.Update()
+
+    return tri.GetOutput()
+
+
 def get_mass_properties(polydata):
     """
     Get volume and surface area of input vtk polydata mesh object.
@@ -242,6 +275,27 @@ def get_mass_properties(polydata):
     surface_area = massProperties.GetSurfaceArea()
 
     return volume, surface_area
+
+
+def get_centroid(polydata):
+    """
+    Get centroid of input vtk polydata mesh object.
+    """
+    coords = numpy_support.vtk_to_numpy(polydata.GetPoints().GetData())
+    centroid = coords.mean(axis=0, keepdims=True)
+    return centroid
+
+
+def get_max_length(polydata):
+    coords = numpy_support.vtk_to_numpy(polydata.GetPoints().GetData())
+    hdist = cdist(coords, coords, metric='euclidean')
+
+    # Get the farthest apart points and their distance
+    indeces = np.unravel_index(hdist.argmax(), hdist.shape)
+    most_distant_point_pair = [coords[indeces[0]], coords[indeces[1]]]
+    maxdist = hdist[indeces]
+
+    return maxdist, most_distant_point_pair
 
 
 # adjust_edge_curvatures is from https://examples.vtk.org/site/Python/PolyData/CurvaturesAdjustEdges/

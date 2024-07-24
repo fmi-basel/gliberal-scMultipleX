@@ -12,14 +12,19 @@ import numpy as np
 import scipy
 import scipy.stats
 import math
+
 from skimage.measure import marching_cubes, mesh_surface_area, label, moments, regionprops
 from skimage.morphology import binary_erosion
 
+from scmultiplex.meshing.MeshFunctions import get_max_length
+
 spacing = None
+
 
 def set_spacing(spacing_s):
     global spacing
     spacing = spacing_s
+
 
 def fixed_percentiles(region_mask, intensity):
     """
@@ -52,14 +57,14 @@ def stdv(region_mask, intensity):
 
 
 def bounding_box_ratio(prop):
-    """Return the ratio between the area and the bounding box area of the object
+    """Return the ratio between the object area and the bounding box area of the object
     Note this is the same as regionprops 'extent'
     """
     return prop.area / prop.area_bbox
 
 
 def convex_hull_ratio(prop):
-    """Return the ratio between the area and the convex hull area of the object
+    """Return the ratio between the object area and the convex hull area of the object
     Note this is the same as regionprops 'solidity'
     """
     return prop.area / prop.area_convex
@@ -67,7 +72,7 @@ def convex_hull_ratio(prop):
 
 def convex_hull_area_resid(prop_2D):
     """Return the normalized difference in area between the convex hull and area of the object
-    Normalize to the area of the convex hull
+    Normalize to the area of the convex hull, becomes fraction of object composed of concavities (divots & indentations)
     """
     return (prop_2D.convex_area - prop_2D.area) / prop_2D.convex_area
 
@@ -77,7 +82,7 @@ def convex_hull_area_resid(prop_2D):
 def convex_hull_centroid_dif(prop_2D, spacing):
     """Return the normalized euclidian distance between the centroid of the object label
         and the centroid of the convex hull
-        Normalize to the object area; becomes fraction of object composed of divots & indentations
+        Normalize to the object area
     """
 
     if len(spacing) != 2:
@@ -236,13 +241,19 @@ def centroid_weighted_correct(labeled_obj, spacing):
     bb_origin_scaled = bb_origin * spacing
     return bb_origin_scaled + centroid_local
 
+
 def centroid_weighted_correct(labeled_obj):
     centroid_local = labeled_obj.centroid_weighted_local
     return tuple(idx + slc.start * spc
-                     for idx, slc, spc in zip(centroid_local, labeled_obj.slice, labeled_obj._spacing))
+                 for idx, slc, spc in zip(centroid_local, labeled_obj.slice, labeled_obj._spacing))
 
 
-def equivalent_surface_area(volume):
+########################
+# MESH FUNCTIONS #######
+########################
+
+
+def mesh_equivalent_surface_area(volume):
     """
     Calculate the surface area of a sphere with a given volume.
     """
@@ -254,13 +265,85 @@ def equivalent_surface_area(volume):
 
     return equivalent_sa
 
-def sphericity(volume, surface_area):
+
+def mesh_equivalent_diameter(volume):
+    """
+    The diameter of a sphere with the same volume as the object region
+    """
+    equiv_diam = 2 * ((0.75 * volume * (1/math.pi)) ** (1. / 3.))
+    return equiv_diam
+
+
+def mesh_sphericity(volume, surface_area):
     """
     Return object sphericity given the measured object volume and surface area. Perfect sphere has a sphericity of 1;
     higher sphericity means that object shape deviates from a sphere. Sphericity is defined as the
     ratio of measured object surface area to the surface area of a sphere with an identical volume.
+    This is a 3D version of circularity.
     """
-    equivalent_sa = equivalent_surface_area(volume)
+    equivalent_sa = mesh_equivalent_surface_area(volume)
     if equivalent_sa == 0:
         raise ValueError('Cannot calculate sphericity for object with volume = 0')
-    return surface_area / equivalent_surface_area(volume)
+    return surface_area / equivalent_sa
+
+
+def mesh_extent(object_volume, bbox_volume):
+    """Return the ratio between the object volume and the bounding box volume
+    Note this is the 3D version of bounding_box_ratio (i.e. 'extent')
+    """
+    return object_volume / bbox_volume
+
+
+def mesh_solidity(object_volume, convex_hull_volume):
+    """Return the ratio between the object volume and the convex hull volume
+    Note this is the 3D version of convex_hull_ratio (i.e. 'solidity')
+    Convex objects have a convex_hull_volume_ratio close 1; objects with concavities have values less than 1.
+    """
+    return object_volume / convex_hull_volume
+
+
+def mesh_concavity(object_volume, convex_hull_volume):
+    """Return the normalized difference in volume between the convex hull and the object
+    Normalize to the volume of the convex hull so that number reflects the fraction of object composed of
+    concavities (divots & indentations). Values closer to 0 indicate a more convex shape.
+    Note this is the 3D version of convex_hull_area_resid
+    """
+    return (convex_hull_volume - object_volume) / convex_hull_volume
+
+
+def mesh_asymmetry(object_volume, object_centroid, convex_hull_centroid):
+    """Return the normalized euclidian distance between the centroid of the object point cloud
+        and the centroid of the convex hull
+        Normalize to the cubed root of object volume
+    """
+
+    # calculate 2-norm (Euclidean distance) and normalize
+    centroid_dist = np.linalg.norm(object_centroid - convex_hull_centroid) / np.cbrt(object_volume)
+
+    return centroid_dist
+
+
+def mesh_aspect_ratio(object_volume, polydata):
+    """
+    Return the ratio of maximum length of mesh point cloud to the equivalent diameter.
+    Typically, use the convex hull vtkPolyData object as input polydata.
+    """
+    equiv_diam = mesh_equivalent_diameter(object_volume)
+    maxdist, _ = get_max_length(polydata)
+
+    return maxdist / equiv_diam
+
+
+def mesh_surface_area_to_volume(object_volume, object_surface_area):
+    """ Return surface are to volume ratio"""
+    return object_surface_area / object_volume
+
+
+def mesh_surface_area_to_volume_norm(object_volume, object_surface_area):
+    """ Return square root of surface are to cubed root of volume ratio.
+    Normalized by factor a so that value is 1.0 for spherical objects
+    This metric is invariant to object size, unlike simple surface area to volume ratio
+    which scales with 3/radius for spherical objects"""
+    a = (3**(1/3))*((4*np.pi)**(1/6))
+    ratio = (object_surface_area**(1/2)) / (object_volume**(1/3) * a)
+    return ratio

@@ -38,7 +38,7 @@ from skimage.measure import label
 from skimage.morphology import disk, remove_small_objects
 from skimage.segmentation import expand_labels
 
-from scmultiplex.features.FeatureFunctions import sphericity
+from scmultiplex.features.FeatureFunctions import mesh_sphericity
 from scmultiplex.fractal.fractal_helper_functions import get_zattrs, convert_indices_to_origin_zyx, format_roi_table
 
 from scmultiplex.meshing.FilterFunctions import equivalent_diam, mask_by_parent_object, \
@@ -353,7 +353,8 @@ def surface_mesh_multiscale(
 
         if calculate_mesh:
             # Make mesh with vtkDiscreteFlyingEdges3D algorithm
-            spacing = tuple(np.array(r0_pixmeta) / r0_pixmeta[1])  # z,y,x e.g. (2.78, 1, 1)
+            # Set spacing to ome-zarr pixel spacing metadata. Mesh will be in physical units (um)
+            spacing = tuple(np.array(r0_pixmeta)) # z,y,x e.g. (0.6, 0.216, 0.216)
 
             # Pad border with 0 so that the mesh forms a manifold
             edges_canny_padded = np.pad(edges_canny, 1)
@@ -375,7 +376,7 @@ def surface_mesh_multiscale(
             logger.info(f"Successfully generated surface mesh for object label {r0_org_label}")
 
             volume, surface_area = get_mass_properties(mesh_polydata_organoid)
-            sphr = sphericity(volume, surface_area)
+            sphr = mesh_sphericity(volume, surface_area)
 
             if sphr > 1.2:
                 logger.warning(
@@ -484,7 +485,7 @@ def surface_mesh_multiscale(
             table_attrs=table_attrs,
         )
 
-    if calculate_mesh & calculate_mesh_features:
+    if calculate_mesh:
         # Check how many objects out of well have a sphericity flag
         logger.info(f"{sphericity_flag} out of {object_count} meshed objects are flagged for high sphericity, "
                     f"which can indicate a highly complex mesh surface.")
