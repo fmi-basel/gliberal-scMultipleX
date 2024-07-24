@@ -12,14 +12,16 @@ from scmultiplex.fractal.calculate_linking_consensus import calculate_linking_co
 from scmultiplex.fractal.calculate_object_linking import calculate_object_linking
 from scmultiplex.fractal.calculate_platymatch_registration import calculate_platymatch_registration
 from scmultiplex.fractal.relabel_by_linking_consensus import relabel_by_linking_consensus
-from scmultiplex.fractal.surface_mesh import surface_mesh
+from scmultiplex.fractal.scmultiplex_mesh_measurements import scmultiplex_mesh_measurements
+from scmultiplex.fractal.spherical_harmonics_from_labelimage import spherical_harmonics_from_labelimage
+from scmultiplex.fractal.surface_mesh_multiscale import surface_mesh_multiscale
 
 name_3d = '220605_151046.zarr'
 name_mip = '220605_151046_mip.zarr'
 
 test_calculate_object_linking_expected_output = np.array([[1., 1., 0.9305816],
-                                              [2., 2., 0.78365386],
-                                              [3., 3., 0.95049506]])
+                                                          [2., 2., 0.78365386],
+                                                          [3., 3., 0.95049506]])
 
 test_calculate_linking_consensus_expected_output = np.array([[1., 1., 0., 1.],
                                                              [2., 2., 1., 2.],
@@ -49,6 +51,14 @@ test_calculate_platymatch_registration_output = np.array(
  [14.,        14.],
  [15.,        15.],
  [16.,        16.]])
+
+test_sphr_harmonics_from_labelimg_expected_output = np.array([11.446810, 10.194640,  14.508974])
+
+test_sphr_harmonics_from_mesh_expected_output = np.array([10.77121,  9.39584, 14.15143])
+
+test_scmultiplex_mesh_measurements_expected_output = np.array([5.1855186e+03, 1.4639492e+03, 1.0104475e+00,
+                                                               4.9461979e-01, 9.9533254e-01, 4.6674553e-03,
+                                                               6.3726273e-03, 1.0982440e+00, 1.0052102e+00])
 
 
 def select_zarr_urls(name, linking_zenodo_zarrs):
@@ -151,7 +161,7 @@ def test_calculate_platymatch_registration(linking_zenodo_zarrs, name=name_3d):
     for img in parallelization_list["parallelization_list"]:
         zarr_url = img['zarr_url']
         init_args = img['init_args']
-        label_name_to_register="nuc"
+        label_name_to_register = "nuc"
         label_name_obj = "org"
         roi_table = "org_ROI_table"
         channel = ChannelInputModel(wavelength_id="A04_C01")
@@ -192,17 +202,21 @@ def test_surface_mesh(linking_zenodo_zarrs, name=name_3d):
         label_name = "nuc"
         roi_table = "org_ROI_table"
 
-        surface_mesh(
+        surface_mesh_multiscale(
             zarr_url=zarr_url,
             init_args=init_args,
             label_name=label_name,
             label_name_obj=label_name_obj,
             roi_table=roi_table,
-            level=0,
             expandby_factor=0.6,
             sigma_factor=5,
             canny_threshold=0.3,
-            save_mesh=True,
+            calculate_mesh=True,
+            polynomial_degree=30,
+            passband=0.01,
+            feature_angle=160,
+            target_reduction=0.98,
+            smoothing_iterations=2,
             save_labels=True,
         )
 
@@ -211,9 +225,80 @@ def test_surface_mesh(linking_zenodo_zarrs, name=name_3d):
         assert len(os.listdir(output_mesh_path)) == 3
 
 
+def test_sphr_harmonics_from_labelimage(linking_zenodo_zarrs, name=name_3d):
+    zarr_urls = select_zarr_urls(name, linking_zenodo_zarrs)
+    parallelization_list = _init_group_by_well_for_multiplexing(zarr_urls=zarr_urls,
+                                                                zarr_dir='',
+                                                                reference_acquisition=0, )
+    for img in parallelization_list["parallelization_list"]:
+        zarr_url = img['zarr_url']
+        init_args = img['init_args']
+        label_name = "org_3d"
+        roi_table = "org_ROI_table_3d"
+
+        spherical_harmonics_from_labelimage(
+            zarr_url=img['zarr_url'],
+            init_args=img['init_args'],
+            label_name=label_name,
+            roi_table=roi_table,
+            lmax=2,
+            save_mesh=True,
+            save_reconstructed_mesh=True,
+        )
+
+        # check that 3 mesh files were written
+        output_mesh_path = f"{zarr_url}/meshes/{roi_table}_shaics"
+        output_mesh_path_reconstructed = f"{zarr_url}/meshes/{roi_table}_shaics_reconstructed"
+        assert len(os.listdir(output_mesh_path)) == 3
+        assert len(os.listdir(output_mesh_path_reconstructed)) == 3
+
+        # check that first calculated spherical harmonic is correct
+        output_table_path = f"{zarr_url}/tables/{label_name}_harmonics"
+        output = ad.read_zarr(output_table_path).to_df().to_numpy()
+        assert_almost_equal(output[:, 0], test_sphr_harmonics_from_labelimg_expected_output, decimal=5)
 
 
+def test_scmultiplex_mesh_measurements(linking_zenodo_zarrs, name=name_3d):
+    zarr_urls = select_zarr_urls(name, linking_zenodo_zarrs)
+    parallelization_list = _init_group_by_well_for_multiplexing(zarr_urls=zarr_urls,
+                                                                zarr_dir='',
+                                                                reference_acquisition=0, )
+    for img in parallelization_list["parallelization_list"]:
+        zarr_url = img['zarr_url']
+        init_args = img['init_args']
+        mesh_name = "org_from_nuc"
+        roi_table = "org_ROI_table_3d"
+        output_table_name = "mesh_features"
 
+        scmultiplex_mesh_measurements(
+            zarr_url=img['zarr_url'],
+            init_args=img['init_args'],
+            mesh_name=mesh_name,
+            roi_table=roi_table,
+            output_table_name=output_table_name,
+            save_hulls=True,
+            calculate_curvature=True,
+            calculate_harmonics=True,
+            lmax=2,
+            translate_to_origin=True,
+            save_reconstructed_mesh=True,
+        )
 
+        # check that 3 mesh files were written for convex hull
+        output_mesh_path_chull = f"{zarr_url}/meshes/{mesh_name}_convex_hull"
+        assert len(os.listdir(output_mesh_path_chull)) == 3
 
+        # check that all extracted features are correct for first organoid
+        output_table_path = f"{zarr_url}/tables/{output_table_name}"
+        output = ad.read_zarr(output_table_path).to_df().to_numpy()
+        assert_almost_equal(output[0, :], test_scmultiplex_mesh_measurements_expected_output, decimal=4)
+
+        # check that 3 mesh files were written for reconstructed harmonics
+        output_mesh_path_reconstructed = f"{zarr_url}/meshes/{mesh_name}_reconstructed"
+        assert len(os.listdir(output_mesh_path_reconstructed)) == 3
+
+        # check that first calculated spherical harmonic is correct
+        output_table_path = f"{zarr_url}/tables/{output_table_name}_harmonics"
+        output = ad.read_zarr(output_table_path).to_df().to_numpy()
+        assert_almost_equal(output[:, 0], test_sphr_harmonics_from_mesh_expected_output, decimal=5)
 

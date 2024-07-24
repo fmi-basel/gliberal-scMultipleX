@@ -1,4 +1,4 @@
-# Copyright 2023 (C) Friedrich Miescher Institute for Biomedical Research and
+# Copyright 2024 (C) Friedrich Miescher Institute for Biomedical Research and
 # University of Zurich
 #
 # Original authors:
@@ -38,19 +38,18 @@ from skimage.measure import label
 from skimage.morphology import disk, remove_small_objects
 from skimage.segmentation import expand_labels
 
-from scmultiplex.fractal.fractal_helper_functions import get_zattrs, convert_indices_to_origin_zyx, format_roi_table, \
-    extract_acq_info
+from scmultiplex.features.FeatureFunctions import mesh_sphericity
+from scmultiplex.fractal.fractal_helper_functions import get_zattrs, convert_indices_to_origin_zyx, format_roi_table
 
 from scmultiplex.meshing.FilterFunctions import equivalent_diam, mask_by_parent_object, \
-    calculate_mean_volume
-from scmultiplex.meshing.MeshFunctions import labels_to_mesh, export_vtk_polydata, \
-    export_stl_polydata
+    calculate_mean_volume, load_border_values, remove_border
+from scmultiplex.meshing.MeshFunctions import labels_to_mesh, export_stl_polydata, get_mass_properties
 
 logger = logging.getLogger(__name__)
 
 
 @validate_arguments
-def surface_mesh(
+def surface_mesh_multiscale(
         *,
         # Fractal arguments
         zarr_url: str,
@@ -59,11 +58,15 @@ def surface_mesh(
         label_name: str = "nuc",
         label_name_obj: str = "org_linked",
         roi_table: str = "org_ROI_table_linked",
-        level: int = 0,
         expandby_factor: float = 0.6,
         sigma_factor: float = 5,
         canny_threshold: float = 0.3,
-        save_mesh: bool = True,
+        calculate_mesh: bool = True,
+        polynomial_degree: int = 30,
+        passband: float = 0.01,
+        feature_angle: int = 160,
+        target_reduction: float = 0.98,
+        smoothing_iterations: int = 1,
         save_labels: bool = True,
 
 ) -> dict[str, Any]:
@@ -71,18 +74,22 @@ def surface_mesh(
     Calculate 3D surface mesh of parent object (e.g. tissue, organoid)
     from 3D cell-level segmentation of children (e.g. nuclei)
 
+    Recommended to run on child objects that have been filtered to remove debris and disconnected components
+    (e.g. following cleanup_3d_segmentation task)
+
     This task consists of 4 parts:
 
     1. Load the sub-object (e.g. nuc) segmentation images for each object of a given reference round; skip other rounds.
         Select sub-objects (e.g. nuc) that belong to parent object region by masking by parent.
-        Filter the sub-objects to remove small debris that was segmented.
     2. Perform label fusion and edge detection to generate surface label image.
-    3. Calculate surface mesh of label image using marching cubes algorithm.
-    4. Output: save the (1) meshes (.vtp) per object id in meshes folder and (2) well label map as a new label in zarr.
+    3. Calculate surface mesh of label image using vtkDiscreteFlyingEdges3D algorithm. Smoothing is applied with
+        vtkWindowedSincPolyDataFilter and tuned with 4 task parameters: passband, smoothing_iterations, feature_angle,
+        polynomial_degree (minimal effect).
+        The number of triangles in the mesh is optionally reduced with vtkQuadricDecimation filter to form a good
+        approximation to the original geometry and is tuned with task parameter target_reduction.
+    4. Output: save the (1) meshes (.stl) per object id in meshes folder and (2) well label map as a new label in zarr.
         Note that label map output may be clipped for objects that are dense and have overlapping pixels.
         In this case, the 'winning' object in the overlap region is the one with higher label id.
-
-    Parallelization level: image
 
     Args:
         zarr_url: Path or url to the individual OME-Zarr image to be processed.
@@ -93,20 +100,48 @@ def surface_mesh(
             zarr_url_list listing all the zarr_urls in the same well as the
             zarr_url of the reference acquisition that are being processed.
             (standard argument for Fractal tasks, managed by Fractal server).
-        label_name: Label name that will be used for surface estimation, e.g. `nuc`.
-        label_name_obj: Label name of segmented objects that is parent of
-            label_name e.g. `org_consensus`.
-        roi_table: Name of the ROI table over which the task loops to
-            calculate the registration. e.g. consensus object table 'org_ROI_table_consensus'
-        level: Pyramid level of the labels to register. Choose `0` to
-            process at full resolution.
+        label_name: Label name of child objects that will be used for multiscale surface estimation, e.g. `nuc`.
+        label_name_obj: Label name of segmented objects that are parents of
+            label_name e.g. `org`.
+        roi_table: Name of the ROI table that corresponds to label_name_obj. The task loops over ROIs in this table
+            to load the corresponding child objects.
         expandby_factor: multiplier that specifies pixels by which to expand each nuclear mask for merging,
-            float in range [0,1 or higher], e.g. 0.2 means that 20% of mean of nuclear equivalent diameter is used.
-        sigma_factor: float that specifies sigma (standard deviation) for Gaussian kernel. Higher
-            values correspond to more blurring. Recommended range 1-8.
+            float in range [0, 1 or higher], e.g. 0.2 means that 20% of mean of nuclear equivalent diameter is used.
+        sigma_factor: float that specifies sigma (standard deviation, in pixels) for Gaussian kernel used for blurring
+            to smoothen label image prior to edge detection. Higher values correspond to more blurring.
+            Recommended range 1-8.
         canny_threshold: image values below this threshold are set to 0 after Gaussian blur. float in range [0,1].
             Higher values result in tighter fit of mesh to nuclear surface
-        save_mesh: if True, saves the vtk mesh on disk in subfolder 'meshes'. Filename corresponds to object label id
+        calculate_mesh: if True, saves the mesh as .stl on disk in meshes/[labelname] folder within zarr structure.
+            Filename corresponds to object label id
+        polynomial_degree: the number of polynomial degrees during surface mesh smoothing with
+            vtkWindowedSincPolyDataFilter determines the maximum number of smoothing passes.
+            This number corresponds to the degree of the polynomial that is used to approximate the windowed sinc
+            function. Usually 10-20 iteration are sufficient. Higher values have little effect on smoothing.
+            For further details see VTK vtkWindowedSincPolyDataFilter documentation.
+        passband: float in range [0,2] that specifies the PassBand for the windowed sinc filter in
+            vtkWindowedSincPolyDataFilter during mesh smoothing. Lower passband values produce more smoothing, due to
+            filtering of higher frequencies. For further details see VTK vtkWindowedSincPolyDataFilter documentation.
+        feature_angle: int in range [0,180] that specifies the feature angle for sharp edge identification used
+            for vtk FeatureEdgeSmoothing. Higher values result in more smoothened edges in mesh.
+            For further details see VTK vtkWindowedSincPolyDataFilter documentation.
+        target_reduction: float in range [0,1]. Target reduction is used during mesh decimation via
+            vtkQuadricDecimation to reduce the number of triangles in a triangle mesh, forming a good approximation to
+            the original geometry. Values closer to 1 indicate larger reduction and smaller mesh file size. Note that
+            target_reduction is expressed as the fraction of the original number of triangles in mesh and so is
+            proportional to original mesh size. Note the actual reduction may be less depending on triangulation and
+            topological constraints. For further details see VTK vtkQuadricDecimation documentation.
+        smoothing_iterations: the number of iterations that mesh smoothing and decimation is run.
+            If smoothing_iterations > 1, the decimated result is used as input for subsequent smoothing rounds.
+            Recommended to start with 1 iteration and increase if resulting smoothing is insufficient. For each
+            iteration after the first, the passband is reduced and feature_angle is increased incrementally to
+            enhance smoothing. Specifically, the passband is reduced by factor 1/(2^n),
+            and the feature_angle is increased by an increment of (5 * n), where n = iteration round (n=0
+            is the first iteration). The target_reduction is fixed to 0.1 smoothing_iterations > 1.
+            For example if user inputs (0.01, 160, 0.98) for (passband, feature_angle, target_reduction), the second
+            iteration will use parameters (0.005, 165, 0.1), the third (0.0025, 170, 0.1), etc. Maximum feature_angle
+            is capped at 180. Note that additional iterations usually do not significantly add to processing time as
+            the number of mesh verteces is typically significantly reduced after the first decimation iteration.
         save_labels: if True, saves the calculated 3D label map as label map in 'labels' with suffix '_3d'
 
     """
@@ -115,6 +150,9 @@ def surface_mesh(
         f"Calculating surface mesh per {roi_table=} for "
         f"{label_name=}."
     )
+
+    # always use highest resolution label
+    level = 0
 
     # Lazily load zarr array for reference cycle
     # load well image as dask array e.g. for nuclear segmentation
@@ -125,7 +163,7 @@ def surface_mesh(
 
     # Read Zarr metadata
     r0_ngffmeta = load_NgffImageMeta(f"{zarr_url}/labels/{label_name}")
-    r0_xycoars = r0_ngffmeta.coarsening_xy # need to know when building new pyramids
+    r0_xycoars = r0_ngffmeta.coarsening_xy  # need to know when building new pyramids
     r0_pixmeta = r0_ngffmeta.get_pixel_sizes_zyx(level=level)
 
     # Create list of indices for 3D ROIs spanning the entire Z direction
@@ -143,12 +181,13 @@ def surface_mesh(
 
     # initialize new zarr for 3d object label image
     # save as same dimensions as nuclear labels from which they are calculated
+    output_label_name = label_name_obj + '_3d'
+    output_roi_table_name = roi_table + '_3d'
+
     if save_labels:
         shape = r0_dask.shape
         chunks = r0_dask.chunksize
         label_dtype = np.uint32
-        output_label_name = label_name_obj + '_3d'
-        output_roi_table_name = roi_table + '_3d'
         store = zarr.storage.FSStore(f"{zarr_url}/labels/{output_label_name}/0")
 
         if len(shape) != 3 or len(chunks) != 3 or shape[0] == 1:
@@ -207,6 +246,8 @@ def surface_mesh(
     compute = True  # convert to numpy array from dask
 
     # for each parent object (e.g. organoid) in r0...
+    sphericity_flag = 0
+    object_count = 0
     for row in r0_adata.obs_names:
         row_int = int(row)
         r0_org_label = r0_labels[row_int]
@@ -258,47 +299,91 @@ def surface_mesh(
         edges_canny = np.zeros_like(blurred)
         # threshold
         blurred[blurred < canny_threshold] = 0  # was 0.15, 0.3
-        for i, zslice in enumerate(blurred):
 
+        padded_zslice_count = 0
+        for i, zslice in enumerate(blurred):
+            padded = False
             if np.count_nonzero(zslice) == 0:  # if all values are 0, skip this zslice
                 continue
             else:
-                # TODO add zero-padding here prior to edge detection? Test in jpnb first. Then remove pad.
+                image_border = load_border_values(zslice)
+                # Pad z-slice border with 0 so that Canny filter generates a closed surface when there are non-zero
+                # values at edge
+                if np.any(image_border):
+                    zslice = np.pad(zslice, 1)
+                    padded_zslice_count += 1
+                    padded = True
+
                 edges = canny(zslice)
-                edges_canny[i, :, :] = binary_fill_holes(edges)
+                edges = binary_fill_holes(edges)
+                if padded:
+                    edges = remove_border(edges)
+                edges_canny[i, :, :] = edges
 
         edges_canny = (edges_canny * 255).astype(np.uint8)
 
         edges_canny = label(remove_small_objects(edges_canny, int(expandby_pix/2)))
 
+        # Check whether new label map has a single value, otherwise result is discarded and object skipped
+        maxvalue = np.amax(edges_canny)
+        if maxvalue != 1:
+            if maxvalue == 0:
+                logger.warning(f'No 3D label and mesh saved for object {r0_org_label}. '
+                               f'Result of canny edge detection is empty')
+                continue
+            else:  # for max values greater than 1 or less than 0
+                logger.warning(f'No 3D label and mesh saved for object {r0_org_label}. Detected {maxvalue} labels. '
+                               f'Is the shape composed of {maxvalue} distinct objects?')
+                continue
+
         logger.info(
-            f"Calculated surface mesh for object label {r0_org_label} using parameters:"
+            f"Successfully calculated 3D label map for object label {r0_org_label} using parameters:"
             f"\n\texpanded by {expandby_pix} pix, \n\teroded by {iterations*2} pix, "
-            f"\n\tgaussian blurred with sigma = {sigma}"
+            f"\n\tgaussian blurred with sigma = {np.round(sigma,1)}"
         )
 
+        if padded_zslice_count > 0:
+            logger.info(f'Object {r0_org_label} has non-zero pixels touching image border. Image processing '
+                        f'completed successfully, however consider reducing sigma_factor '
+                        f'or increasing the canny_threshold to reduce risk of cropping shape edges.')
+        object_count += 1
         ##############
         # Calculate and save mesh  ###
         ##############
 
-        if save_mesh:
-            # Make mesh with marching cubes
-            spacing = tuple(np.array(r0_pixmeta) / r0_pixmeta[1])  # z,y,x e.g. (2.78, 1, 1)
+        if calculate_mesh:
+            # Make mesh with vtkDiscreteFlyingEdges3D algorithm
+            # Set spacing to ome-zarr pixel spacing metadata. Mesh will be in physical units (um)
+            spacing = tuple(np.array(r0_pixmeta)) # z,y,x e.g. (0.6, 0.216, 0.216)
 
-            # target reduction is expressed as the fraction of the original number of triangles
-            # note the actual reduction may be less depending on triangulation and topological constraints
-            # target reduction is thus proportional to organoid dimensions
-            mesh_polydata_organoid = labels_to_mesh(edges_canny, spacing,
-                                                    smoothing_iterations=100,
-                                                    pass_band_param=0.01,
-                                                    target_reduction=0.98,
+            # Pad border with 0 so that the mesh forms a manifold
+            edges_canny_padded = np.pad(edges_canny, 1)
+            mesh_polydata_organoid = labels_to_mesh(edges_canny_padded, spacing,
+                                                    polynomial_degree=polynomial_degree,
+                                                    pass_band_param=passband,
+                                                    feature_angle=feature_angle,
+                                                    target_reduction=target_reduction,
+                                                    smoothing_iterations=smoothing_iterations,
+                                                    margin=5,
                                                     show_progress=False)
-
+            # Save mesh
             save_transform_path = f"{zarr_url}/meshes/{label_name_obj}_from_{label_name}"
             os.makedirs(save_transform_path, exist_ok=True)
-            # save name is the organoid label id
+            # Save name is the organoid label id
             save_name = f"{int(r0_org_label)}.stl"
             export_stl_polydata(os.path.join(save_transform_path, save_name), mesh_polydata_organoid)
+
+            logger.info(f"Successfully generated surface mesh for object label {r0_org_label}")
+
+            volume, surface_area = get_mass_properties(mesh_polydata_organoid)
+            sphr = mesh_sphericity(volume, surface_area)
+
+            if sphr > 1.2:
+                logger.warning(
+                    f"Detected high sphericity = {np.round(sphr,3)} for object {r0_org_label}. "
+                    f"Check mesh quality."
+                )
+                sphericity_flag += 1
 
         ##############
         # Save labels and make ROI table ###
@@ -306,7 +391,8 @@ def surface_mesh(
 
         if save_labels:
             # store labels as new label map in zarr
-            # note that pixels of overlap in the case where two meshes are touching are overwritten by the last written object
+            # note that pixels of overlap in the case where two meshes are touching are overwritten by the last
+            # written object
             # thus meshes are the most accurate representation of surface, labels may be cropped
 
             # # TODO delete
@@ -332,14 +418,6 @@ def surface_mesh(
             # check that dimensions of rois match
             if seg_ondisk.shape != edges_canny.shape:
                 raise ValueError('Computed label image must match image dimensions of bounding box during saving')
-
-            # check that new label map is binary
-            maxvalue = np.amax(edges_canny)
-            if maxvalue != 1:
-                if maxvalue == 0:
-                    logger.warning('Result of canny edge detection is empty')
-                else: # for max values greater than 1 or less than 0
-                    raise ValueError('Result of canny edge detection must be binary, check normalization')
 
             # convert edge detection label image value to match object label id
             edges_canny_label = edges_canny * int(r0_org_label)
@@ -407,18 +485,24 @@ def surface_mesh(
             table_attrs=table_attrs,
         )
 
-    logger.info(f"End surface_mesh task for {zarr_url}/labels/{output_label_name}")
+    if calculate_mesh:
+        # Check how many objects out of well have a sphericity flag
+        logger.info(f"{sphericity_flag} out of {object_count} meshed objects are flagged for high sphericity, "
+                    f"which can indicate a highly complex mesh surface.")
+        if sphericity_flag > 0.1 * object_count:
+            # if more than 10% of objects have a sphericity flag, raise warning
+            logger.warning(f"Detected high fraction of suspicious organoid meshes in well. Inspect mesh quality "
+                           f"and tune task parameters for label expansion and mesh smoothing accordingly. ")
+
+    logger.info(f"End surface_mesh_multiscale task for {zarr_url}/labels/{output_label_name}")
 
     return {}
 
 
 if __name__ == "__main__":
     from fractal_tasks_core.tasks._utils import run_fractal_task
-    # from multiprocessing import freeze_support
-    #
-    # freeze_support()
 
     run_fractal_task(
-        task_function=surface_mesh,
+        task_function=surface_mesh_multiscale,
         logger_name=logger.name,
     )

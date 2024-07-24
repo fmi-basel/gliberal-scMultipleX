@@ -206,7 +206,7 @@
       },
       "meta_parallel": {
         "cpus_per_task": 4,
-        "mem": 16000
+        "mem": 64000
       },
       "args_schema_non_parallel": {
         "title": "ImageBasedRegistrationHcsAllroundsInit",
@@ -454,9 +454,9 @@
       "docs_info": "## _image_based_registration_hcs_init\nInitialized calculate registration task\n\nThis task prepares a parallelization list of all zarr_urls that need to be\nused to calculate the registration between acquisitions (all zarr_urls\nexcept the reference acquisition vs. the reference acquisition).\nThis task only works for HCS OME-Zarrs for 2 reasons: Only HCS OME-Zarrs\ncurrently have defined acquisition metadata to determine reference\nacquisitions. And we have only implemented the grouping of images for\nHCS OME-Zarrs by well (with the assumption that every well just has 1\nimage per acqusition).\n## calculate_platymatch_registration\nCalculate point-cloud-based registration with PlatyMatch.\n\nThis task consists of 4 parts:\n\n1. Load the sub-object segmentation images for each well (paired reference and alignment round)\n2. Select sub-objects that belong to object region by loading with object ROI table and mask by object mask.\n   Object pair is defined by consensus linking. Filter the sub-objects to remove small debris that was segmented.\n3. Calculate affine and optionally the free-form deformation for each object pair\n4. Output: save the identified matches as a linking table in alignment round directory\n   and optionally the transformation matrix on disk.\n\nParallelization level: image\n"
     },
     {
-      "name": "scMultiplex Surface Mesh",
+      "name": "scMultiplex Surface Mesh Multiscale",
       "executable_non_parallel": "fractal/_init_group_by_well_for_multiplexing.py",
-      "executable_parallel": "fractal/surface_mesh.py",
+      "executable_parallel": "fractal/surface_mesh_multiscale.py",
       "meta_non_parallel": {
         "cpus_per_task": 1,
         "mem": 1000
@@ -496,7 +496,7 @@
         "additionalProperties": false
       },
       "args_schema_parallel": {
-        "title": "SurfaceMesh",
+        "title": "SurfaceMeshMultiscale",
         "type": "object",
         "properties": {
           "zarr_url": {
@@ -513,37 +513,31 @@
             "title": "Label Name",
             "default": "nuc",
             "type": "string",
-            "description": "Label name that will be used for surface estimation, e.g. `nuc`."
+            "description": "Label name of child objects that will be used for multiscale surface estimation, e.g. `nuc`."
           },
           "label_name_obj": {
             "title": "Label Name Obj",
             "default": "org_linked",
             "type": "string",
-            "description": "Label name of segmented objects that is parent of label_name e.g. `org_consensus`."
+            "description": "Label name of segmented objects that are parents of label_name e.g. `org`."
           },
           "roi_table": {
             "title": "Roi Table",
             "default": "org_ROI_table_linked",
             "type": "string",
-            "description": "Name of the ROI table over which the task loops to calculate the registration. e.g. consensus object table 'org_ROI_table_consensus'"
-          },
-          "level": {
-            "title": "Level",
-            "default": 0,
-            "type": "integer",
-            "description": "Pyramid level of the labels to register. Choose `0` to process at full resolution."
+            "description": "Name of the ROI table that corresponds to label_name_obj. The task loops over ROIs in this table to load the corresponding child objects."
           },
           "expandby_factor": {
             "title": "Expandby Factor",
             "default": 0.6,
             "type": "number",
-            "description": "multiplier that specifies pixels by which to expand each nuclear mask for merging, float in range [0,1 or higher], e.g. 0.2 means that 20% of mean of nuclear equivalent diameter is used."
+            "description": "multiplier that specifies pixels by which to expand each nuclear mask for merging, float in range [0, 1 or higher], e.g. 0.2 means that 20% of mean of nuclear equivalent diameter is used."
           },
           "sigma_factor": {
             "title": "Sigma Factor",
             "default": 5,
             "type": "number",
-            "description": "float that specifies sigma (standard deviation) for Gaussian kernel. Higher values correspond to more blurring. Recommended range 1-8."
+            "description": "float that specifies sigma (standard deviation, in pixels) for Gaussian kernel used for blurring to smoothen label image prior to edge detection. Higher values correspond to more blurring. Recommended range 1-8."
           },
           "canny_threshold": {
             "title": "Canny Threshold",
@@ -551,11 +545,41 @@
             "type": "number",
             "description": "image values below this threshold are set to 0 after Gaussian blur. float in range [0,1]. Higher values result in tighter fit of mesh to nuclear surface"
           },
-          "save_mesh": {
-            "title": "Save Mesh",
+          "calculate_mesh": {
+            "title": "Calculate Mesh",
             "default": true,
             "type": "boolean",
-            "description": "if True, saves the vtk mesh on disk in subfolder 'meshes'. Filename corresponds to object label id"
+            "description": "if True, saves the mesh as .stl on disk in meshes/[labelname] folder within zarr structure. Filename corresponds to object label id"
+          },
+          "polynomial_degree": {
+            "title": "Polynomial Degree",
+            "default": 30,
+            "type": "integer",
+            "description": "the number of polynomial degrees during surface mesh smoothing with vtkWindowedSincPolyDataFilter determines the maximum number of smoothing passes. This number corresponds to the degree of the polynomial that is used to approximate the windowed sinc function. Usually 10-20 iteration are sufficient. Higher values have little effect on smoothing. For further details see VTK vtkWindowedSincPolyDataFilter documentation."
+          },
+          "passband": {
+            "title": "Passband",
+            "default": 0.01,
+            "type": "number",
+            "description": "float in range [0,2] that specifies the PassBand for the windowed sinc filter in vtkWindowedSincPolyDataFilter during mesh smoothing. Lower passband values produce more smoothing, due to filtering of higher frequencies. For further details see VTK vtkWindowedSincPolyDataFilter documentation."
+          },
+          "feature_angle": {
+            "title": "Feature Angle",
+            "default": 160,
+            "type": "integer",
+            "description": "int in range [0,180] that specifies the feature angle for sharp edge identification used for vtk FeatureEdgeSmoothing. Higher values result in more smoothened edges in mesh. For further details see VTK vtkWindowedSincPolyDataFilter documentation."
+          },
+          "target_reduction": {
+            "title": "Target Reduction",
+            "default": 0.98,
+            "type": "number",
+            "description": "float in range [0,1]. Target reduction is used during mesh decimation via vtkQuadricDecimation to reduce the number of triangles in a triangle mesh, forming a good approximation to the original geometry. Values closer to 1 indicate larger reduction and smaller mesh file size. Note that target_reduction is expressed as the fraction of the original number of triangles in mesh and so is proportional to original mesh size. Note the actual reduction may be less depending on triangulation and topological constraints. For further details see VTK vtkQuadricDecimation documentation."
+          },
+          "smoothing_iterations": {
+            "title": "Smoothing Iterations",
+            "default": 1,
+            "type": "integer",
+            "description": "the number of iterations that mesh smoothing and decimation is run. If smoothing_iterations > 1, the decimated result is used as input for subsequent smoothing rounds. Recommended to start with 1 iteration and increase if resulting smoothing is insufficient. For each iteration after the first, the passband is reduced and feature_angle is increased incrementally to enhance smoothing. Specifically, the passband is reduced by factor 1/(2^n), and the feature_angle is increased by an increment of (5 * n), where n = iteration round (n=0 is the first iteration). The target_reduction is fixed to 0.1 smoothing_iterations > 1. For example if user inputs (0.01, 160, 0.98) for (passband, feature_angle, target_reduction), the second iteration will use parameters (0.005, 165, 0.1), the third (0.0025, 170, 0.1), etc. Maximum feature_angle is capped at 180. Note that additional iterations usually do not significantly add to processing time as the number of mesh verteces is typically significantly reduced after the first decimation iteration."
           },
           "save_labels": {
             "title": "Save Labels",
@@ -589,7 +613,259 @@
           }
         }
       },
-      "docs_info": "## _init_group_by_well_for_multiplexing\nFinds images for all acquisitions per well.\n\nReturns the parallelization_list to run `find_registration_consensus`.\n## surface_mesh\nCalculate 3D surface mesh of parent object (e.g. tissue, organoid)\nfrom 3D cell-level segmentation of children (e.g. nuclei)\n\nThis task consists of 4 parts:\n\n1. Load the sub-object (e.g. nuc) segmentation images for each object of a given reference round; skip other rounds.\n    Select sub-objects (e.g. nuc) that belong to parent object region by masking by parent.\n    Filter the sub-objects to remove small debris that was segmented.\n2. Perform label fusion and edge detection to generate surface label image.\n3. Calculate surface mesh of label image using marching cubes algorithm.\n4. Output: save the (1) meshes (.vtp) per object id in meshes folder and (2) well label map as a new label in zarr.\n    Note that label map output may be clipped for objects that are dense and have overlapping pixels.\n    In this case, the 'winning' object in the overlap region is the one with higher label id.\n\nParallelization level: image\n"
+      "docs_info": "## _init_group_by_well_for_multiplexing\nFinds images for all acquisitions per well.\n\nReturns the parallelization_list to run `find_registration_consensus`.\n## surface_mesh_multiscale\nCalculate 3D surface mesh of parent object (e.g. tissue, organoid)\nfrom 3D cell-level segmentation of children (e.g. nuclei)\n\nRecommended to run on child objects that have been filtered to remove debris and disconnected components\n(e.g. following cleanup_3d_segmentation task)\n\nThis task consists of 4 parts:\n\n1. Load the sub-object (e.g. nuc) segmentation images for each object of a given reference round; skip other rounds.\n    Select sub-objects (e.g. nuc) that belong to parent object region by masking by parent.\n2. Perform label fusion and edge detection to generate surface label image.\n3. Calculate surface mesh of label image using vtkDiscreteFlyingEdges3D algorithm. Smoothing is applied with\n    vtkWindowedSincPolyDataFilter and tuned with 4 task parameters: passband, smoothing_iterations, feature_angle,\n    polynomial_degree (minimal effect).\n    The number of triangles in the mesh is optionally reduced with vtkQuadricDecimation filter to form a good\n    approximation to the original geometry and is tuned with task parameter target_reduction.\n4. Output: save the (1) meshes (.stl) per object id in meshes folder and (2) well label map as a new label in zarr.\n    Note that label map output may be clipped for objects that are dense and have overlapping pixels.\n    In this case, the 'winning' object in the overlap region is the one with higher label id.\n"
+    },
+    {
+      "name": "scMultiplex Spherical Harmonics from Label Image",
+      "executable_non_parallel": "fractal/_init_group_by_well_for_multiplexing.py",
+      "executable_parallel": "fractal/spherical_harmonics_from_labelimage.py",
+      "meta_non_parallel": {
+        "cpus_per_task": 1,
+        "mem": 1000
+      },
+      "meta_parallel": {
+        "cpus_per_task": 4,
+        "mem": 16000
+      },
+      "args_schema_non_parallel": {
+        "title": "InitGroupByWellForMultiplexing",
+        "type": "object",
+        "properties": {
+          "zarr_urls": {
+            "title": "Zarr Urls",
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of paths or urls to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "zarr_dir": {
+            "title": "Zarr Dir",
+            "type": "string",
+            "description": "path of the directory where the new OME-Zarrs will be created. Not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "reference_acquisition": {
+            "title": "Reference Acquisition",
+            "default": 0,
+            "type": "integer",
+            "description": "Which acquisition to register against. Uses the OME-NGFF HCS well metadata acquisition keys to find the reference acquisition."
+          }
+        },
+        "required": [
+          "zarr_urls",
+          "zarr_dir"
+        ],
+        "additionalProperties": false
+      },
+      "args_schema_parallel": {
+        "title": "SphericalHarmonicsFromLabelimage",
+        "type": "object",
+        "properties": {
+          "zarr_url": {
+            "title": "Zarr Url",
+            "type": "string",
+            "description": "Path or url to the individual OME-Zarr image to be processed. Refers to the zarr_url of the reference acquisition. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "init_args": {
+            "$ref": "#/definitions/InitArgsRegistrationConsensus",
+            "title": "Init_Args",
+            "description": "Intialization arguments provided by `init_group_by_well_for_multiplexing`. It contains the zarr_url_list listing all the zarr_urls in the same well as the zarr_url of the reference acquisition that are being processed. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "label_name": {
+            "title": "Label Name",
+            "default": "org_3d",
+            "type": "string",
+            "description": "Label for which spherical harmonics are calculated"
+          },
+          "roi_table": {
+            "title": "Roi Table",
+            "default": "org_ROI_table_3d",
+            "type": "string",
+            "description": "Name of the ROI table over which the task loops to calculate the registration. e.g. consensus object table 'org_ROI_table_consensus'"
+          },
+          "lmax": {
+            "title": "Lmax",
+            "default": 2,
+            "type": "integer",
+            "description": "Maximum degree of the spherical harmonics coefficients"
+          },
+          "save_mesh": {
+            "title": "Save Mesh",
+            "default": true,
+            "type": "boolean",
+            "description": "If True, saves the computed surface mesh (with vtkContourFilter in aics_shparam functions) on disk in subfolder 'meshes'. Filename corresponds to object label id"
+          },
+          "save_reconstructed_mesh": {
+            "title": "Save Reconstructed Mesh",
+            "default": true,
+            "type": "boolean",
+            "description": "If true, reconstruct mesh from spherical harmonics and save as stl in meshes zarr directory. Filename corresponds to object label id"
+          }
+        },
+        "required": [
+          "zarr_url",
+          "init_args"
+        ],
+        "additionalProperties": false,
+        "definitions": {
+          "InitArgsRegistrationConsensus": {
+            "title": "InitArgsRegistrationConsensus",
+            "description": "Registration consensus init args.",
+            "type": "object",
+            "properties": {
+              "zarr_url_list": {
+                "title": "Zarr Url List",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "zarr_url_list"
+            ]
+          }
+        }
+      },
+      "docs_info": "## _init_group_by_well_for_multiplexing\nFinds images for all acquisitions per well.\n\nReturns the parallelization_list to run `find_registration_consensus`.\n## spherical_harmonics_from_labelimage\nCalculate spherical harmonics of 3D input label image using aics_shparam.\n\nThis task consists of 6 parts:\n\n1. Load 3D label image based on provided label name and ROI table\n2. Compute 3D mesh with vtkContourFilter using aics_shparam functions\n3. Compute spherical harmonics of mesh using aics_shparam\n4. Compute reconstruction error (mse) of computed harmonics\n5. Optionally generate reconstructed mesh from the calculated harmonics\n6. Output: save the (1) spherical harmonic coefficients and mse error as feature table\n    (2) reconstructed meshes (.stl) per object id in a new meshes folder within zarr structure\n"
+    },
+    {
+      "name": "scMultiplex Mesh Measurements",
+      "executable_non_parallel": "fractal/_init_group_by_well_for_multiplexing.py",
+      "executable_parallel": "fractal/scmultiplex_mesh_measurements.py",
+      "meta_non_parallel": {
+        "cpus_per_task": 1,
+        "mem": 1000
+      },
+      "meta_parallel": {
+        "cpus_per_task": 4,
+        "mem": 16000
+      },
+      "args_schema_non_parallel": {
+        "title": "InitGroupByWellForMultiplexing",
+        "type": "object",
+        "properties": {
+          "zarr_urls": {
+            "title": "Zarr Urls",
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of paths or urls to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "zarr_dir": {
+            "title": "Zarr Dir",
+            "type": "string",
+            "description": "path of the directory where the new OME-Zarrs will be created. Not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "reference_acquisition": {
+            "title": "Reference Acquisition",
+            "default": 0,
+            "type": "integer",
+            "description": "Which acquisition to register against. Uses the OME-NGFF HCS well metadata acquisition keys to find the reference acquisition."
+          }
+        },
+        "required": [
+          "zarr_urls",
+          "zarr_dir"
+        ],
+        "additionalProperties": false
+      },
+      "args_schema_parallel": {
+        "title": "ScmultiplexMeshMeasurements",
+        "type": "object",
+        "properties": {
+          "zarr_url": {
+            "title": "Zarr Url",
+            "type": "string",
+            "description": "Path or url to the individual OME-Zarr image to be processed. Refers to the zarr_url of the reference acquisition. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "init_args": {
+            "$ref": "#/definitions/InitArgsRegistrationConsensus",
+            "title": "Init_Args",
+            "description": "Initialization arguments provided by `init_group_by_well_for_multiplexing`. It contains the zarr_url_list listing all the zarr_urls in the same well as the zarr_url of the reference acquisition that are being processed. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "mesh_name": {
+            "title": "Mesh Name",
+            "type": "string",
+            "description": "Mesh folder name for which features are to be extracted. Must contain .stl format meshes whose filename corresponds to label name in ROI table."
+          },
+          "roi_table": {
+            "title": "Roi Table",
+            "type": "string",
+            "description": "Name of the ROI table that corresponds to labels of meshed objects, only used for indexing objects"
+          },
+          "output_table_name": {
+            "title": "Output Table Name",
+            "type": "string",
+            "description": "Name of the output AnnData table to save the measurements in. A table of this name can't exist yet in the OME-Zarr file"
+          },
+          "save_hulls": {
+            "title": "Save Hulls",
+            "default": true,
+            "type": "boolean",
+            "description": "if True, save the calculated convex hull and bounding box as .vtp meshes within meshes/[mesh_name]_convex_hull and meshes/[mesh_name]_bounding_box directories"
+          },
+          "calculate_curvature": {
+            "title": "Calculate Curvature",
+            "default": true,
+            "type": "boolean",
+            "description": "if True, calculate Gaussian curvature at each mesh point and save as .vtp mesh on disk within meshes/[mesh_name]_curvature folder in zarr structure. Filename corresponds to object label id."
+          },
+          "calculate_harmonics": {
+            "title": "Calculate Harmonics",
+            "default": true,
+            "type": "boolean",
+            "description": "if True, calculate spherical harmonics of mesh using aics_shparam"
+          },
+          "lmax": {
+            "title": "Lmax",
+            "default": 2,
+            "type": "integer",
+            "description": "Maximum degree of the spherical harmonics coefficients"
+          },
+          "translate_to_origin": {
+            "title": "Translate To Origin",
+            "default": true,
+            "type": "boolean",
+            "description": "If true, translate centroid of mesh to origin prior to spherical harmonic decomposition. Recommended set to True"
+          },
+          "save_reconstructed_mesh": {
+            "title": "Save Reconstructed Mesh",
+            "default": true,
+            "type": "boolean",
+            "description": "If true, reconstruct mesh from spherical harmonics and save as stl in meshes zarr directory"
+          }
+        },
+        "required": [
+          "zarr_url",
+          "init_args",
+          "mesh_name",
+          "roi_table",
+          "output_table_name"
+        ],
+        "additionalProperties": false,
+        "definitions": {
+          "InitArgsRegistrationConsensus": {
+            "title": "InitArgsRegistrationConsensus",
+            "description": "Registration consensus init args.",
+            "type": "object",
+            "properties": {
+              "zarr_url_list": {
+                "title": "Zarr Url List",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "zarr_url_list"
+            ]
+          }
+        }
+      },
+      "docs_info": "## _init_group_by_well_for_multiplexing\nFinds images for all acquisitions per well.\n\nReturns the parallelization_list to run `find_registration_consensus`.\n## scmultiplex_mesh_measurements\nExtract shape features of 3D input meshes.\n\nThis task consists of 5 parts:\n\n1. Load meshes (.stl) from zarr structure that have been previously generated\n    (e.g. using Surface Mesh Multiscale task)\n2. Extract mesh morphology measurements: volume, surface area, extent, solidity, concavity, asymmetry,\n    aspect ratio, and normalized surface area to volume ratio. Units correspond to units of mesh. If mesh was\n    generated with surface_mesh_multiscale task, units are physical units (um). For further details of features see\n    scMultiplex FeatureFunctions.py\n3. Optionally calculate Gaussian curvature at each mesh point (set calculate_curvature = True)\n4. Optionally compute spherical harmonics of mesh using aics_shparam (set calculate_harmonics = True).\n    Compute reconstruction error (mse) of computed harmonics and optionally generate reconstructed mesh from the\n    calculated harmonics\n5. Output: save (1) extracted measurements as a new table (output_table_name), (2) optional spherical harmonic\n    coefficients and mse error as a separate feature table ('output_table_name'_harmonics) (3) optional\n    reconstructed meshes from spherical harmonics as .stl within zarr structure (3) optional convex hull\n    and bounding box on disk as .vtp within zarr structure (4) optional curvature meshes on disk as .vtp within\n    zarr structure.\n"
     },
     {
       "name": "scMultiplex Feature Measurements",
