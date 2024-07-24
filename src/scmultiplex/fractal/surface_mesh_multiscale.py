@@ -1,9 +1,11 @@
-# Copyright 2024 (C) Friedrich Miescher Institute for Biomedical Research and
-# University of Zurich
-#
-# Original authors:
-# Nicole Repina <nicole.repina@fmi.ch>
-#
+# Copyright (C) 2024 Friedrich Miescher Institute for Biomedical Research
+
+##############################################################################
+#                                                                            #
+# Author: Nicole Repina              <nicole.repina@fmi.ch>                  #
+#                                                                            #
+##############################################################################
+
 
 """
 Calculates 3D surface mesh of parent object (e.g. tissue, organoid)
@@ -30,19 +32,12 @@ from fractal_tasks_core.roi import (
     convert_indices_to_regions,
     convert_ROI_table_to_indices,
     load_region, array_to_bounding_box_table, get_overlapping_pairs_3D)
-from scipy.ndimage import binary_fill_holes, binary_erosion
 
-from skimage.feature import canny
-from skimage.filters import gaussian
-from skimage.measure import label
-from skimage.morphology import disk, remove_small_objects
-from skimage.segmentation import expand_labels
-
-from scmultiplex.features.FeatureFunctions import mesh_sphericity, mesh_equivalent_diameter
+from scmultiplex.features.FeatureFunctions import mesh_sphericity
 from scmultiplex.fractal.fractal_helper_functions import get_zattrs, convert_indices_to_origin_zyx, format_roi_table
 
-from scmultiplex.meshing.FilterFunctions import (mask_by_parent_object,
-                                                 calculate_mean_volume, load_border_values, remove_border)
+from scmultiplex.meshing.FilterFunctions import mask_by_parent_object
+from scmultiplex.meshing.LabelFusionFunctions import run_label_fusion
 from scmultiplex.meshing.MeshFunctions import labels_to_mesh, export_stl_polydata, get_mass_properties
 
 logger = logging.getLogger(__name__)
@@ -266,63 +261,11 @@ def surface_mesh_multiscale(
         # Perform label fusion and edge detection  ###
         ##############
 
-        # calculate mean volume of nuclei or cells in object
-        size_mean = calculate_mean_volume(seg)
+        edges_canny, expandby_pix, iterations, anisotropic_sigma, padded_zslice_count = (
+            run_label_fusion(seg, expandby_factor, sigma_factor, r0_pixmeta, canny_threshold))
 
-        # expand labels in each z-slice and combine together
-        seg_fill = np.zeros_like(seg)
-
-        # the number of pixels by which to expand is a function of average nuclear size within the organoid.
-        expandby_pix = int(round(expandby_factor * mesh_equivalent_diameter(size_mean)))
         if expandby_pix == 0:
             logger.warning("Equivalent diameter is 0 or negative, thus labels not expanded. Check segmentation quality")
-
-        iterations = int(round(expandby_pix / 2))
-
-        # loop over each zslice and expand the labels, then fill holes
-        for i, zslice in enumerate(seg):
-            zslice = expand_labels(zslice, expandby_pix)  # expand labels in each zslice in xy
-            zslice = binary_fill_holes(zslice)  # fill holes
-            # to revert the expansion, erode by half of the expanded pixels ...
-            # ...(since disk(1) has a radius of 1, i.e. diameter of 2)
-            seg_fill[i, :, :] = binary_erosion(zslice, disk(1), iterations=iterations)  # erode down to original size
-
-        # 3D gaussian blur
-        seg_fill_8bit = (seg_fill * 255).astype(np.uint8)
-
-        # calculate sigma based on z,y,x pixel spacing metadata, so that sigma scales with anisotropy
-        pixel_anisotropy = r0_pixmeta[0]/np.array(r0_pixmeta)  # (z, y, x) where z is normalized to 1, e.g. (1, 3, 3)
-        sigma = tuple([sigma_factor * x for x in pixel_anisotropy])
-        blurred = gaussian(seg_fill_8bit, sigma=sigma, preserve_range=False)
-
-        # Canny filter to detect gaussian edges
-        edges_canny = np.zeros_like(blurred)
-        # threshold
-        blurred[blurred < canny_threshold] = 0  # was 0.15, 0.3
-
-        padded_zslice_count = 0
-        for i, zslice in enumerate(blurred):
-            padded = False
-            if np.count_nonzero(zslice) == 0:  # if all values are 0, skip this zslice
-                continue
-            else:
-                image_border = load_border_values(zslice)
-                # Pad z-slice border with 0 so that Canny filter generates a closed surface when there are non-zero
-                # values at edge
-                if np.any(image_border):
-                    zslice = np.pad(zslice, 1)
-                    padded_zslice_count += 1
-                    padded = True
-
-                edges = canny(zslice)
-                edges = binary_fill_holes(edges)
-                if padded:
-                    edges = remove_border(edges)
-                edges_canny[i, :, :] = edges
-
-        edges_canny = (edges_canny * 255).astype(np.uint8)
-
-        edges_canny = label(remove_small_objects(edges_canny, int(expandby_pix/2)))
 
         # Check whether new label map has a single value, otherwise result is discarded and object skipped
         maxvalue = np.amax(edges_canny)
@@ -339,7 +282,7 @@ def surface_mesh_multiscale(
         logger.info(
             f"Successfully calculated 3D label map for object label {r0_org_label} using parameters:"
             f"\n\texpanded by {expandby_pix} pix, \n\teroded by {iterations*2} pix, "
-            f"\n\tgaussian blurred with sigma = {np.round(sigma,1)}"
+            f"\n\tgaussian blurred with sigma = {np.round(anisotropic_sigma,1)}"
         )
 
         if padded_zslice_count > 0:
@@ -347,6 +290,7 @@ def surface_mesh_multiscale(
                         f'completed successfully, however consider reducing sigma_factor '
                         f'or increasing the canny_threshold to reduce risk of cropping shape edges.')
         object_count += 1
+
         ##############
         # Calculate and save mesh  ###
         ##############
@@ -354,7 +298,7 @@ def surface_mesh_multiscale(
         if calculate_mesh:
             # Make mesh with vtkDiscreteFlyingEdges3D algorithm
             # Set spacing to ome-zarr pixel spacing metadata. Mesh will be in physical units (um)
-            spacing = tuple(np.array(r0_pixmeta)) # z,y,x e.g. (0.6, 0.216, 0.216)
+            spacing = tuple(np.array(r0_pixmeta))  # z,y,x e.g. (0.6, 0.216, 0.216)
 
             # Pad border with 0 so that the mesh forms a manifold
             edges_canny_padded = np.pad(edges_canny, 1)
