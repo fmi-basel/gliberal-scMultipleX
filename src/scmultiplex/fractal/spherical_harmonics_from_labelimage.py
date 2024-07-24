@@ -137,8 +137,8 @@ def spherical_harmonics_from_labelimage(
         ##############
         # Compute mesh and spherical harmonics coefficients  ###
         ##############
-
-        spacing = tuple(np.array(pixmeta) / pixmeta[1])  # z,y,x e.g. (2.78, 1, 1)
+        # Set spacing to ome-zarr pixel spacing metadata. Mesh will be in physical units (um)
+        spacing = tuple(np.array(pixmeta))  # z,y,x e.g. (0.6, 0.216, 0.216)
 
         ((coeffs, grid_rec), (image_, mesh, grid_down, transform)) = shparam.get_shcoeffs(image=seg,
                                                                                           lmax=lmax,

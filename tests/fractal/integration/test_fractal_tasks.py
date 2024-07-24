@@ -53,7 +53,7 @@ test_calculate_platymatch_registration_output = np.array(
  [15.,        15.],
  [16.,        16.]])
 
-test_sphr_harmonics_from_labelimg_expected_output = np.array([52.831512, 47.05219,  66.96421])
+test_sphr_harmonics_from_labelimg_expected_output = np.array([11.446810, 10.194640,  14.508974])
 
 test_sphr_harmonics_from_mesh_expected_output = np.array([10.77121,  9.39584, 14.15143])
 

@@ -85,7 +85,7 @@ def get_mesh_from_image(
     if sigma > 0:
         # scale sigma by anisotropic spacing
         if spacing:
-            sigma_scaled = tuple([sigma * (1 / x) for x in spacing])
+            sigma_scaled = tuple([sigma * (spacing[1] / x) for x in spacing])
             img = skfilters.gaussian(img.astype(np.float32), sigma=sigma_scaled)
         else:
             img = skfilters.gaussian(img.astype(np.float32), sigma=(sigma, sigma, sigma))
