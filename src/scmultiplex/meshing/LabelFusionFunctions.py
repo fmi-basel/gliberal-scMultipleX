@@ -56,8 +56,8 @@ def anisotropic_gaussian_blur(seg_binary, sigma, pixmeta):
     seg_fill_8bit = (seg_binary * 255).astype(np.uint8)
 
     # Scale sigma to match pixel anisotropy
-    pixel_anisotropy = pixmeta[0]/np.array(pixmeta)  # (z, y, x) where z is normalized to 1, e.g. (1, 3, 3)
-    anisotropic_sigma = tuple([sigma * x for x in pixel_anisotropy])
+    spacing = np.array(pixmeta)/pixmeta[1]  # (z, y, x) where x,y is normalized to 1 e.g. (3, 1, 1)
+    anisotropic_sigma = tuple([sigma * (spacing[1] / x) for x in spacing])
 
     # Perform 3D gaussian blur
     # Output image has value range 0-1 (not always max 1)
