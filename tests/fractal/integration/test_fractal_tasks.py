@@ -14,7 +14,6 @@ from scmultiplex.fractal.calculate_platymatch_registration import calculate_plat
 from scmultiplex.fractal.relabel_by_linking_consensus import relabel_by_linking_consensus
 from scmultiplex.fractal.scmultiplex_mesh_measurements import scmultiplex_mesh_measurements
 from scmultiplex.fractal.spherical_harmonics_from_labelimage import spherical_harmonics_from_labelimage
-from scmultiplex.fractal.spherical_harmonics_from_mesh import spherical_harmonics_from_mesh
 from scmultiplex.fractal.surface_mesh_multiscale import surface_mesh_multiscale
 
 name_3d = '220605_151046.zarr'
@@ -259,37 +258,6 @@ def test_sphr_harmonics_from_labelimage(linking_zenodo_zarrs, name=name_3d):
         assert_almost_equal(output[:, 0], test_sphr_harmonics_from_labelimg_expected_output, decimal=5)
 
 
-def test_sphr_harmonics_from_mesh(linking_zenodo_zarrs, name=name_3d):
-    zarr_urls = select_zarr_urls(name, linking_zenodo_zarrs)
-    parallelization_list = _init_group_by_well_for_multiplexing(zarr_urls=zarr_urls,
-                                                                zarr_dir='',
-                                                                reference_acquisition=0, )
-    for img in parallelization_list["parallelization_list"]:
-        zarr_url = img['zarr_url']
-        init_args = img['init_args']
-        mesh_name = "org_from_nuc"
-        roi_table = "org_ROI_table_3d"
-
-        spherical_harmonics_from_mesh(
-            zarr_url=img['zarr_url'],
-            init_args=img['init_args'],
-            mesh_name=mesh_name,
-            roi_table=roi_table,
-            lmax=2,
-            translate_to_origin=True,
-            save_reconstructed_mesh=True,
-        )
-
-        # check that 3 mesh files were written
-        output_mesh_path_reconstructed = f"{zarr_url}/meshes/{mesh_name}_reconstructed"
-        assert len(os.listdir(output_mesh_path_reconstructed)) == 3
-
-        # check that first calculated spherical harmonic is correct
-        output_table_path = f"{zarr_url}/tables/{mesh_name}_harmonics"
-        output = ad.read_zarr(output_table_path).to_df().to_numpy()
-        assert_almost_equal(output[:, 0], test_sphr_harmonics_from_mesh_expected_output, decimal=5)
-
-
 def test_scmultiplex_mesh_measurements(linking_zenodo_zarrs, name=name_3d):
     zarr_urls = select_zarr_urls(name, linking_zenodo_zarrs)
     parallelization_list = _init_group_by_well_for_multiplexing(zarr_urls=zarr_urls,
@@ -308,15 +276,29 @@ def test_scmultiplex_mesh_measurements(linking_zenodo_zarrs, name=name_3d):
             mesh_name=mesh_name,
             roi_table=roi_table,
             output_table_name=output_table_name,
-            calculate_curvature=True,
             save_hulls=True,
+            calculate_curvature=True,
+            calculate_harmonics=True,
+            lmax=2,
+            translate_to_origin=True,
+            save_reconstructed_mesh=True,
         )
 
-        # check that 3 mesh files were written
+        # check that 3 mesh files were written for convex hull
         output_mesh_path_chull = f"{zarr_url}/meshes/{mesh_name}_convex_hull"
         assert len(os.listdir(output_mesh_path_chull)) == 3
 
-        # check that first calculated spherical harmonic is correct
+        # check that all extracted features are correct for first organoid
         output_table_path = f"{zarr_url}/tables/{output_table_name}"
         output = ad.read_zarr(output_table_path).to_df().to_numpy()
         assert_almost_equal(output[0, :], test_scmultiplex_mesh_measurements_expected_output, decimal=4)
+
+        # check that 3 mesh files were written for reconstructed harmonics
+        output_mesh_path_reconstructed = f"{zarr_url}/meshes/{mesh_name}_reconstructed"
+        assert len(os.listdir(output_mesh_path_reconstructed)) == 3
+
+        # check that first calculated spherical harmonic is correct
+        output_table_path = f"{zarr_url}/tables/{output_table_name}_harmonics"
+        output = ad.read_zarr(output_table_path).to_df().to_numpy()
+        assert_almost_equal(output[:, 0], test_sphr_harmonics_from_mesh_expected_output, decimal=5)
+
