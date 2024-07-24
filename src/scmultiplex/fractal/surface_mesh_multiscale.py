@@ -38,11 +38,11 @@ from skimage.measure import label
 from skimage.morphology import disk, remove_small_objects
 from skimage.segmentation import expand_labels
 
-from scmultiplex.features.FeatureFunctions import mesh_sphericity
+from scmultiplex.features.FeatureFunctions import mesh_sphericity, mesh_equivalent_diameter
 from scmultiplex.fractal.fractal_helper_functions import get_zattrs, convert_indices_to_origin_zyx, format_roi_table
 
-from scmultiplex.meshing.FilterFunctions import equivalent_diam, mask_by_parent_object, \
-    calculate_mean_volume, load_border_values, remove_border
+from scmultiplex.meshing.FilterFunctions import (mask_by_parent_object,
+                                                 calculate_mean_volume, load_border_values, remove_border)
 from scmultiplex.meshing.MeshFunctions import labels_to_mesh, export_stl_polydata, get_mass_properties
 
 logger = logging.getLogger(__name__)
@@ -273,7 +273,7 @@ def surface_mesh_multiscale(
         seg_fill = np.zeros_like(seg)
 
         # the number of pixels by which to expand is a function of average nuclear size within the organoid.
-        expandby_pix = int(round(expandby_factor * equivalent_diam(size_mean)))
+        expandby_pix = int(round(expandby_factor * mesh_equivalent_diameter(size_mean)))
         if expandby_pix == 0:
             logger.warning("Equivalent diameter is 0 or negative, thus labels not expanded. Check segmentation quality")
 

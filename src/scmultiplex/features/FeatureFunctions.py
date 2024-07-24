@@ -268,9 +268,14 @@ def mesh_equivalent_surface_area(volume):
 
 def mesh_equivalent_diameter(volume):
     """
-    The diameter of a sphere with the same volume as the object region
+    Calculate equivalent diameter of sphere with a given volume
     """
-    equiv_diam = 2 * ((0.75 * volume * (1/math.pi)) ** (1. / 3.))
+    try:
+        equiv_diam = 2 * ((0.75 * volume * (1/math.pi)) ** (1. / 3.))
+    # ValueError is raised when input value is negative
+    # in this case set diameter to 0
+    except ValueError:
+        equiv_diam = 0
     return equiv_diam
 
 
