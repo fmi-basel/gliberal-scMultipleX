@@ -25,7 +25,7 @@ def apply_tps_transform(moving_all, moving_cp, w_a_x, w_a_y, w_a_z):
     N = moving_all.shape[0]
     N1 = moving_cp.shape[0] 
     
-    A = np.zeros((N, N1+4), dtype=np.float) # N x (N1+4)
+    A = np.zeros((N, N1+4), dtype=np.float64) # N x (N1+4)
     k = distance_matrix(moving_all, moving_cp) # N x N1
     A[:, :N1] = get_U(k) # N x N1
     A[:, N1:] = m1 # N x 4

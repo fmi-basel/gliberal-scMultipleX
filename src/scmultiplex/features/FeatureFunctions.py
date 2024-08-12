@@ -127,7 +127,7 @@ def minor_major_axis_ratio(prop):
     """Return the ratio of major to minor axis
     """
     if prop.major_axis_length == 0:
-        return np.float('NaN')
+        return np.float64('NaN')
     else:
         return prop.minor_axis_length / prop.major_axis_length
 
