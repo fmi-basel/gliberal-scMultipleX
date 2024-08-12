@@ -13,7 +13,7 @@ Wrapper of scMultipleX measurements for Fractal
 """
 
 import logging
-from typing import Dict
+from typing import Dict, Union
 
 import anndata as ad
 import dask.array as da
@@ -52,7 +52,7 @@ def scmultiplex_feature_measurements(  # noqa: C901
     # Task-specific arguments:
     label_image: str,
     output_table_name: str,
-    input_channels: Dict[str, ChannelInputModel] = None,
+    input_channels: Union[Dict[str, ChannelInputModel], None] = None,
     input_ROI_table: str = "well_ROI_table",
     level: int = 0,
     label_level: int = 0,
