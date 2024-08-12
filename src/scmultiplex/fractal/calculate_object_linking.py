@@ -11,42 +11,44 @@
 Calculates linking tables for segmented objects in a well
 """
 import logging
-from pathlib import Path
 from typing import Any
-from typing import Sequence
 
 import anndata as ad
 import dask.array as da
 import numpy as np
 import zarr
-from fractal_tasks_core.tasks.io_models import InitArgsRegistration
-from pydantic.decorator import validate_arguments
-
 from fractal_tasks_core.ngff import load_NgffImageMeta
 from fractal_tasks_core.roi import (
     check_valid_ROI_indices,
     convert_indices_to_regions,
     convert_ROI_table_to_indices,
-    load_region)
+    load_region,
+)
 from fractal_tasks_core.tables import write_table
+from fractal_tasks_core.tasks.io_models import InitArgsRegistration
+from pydantic import validate_call
 
 from scmultiplex.fractal.fractal_helper_functions import extract_acq_info
-from scmultiplex.linking.OrganoidLinkingFunctions import calculate_shift, apply_shift, calculate_matching
+from scmultiplex.linking.OrganoidLinkingFunctions import (
+    apply_shift,
+    calculate_matching,
+    calculate_shift,
+)
 
 logger = logging.getLogger(__name__)
 
 
-@validate_arguments
+@validate_call
 def calculate_object_linking(
-        *,
-        # Fractal arguments
-        zarr_url: str,
-        init_args: InitArgsRegistration,
-        # Task-specific arguments
-        label_name: str,
-        roi_table: str = "well_ROI_table",
-        level: int = 0,
-        iou_cutoff: float = 0.2,
+    *,
+    # Fractal arguments
+    zarr_url: str,
+    init_args: InitArgsRegistration,
+    # Task-specific arguments
+    label_name: str,
+    roi_table: str = "well_ROI_table",
+    level: int = 0,
+    iou_cutoff: float = 0.2,
 ) -> dict[str, Any]:
     """
     Calculate object linking based on segmentation label map images
@@ -97,9 +99,7 @@ def calculate_object_linking(
     rx_pixmeta = rx_ngffmeta.get_pixel_sizes_zyx(level=0)
 
     if r0_pixmeta != rx_pixmeta:
-        raise ValueError(
-            "Pixel sizes need to be equal between cycles for registration"
-        )
+        raise ValueError("Pixel sizes need to be equal between cycles for registration")
 
     # Lazily load zarr array
     # Reference (e.g. R0, fixed) vs. alignment (e.g. RX, moving)
@@ -110,9 +110,7 @@ def calculate_object_linking(
     # Read ROIs
     r0_adata = ad.read_zarr(f"{r0_zarr_path}/tables/{roi_table}")
     rx_adata = ad.read_zarr(f"{zarr_url}/tables/{roi_table}")
-    logger.info(
-        f"Found {len(rx_adata)} ROIs in {roi_table=} to be processed."
-    )
+    logger.info(f"Found {len(rx_adata)} ROIs in {roi_table=} to be processed.")
 
     # Create list of indices for 3D ROIs spanning the entire Z direction
     r0_idlist = convert_ROI_table_to_indices(
@@ -132,14 +130,10 @@ def calculate_object_linking(
     check_valid_ROI_indices(rx_idlist, roi_table)
 
     if len(r0_idlist) > 1 or len(rx_idlist) > 1:
-        raise ValueError(
-            "Well overview must contain single region of interest"
-        )
+        raise ValueError("Well overview must contain single region of interest")
 
     if len(r0_idlist) == 0 or len(rx_idlist) == 0:
-        raise ValueError(
-            "Well overview ROI is empty"
-        )
+        raise ValueError("Well overview ROI is empty")
 
     ##############
     #  Calculate the transformation
@@ -173,11 +167,17 @@ def calculate_object_linking(
 
     # run matching
     # column names of link_df are ["R0_label", "RX_label", "iou"],
-    stat, link_df_unfiltered, link_df = calculate_matching(r0_pad, rx_pad_shifted, iou_cutoff)
+    stat, link_df_unfiltered, link_df = calculate_matching(
+        r0_pad, rx_pad_shifted, iou_cutoff
+    )
 
     # log matching output
-    logger.info(f"{stat[2]} out of {stat[10]} alignment objects are NOT matched to a reference object.")
-    logger.info(f"{stat[4]} out of {stat[9]} reference objects are NOT matched to an alignment object.")
+    logger.info(
+        f"{stat[2]} out of {stat[10]} alignment objects are NOT matched to a reference object."
+    )
+    logger.info(
+        f"{stat[4]} out of {stat[9]} reference objects are NOT matched to an alignment object."
+    )
     logger.info(
         f"removed {len(link_df_unfiltered) - len(link_df)} out of {len(link_df_unfiltered)} alignment "
         f"objects that are not matched to reference."
@@ -185,8 +185,12 @@ def calculate_object_linking(
 
     # format output df and convert to anndata
     link_df = link_df.sort_values(by=["R0_label"])
-    link_df = link_df.rename(columns={"R0_label": "R" + str(ref_acquisition) + "_label",
-                                      "RX_label": "R" + str(zarr_acquisition) + "_label"})
+    link_df = link_df.rename(
+        columns={
+            "R0_label": "R" + str(ref_acquisition) + "_label",
+            "RX_label": "R" + str(zarr_acquisition) + "_label",
+        }
+    )
     logger.info(link_df)
 
     # TODO refactor into helper function
@@ -226,8 +230,3 @@ if __name__ == "__main__":
         task_function=calculate_object_linking,
         logger_name=logger.name,
     )
-
-
-
-
-

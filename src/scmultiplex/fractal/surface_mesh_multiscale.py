@@ -9,29 +9,29 @@
 Calculates 3D surface mesh of parent object (e.g. tissue, organoid)
 from 3D cell-level segmentation of children (e.g. nuclei)
 """
+import logging
+import os
 from typing import Any
 
 import anndata as ad
 import dask.array as da
-import logging
 import numpy as np
-import os
-
 import zarr
 from fractal_tasks_core.labels import prepare_label_group
-from fractal_tasks_core.pyramids import build_pyramid
-from fractal_tasks_core.tables import write_table
-from fractal_tasks_core.tasks.io_models import InitArgsRegistrationConsensus
-from pydantic.decorator import validate_arguments
-
 from fractal_tasks_core.ngff import load_NgffImageMeta
+from fractal_tasks_core.pyramids import build_pyramid
 from fractal_tasks_core.roi import (
+    array_to_bounding_box_table,
     check_valid_ROI_indices,
     convert_indices_to_regions,
     convert_ROI_table_to_indices,
-    load_region, array_to_bounding_box_table, get_overlapping_pairs_3D)
-from scipy.ndimage import binary_fill_holes, binary_erosion
-
+    get_overlapping_pairs_3D,
+    load_region,
+)
+from fractal_tasks_core.tables import write_table
+from fractal_tasks_core.tasks.io_models import InitArgsRegistrationConsensus
+from pydantic import validate_call
+from scipy.ndimage import binary_erosion, binary_fill_holes
 from skimage.feature import canny
 from skimage.filters import gaussian
 from skimage.measure import label
@@ -39,36 +39,47 @@ from skimage.morphology import disk, remove_small_objects
 from skimage.segmentation import expand_labels
 
 from scmultiplex.features.FeatureFunctions import mesh_sphericity
-from scmultiplex.fractal.fractal_helper_functions import get_zattrs, convert_indices_to_origin_zyx, format_roi_table
-
-from scmultiplex.meshing.FilterFunctions import equivalent_diam, mask_by_parent_object, \
-    calculate_mean_volume, load_border_values, remove_border
-from scmultiplex.meshing.MeshFunctions import labels_to_mesh, export_stl_polydata, get_mass_properties
+from scmultiplex.fractal.fractal_helper_functions import (
+    convert_indices_to_origin_zyx,
+    format_roi_table,
+    get_zattrs,
+)
+from scmultiplex.meshing.FilterFunctions import (
+    calculate_mean_volume,
+    equivalent_diam,
+    load_border_values,
+    mask_by_parent_object,
+    remove_border,
+)
+from scmultiplex.meshing.MeshFunctions import (
+    export_stl_polydata,
+    get_mass_properties,
+    labels_to_mesh,
+)
 
 logger = logging.getLogger(__name__)
 
 
-@validate_arguments
+@validate_call
 def surface_mesh_multiscale(
-        *,
-        # Fractal arguments
-        zarr_url: str,
-        init_args: InitArgsRegistrationConsensus,
-        # Task-specific arguments
-        label_name: str = "nuc",
-        label_name_obj: str = "org_linked",
-        roi_table: str = "org_ROI_table_linked",
-        expandby_factor: float = 0.6,
-        sigma_factor: float = 5,
-        canny_threshold: float = 0.3,
-        calculate_mesh: bool = True,
-        polynomial_degree: int = 30,
-        passband: float = 0.01,
-        feature_angle: int = 160,
-        target_reduction: float = 0.98,
-        smoothing_iterations: int = 1,
-        save_labels: bool = True,
-
+    *,
+    # Fractal arguments
+    zarr_url: str,
+    init_args: InitArgsRegistrationConsensus,
+    # Task-specific arguments
+    label_name: str = "nuc",
+    label_name_obj: str = "org_linked",
+    roi_table: str = "org_ROI_table_linked",
+    expandby_factor: float = 0.6,
+    sigma_factor: float = 5,
+    canny_threshold: float = 0.3,
+    calculate_mesh: bool = True,
+    polynomial_degree: int = 30,
+    passband: float = 0.01,
+    feature_angle: int = 160,
+    target_reduction: float = 0.98,
+    smoothing_iterations: int = 1,
+    save_labels: bool = True,
 ) -> dict[str, Any]:
     """
     Calculate 3D surface mesh of parent object (e.g. tissue, organoid)
@@ -181,8 +192,8 @@ def surface_mesh_multiscale(
 
     # initialize new zarr for 3d object label image
     # save as same dimensions as nuclear labels from which they are calculated
-    output_label_name = label_name_obj + '_3d'
-    output_roi_table_name = roi_table + '_3d'
+    output_label_name = label_name_obj + "_3d"
+    output_roi_table_name = roi_table + "_3d"
 
     if save_labels:
         shape = r0_dask.shape
@@ -191,7 +202,7 @@ def surface_mesh_multiscale(
         store = zarr.storage.FSStore(f"{zarr_url}/labels/{output_label_name}/0")
 
         if len(shape) != 3 or len(chunks) != 3 or shape[0] == 1:
-            raise ValueError('Expecting 3D image')
+            raise ValueError("Expecting 3D image")
 
         # Add metadata to labels group
         # Get the label_attrs correctly
@@ -241,7 +252,7 @@ def surface_mesh_multiscale(
 
     check_valid_ROI_indices(r0_idlist_parent, roi_table)
 
-    r0_labels = r0_adata.obs_vector('label')
+    r0_labels = r0_adata.obs_vector("label")
     # initialize variables
     compute = True  # convert to numpy array from dask
 
@@ -260,7 +271,9 @@ def surface_mesh_multiscale(
             compute=compute,
         )
 
-        seg = mask_by_parent_object(seg, r0_dask_parent, r0_idlist_parent, row_int, r0_org_label)
+        seg = mask_by_parent_object(
+            seg, r0_dask_parent, r0_idlist_parent, row_int, r0_org_label
+        )
 
         ##############
         # Perform label fusion and edge detection  ###
@@ -275,24 +288,32 @@ def surface_mesh_multiscale(
         # the number of pixels by which to expand is a function of average nuclear size within the organoid.
         expandby_pix = int(round(expandby_factor * equivalent_diam(size_mean)))
         if expandby_pix == 0:
-            logger.warning("Equivalent diameter is 0 or negative, thus labels not expanded. Check segmentation quality")
+            logger.warning(
+                "Equivalent diameter is 0 or negative, thus labels not expanded. Check segmentation quality"
+            )
 
         iterations = int(round(expandby_pix / 2))
 
         # loop over each zslice and expand the labels, then fill holes
         for i, zslice in enumerate(seg):
-            zslice = expand_labels(zslice, expandby_pix)  # expand labels in each zslice in xy
+            zslice = expand_labels(
+                zslice, expandby_pix
+            )  # expand labels in each zslice in xy
             zslice = binary_fill_holes(zslice)  # fill holes
             # to revert the expansion, erode by half of the expanded pixels ...
             # ...(since disk(1) has a radius of 1, i.e. diameter of 2)
-            seg_fill[i, :, :] = binary_erosion(zslice, disk(1), iterations=iterations)  # erode down to original size
+            seg_fill[i, :, :] = binary_erosion(
+                zslice, disk(1), iterations=iterations
+            )  # erode down to original size
 
         # 3D gaussian blur
         seg_fill_8bit = (seg_fill * 255).astype(np.uint8)
 
         # calculate sigma based on z,y,x pixel spacing metadata, so that sigma scales with anisotropy
-        pixel_anisotropy = r0_pixmeta[0]/np.array(r0_pixmeta)  # (z, y, x) where z is normalized to 1, e.g. (1, 3, 3)
-        sigma = tuple([sigma_factor * x for x in pixel_anisotropy])
+        pixel_anisotropy = r0_pixmeta[0] / np.array(
+            r0_pixmeta
+        )  # (z, y, x) where z is normalized to 1, e.g. (1, 3, 3)
+        sigma = tuple(sigma_factor * x for x in pixel_anisotropy)
         blurred = gaussian(seg_fill_8bit, sigma=sigma, preserve_range=False)
 
         # Canny filter to detect gaussian edges
@@ -322,18 +343,22 @@ def surface_mesh_multiscale(
 
         edges_canny = (edges_canny * 255).astype(np.uint8)
 
-        edges_canny = label(remove_small_objects(edges_canny, int(expandby_pix/2)))
+        edges_canny = label(remove_small_objects(edges_canny, int(expandby_pix / 2)))
 
         # Check whether new label map has a single value, otherwise result is discarded and object skipped
         maxvalue = np.amax(edges_canny)
         if maxvalue != 1:
             if maxvalue == 0:
-                logger.warning(f'No 3D label and mesh saved for object {r0_org_label}. '
-                               f'Result of canny edge detection is empty')
+                logger.warning(
+                    f"No 3D label and mesh saved for object {r0_org_label}. "
+                    f"Result of canny edge detection is empty"
+                )
                 continue
             else:  # for max values greater than 1 or less than 0
-                logger.warning(f'No 3D label and mesh saved for object {r0_org_label}. Detected {maxvalue} labels. '
-                               f'Is the shape composed of {maxvalue} distinct objects?')
+                logger.warning(
+                    f"No 3D label and mesh saved for object {r0_org_label}. Detected {maxvalue} labels. "
+                    f"Is the shape composed of {maxvalue} distinct objects?"
+                )
                 continue
 
         logger.info(
@@ -343,9 +368,11 @@ def surface_mesh_multiscale(
         )
 
         if padded_zslice_count > 0:
-            logger.info(f'Object {r0_org_label} has non-zero pixels touching image border. Image processing '
-                        f'completed successfully, however consider reducing sigma_factor '
-                        f'or increasing the canny_threshold to reduce risk of cropping shape edges.')
+            logger.info(
+                f"Object {r0_org_label} has non-zero pixels touching image border. Image processing "
+                f"completed successfully, however consider reducing sigma_factor "
+                f"or increasing the canny_threshold to reduce risk of cropping shape edges."
+            )
         object_count += 1
         ##############
         # Calculate and save mesh  ###
@@ -354,26 +381,35 @@ def surface_mesh_multiscale(
         if calculate_mesh:
             # Make mesh with vtkDiscreteFlyingEdges3D algorithm
             # Set spacing to ome-zarr pixel spacing metadata. Mesh will be in physical units (um)
-            spacing = tuple(np.array(r0_pixmeta)) # z,y,x e.g. (0.6, 0.216, 0.216)
+            spacing = tuple(np.array(r0_pixmeta))  # z,y,x e.g. (0.6, 0.216, 0.216)
 
             # Pad border with 0 so that the mesh forms a manifold
             edges_canny_padded = np.pad(edges_canny, 1)
-            mesh_polydata_organoid = labels_to_mesh(edges_canny_padded, spacing,
-                                                    polynomial_degree=polynomial_degree,
-                                                    pass_band_param=passband,
-                                                    feature_angle=feature_angle,
-                                                    target_reduction=target_reduction,
-                                                    smoothing_iterations=smoothing_iterations,
-                                                    margin=5,
-                                                    show_progress=False)
+            mesh_polydata_organoid = labels_to_mesh(
+                edges_canny_padded,
+                spacing,
+                polynomial_degree=polynomial_degree,
+                pass_band_param=passband,
+                feature_angle=feature_angle,
+                target_reduction=target_reduction,
+                smoothing_iterations=smoothing_iterations,
+                margin=5,
+                show_progress=False,
+            )
             # Save mesh
-            save_transform_path = f"{zarr_url}/meshes/{label_name_obj}_from_{label_name}"
+            save_transform_path = (
+                f"{zarr_url}/meshes/{label_name_obj}_from_{label_name}"
+            )
             os.makedirs(save_transform_path, exist_ok=True)
             # Save name is the organoid label id
             save_name = f"{int(r0_org_label)}.stl"
-            export_stl_polydata(os.path.join(save_transform_path, save_name), mesh_polydata_organoid)
+            export_stl_polydata(
+                os.path.join(save_transform_path, save_name), mesh_polydata_organoid
+            )
 
-            logger.info(f"Successfully generated surface mesh for object label {r0_org_label}")
+            logger.info(
+                f"Successfully generated surface mesh for object label {r0_org_label}"
+            )
 
             volume, surface_area = get_mass_properties(mesh_polydata_organoid)
             sphr = mesh_sphericity(volume, surface_area)
@@ -417,7 +453,9 @@ def surface_mesh_multiscale(
 
             # check that dimensions of rois match
             if seg_ondisk.shape != edges_canny.shape:
-                raise ValueError('Computed label image must match image dimensions of bounding box during saving')
+                raise ValueError(
+                    "Computed label image must match image dimensions of bounding box during saving"
+                )
 
             # convert edge detection label image value to match object label id
             edges_canny_label = edges_canny * int(r0_org_label)
@@ -444,13 +482,9 @@ def surface_mesh_multiscale(
 
             overlap_list = []
             for df in bbox_dataframe_list:
-                overlap_list.extend(
-                    get_overlapping_pairs_3D(df, r0_pixmeta)
-                )
+                overlap_list.extend(get_overlapping_pairs_3D(df, r0_pixmeta))
             if len(overlap_list) > 0:
-                logger.warning(
-                    f"{len(overlap_list)} bounding-box pairs overlap"
-                )
+                logger.warning(f"{len(overlap_list)} bounding-box pairs overlap")
 
     # Starting from on-disk highest-resolution data, build and write to disk a
     # pyramid of coarser levels
@@ -465,11 +499,15 @@ def surface_mesh_multiscale(
             aggregation_function=np.max,
         )
 
-        logger.info(f"Built a pyramid for the {zarr_url}/labels/{output_label_name} label image")
+        logger.info(
+            f"Built a pyramid for the {zarr_url}/labels/{output_label_name} label image"
+        )
 
         bbox_table = format_roi_table(bbox_dataframe_list)
         # Write to zarr group
-        logger.info(f"Writing new bounding-box ROI table to {zarr_url}/tables/{output_roi_table_name}")
+        logger.info(
+            f"Writing new bounding-box ROI table to {zarr_url}/tables/{output_roi_table_name}"
+        )
 
         table_attrs = {
             "type": "ngff:region_table",
@@ -487,14 +525,20 @@ def surface_mesh_multiscale(
 
     if calculate_mesh:
         # Check how many objects out of well have a sphericity flag
-        logger.info(f"{sphericity_flag} out of {object_count} meshed objects are flagged for high sphericity, "
-                    f"which can indicate a highly complex mesh surface.")
+        logger.info(
+            f"{sphericity_flag} out of {object_count} meshed objects are flagged for high sphericity, "
+            f"which can indicate a highly complex mesh surface."
+        )
         if sphericity_flag > 0.1 * object_count:
             # if more than 10% of objects have a sphericity flag, raise warning
-            logger.warning(f"Detected high fraction of suspicious organoid meshes in well. Inspect mesh quality "
-                           f"and tune task parameters for label expansion and mesh smoothing accordingly. ")
+            logger.warning(
+                "Detected high fraction of suspicious organoid meshes in well. Inspect mesh quality "
+                "and tune task parameters for label expansion and mesh smoothing accordingly. "
+            )
 
-    logger.info(f"End surface_mesh_multiscale task for {zarr_url}/labels/{output_label_name}")
+    logger.info(
+        f"End surface_mesh_multiscale task for {zarr_url}/labels/{output_label_name}"
+    )
 
     return {}
 

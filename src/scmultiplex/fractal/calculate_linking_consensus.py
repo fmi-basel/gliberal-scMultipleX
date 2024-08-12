@@ -12,19 +12,24 @@ Calculates consensus for linking tables across multiplexing rounds.
 Stores single consensus table in reference round directory.
 """
 import logging
+
 import anndata as ad
 import numpy as np
 import zarr
-from fractal_tasks_core.tasks.io_models import InitArgsRegistrationConsensus
-from pydantic.decorator import validate_arguments
 from fractal_tasks_core.tables import write_table
-from scmultiplex.fractal.fractal_helper_functions import are_linking_table_columns_valid, find_consensus, \
-    extract_acq_info
+from fractal_tasks_core.tasks.io_models import InitArgsRegistrationConsensus
+from pydantic import validate_call
+
+from scmultiplex.fractal.fractal_helper_functions import (
+    are_linking_table_columns_valid,
+    extract_acq_info,
+    find_consensus,
+)
 
 logger = logging.getLogger(__name__)
 
 
-@validate_arguments
+@validate_call
 def calculate_linking_consensus(
     *,
     # Fractal arguments
@@ -60,8 +65,8 @@ def calculate_linking_consensus(
 
     consensus_table_name = roi_table + "_consensus"
 
-    #zarr_url is the path to the reference round
-    #init args contain the list to all rounds, including reference round
+    # zarr_url is the path to the reference round
+    # init args contain the list to all rounds, including reference round
     ref_acquisition = extract_acq_info(zarr_url)
 
     logger.info(
@@ -82,29 +87,33 @@ def calculate_linking_consensus(
         if acq_zarr_url == zarr_url:
             continue
 
-        rx_adata = ad.read_zarr(
-            f"{acq_zarr_url}/tables/{roi_table}"
-        )
+        rx_adata = ad.read_zarr(f"{acq_zarr_url}/tables/{roi_table}")
 
         # Check for valid ROI tables
-        are_linking_table_columns_valid(table=rx_adata, reference_cycle=ref_acquisition, alignment_cycle=zarr_acquisition)
+        are_linking_table_columns_valid(
+            table=rx_adata,
+            reference_cycle=ref_acquisition,
+            alignment_cycle=zarr_acquisition,
+        )
 
         # Add to dictionary
         roi_tables[zarr_acquisition] = rx_adata
 
     # Convert dictionary of anndata tables to list of pandas dfs
     roi_df_list = [
-        roi_table.to_df().iloc[:, 0:2] # check jupyter notebook
+        roi_table.to_df().iloc[:, 0:2]  # check jupyter notebook
         for roi_table in roi_tables.values()
     ]
 
     logger.info("Calculating consensus across cycles.")
 
-    consensus = find_consensus(df_list=roi_df_list, on=["R" + str(ref_acquisition) + "_label"])
+    consensus = find_consensus(
+        df_list=roi_df_list, on=["R" + str(ref_acquisition) + "_label"]
+    )
 
     consensus = consensus.sort_values(by=["R" + str(ref_acquisition) + "_label"])
-    consensus['consensus_index'] = consensus.index.astype(np.float32)
-    consensus['consensus_label'] = consensus['consensus_index']+1
+    consensus["consensus_index"] = consensus.index.astype(np.float32)
+    consensus["consensus_label"] = consensus["consensus_index"] + 1
 
     # Consensus table has columns ["R0_label", "R1_label", "R2_label", ... "consensus_index", 'consensus_label']
     logger.info(consensus)
@@ -143,6 +152,3 @@ if __name__ == "__main__":
         task_function=calculate_linking_consensus,
         logger_name=logger.name,
     )
-
-
-

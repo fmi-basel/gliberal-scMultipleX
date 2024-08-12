@@ -12,35 +12,42 @@ Relabels image labels and ROI tables based on consensus linking.
 """
 import logging
 from pathlib import Path
-import pandas as pd
 
 import anndata as ad
 import dask.array as da
 import numpy as np
+import pandas as pd
 import zarr
 from fractal_tasks_core.labels import prepare_label_group
 from fractal_tasks_core.ngff import load_NgffImageMeta
 from fractal_tasks_core.pyramids import build_pyramid
 from fractal_tasks_core.tables import write_table
 from fractal_tasks_core.tasks.io_models import InitArgsRegistration
-from pydantic.decorator import validate_arguments
+from pydantic import validate_call
 
-from scmultiplex.fractal.fractal_helper_functions import get_zattrs, read_table_and_attrs, extract_acq_info
-from scmultiplex.linking.NucleiLinkingFunctions import relabel_RX_numpy, make_linking_dict
+from scmultiplex.fractal.fractal_helper_functions import (
+    extract_acq_info,
+    get_zattrs,
+    read_table_and_attrs,
+)
+from scmultiplex.linking.NucleiLinkingFunctions import (
+    make_linking_dict,
+    relabel_RX_numpy,
+)
 
 logger = logging.getLogger(__name__)
 
 
-@validate_arguments
+@validate_call
 def relabel_by_linking_consensus(
-        *,
-        # Fractal arguments
-        zarr_url: str,
-        init_args: InitArgsRegistration,
-        # Task-specific arguments
-        label_name: str,
-        consensus_table: str = "org_match_table_consensus",
-        table_to_relabel: str = "org_ROI_table",
+    *,
+    # Fractal arguments
+    zarr_url: str,
+    init_args: InitArgsRegistration,
+    # Task-specific arguments
+    label_name: str,
+    consensus_table: str = "org_match_table_consensus",
+    table_to_relabel: str = "org_ROI_table",
 ):
     """
     Relabels image labels and ROI tables based on consensus linking.
@@ -69,8 +76,8 @@ def relabel_by_linking_consensus(
     zarr_acquisition = extract_acq_info(zarr_url)
     ref_acquisition = extract_acq_info(r0_zarr_path)
 
-    new_label_name = label_name + '_linked'
-    new_table_name = table_to_relabel + '_linked'
+    new_label_name = label_name + "_linked"
+    new_table_name = table_to_relabel + "_linked"
 
     logger.info(
         f"Running for {zarr_url=}. \n"
@@ -85,10 +92,7 @@ def relabel_by_linking_consensus(
 
     # Read ROIs
     consensus_adata = ad.read_zarr(f"{r0_zarr_path}/tables/{consensus_table}")
-    rx_label_adata, table_attrs = read_table_and_attrs(
-        Path(zarr_url),
-        table_to_relabel
-    )
+    rx_label_adata, table_attrs = read_table_and_attrs(Path(zarr_url), table_to_relabel)
     consensus_pd = consensus_adata.to_df()
 
     moving_colname = "R" + str(zarr_acquisition) + "_label"
@@ -98,24 +102,28 @@ def relabel_by_linking_consensus(
     # note that label IDs in ROI tables are strings, so need to convert floats in linking tables to int then str
     id_rx = consensus_adata[:, [moving_colname]].to_df()
     id_list = id_rx[moving_colname].tolist()
-    id_list = [str(int(x)) for x in id_list] # list of strings of integers
+    id_list = [str(int(x)) for x in id_list]  # list of strings of integers
 
     # make sure that labels are stored as strings of integers
-    rx_label_adata.obs['label'] = pd.to_numeric(rx_label_adata.obs['label']).astype(int).astype(str)
+    rx_label_adata.obs["label"] = (
+        pd.to_numeric(rx_label_adata.obs["label"]).astype(int).astype(str)
+    )
 
     # filter ROI table by rx IDs that have been linked across all rounds i.e. discard non-consensus labels
     # make new table only for the linked IDs
-    bdata = rx_label_adata[rx_label_adata.obs['label'].isin(id_list)].copy()
+    bdata = rx_label_adata[rx_label_adata.obs["label"].isin(id_list)].copy()
 
     # relabel rx IDs to consensus ID with a mapping dictionary
     # key is moving label (rx ID), value is fixed label (consensus ID)
     consensus_pd_str = consensus_pd.astype(int).astype(str)
-    matching_dict = make_linking_dict(consensus_pd_str, moving_colname=moving_colname, fixed_colname=fixed_colname)
+    matching_dict = make_linking_dict(
+        consensus_pd_str, moving_colname=moving_colname, fixed_colname=fixed_colname
+    )
     # map original rx IDs to consensus label
-    bdata.obs['label'] = bdata.obs['label'].map(matching_dict)
+    bdata.obs["label"] = bdata.obs["label"].map(matching_dict)
     # reset label index
     bdata.obs.reset_index(drop=True, inplace=True)
-    bdata.obs.index = bdata.obs.index.map(str) # anndata wants indexes as strings!
+    bdata.obs.index = bdata.obs.index.map(str)  # anndata wants indexes as strings!
 
     # logger.info(bdata.obs)
 
@@ -123,7 +131,7 @@ def relabel_by_linking_consensus(
     image_group = zarr.group(f"{zarr_url}")
 
     # TODO Temporary fix to write correct path to label in table zattr
-    table_attrs['region']['path'] = f"../labels/{new_label_name}"
+    table_attrs["region"]["path"] = f"../labels/{new_label_name}"
 
     write_table(
         image_group,
@@ -163,13 +171,15 @@ def relabel_by_linking_consensus(
     # 2) Relabel image
 
     # Loop over linked labels and relabel. if label not in consensus, it is set to 0 (background).
-    logger.info(
-        f"Relabeling {zarr_url=} image..."
-    )
+    logger.info(f"Relabeling {zarr_url=} image...")
 
-    rx_dask_relabeled, count_input, count_output = relabel_RX_numpy(rx_dask, consensus_pd,
-                                                                    moving_colname=moving_colname,
-                                                                    fixed_colname=fixed_colname, daskarr=True)
+    rx_dask_relabeled, count_input, count_output = relabel_RX_numpy(
+        rx_dask,
+        consensus_pd,
+        moving_colname=moving_colname,
+        fixed_colname=fixed_colname,
+        daskarr=True,
+    )
 
     logger.info(f"Relabeled {count_output} out of {count_input} detected labels")
 
@@ -221,4 +231,3 @@ if __name__ == "__main__":
         task_function=relabel_by_linking_consensus,
         logger_name=logger.name,
     )
-
