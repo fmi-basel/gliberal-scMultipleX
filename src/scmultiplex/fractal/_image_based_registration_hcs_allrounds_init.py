@@ -16,7 +16,7 @@ with reference round specified in init args.
 import logging
 from typing import Any
 
-from fractal_tasks_core.tasks._registration_utils import create_well_acquisition_dict
+from fractal_tasks_core.utils import create_well_acquisition_dict
 from pydantic import validate_call
 
 logger = logging.getLogger(__name__)
