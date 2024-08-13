@@ -113,6 +113,17 @@ def find_consensus(*, df_list: Sequence[pd.DataFrame], on: Sequence[str]) -> pd.
     return consensus
 
 
+def check_for_duplicates(pd_column):
+    """
+    Check if input pandas df column contains duplicated entries.
+    Returns: is_duplicated, boolean; True if there are 1 or more duplicated item, otherwise False.
+    """
+    s = pd.Series(pd_column)
+    res = s.duplicated()
+    is_duplicated = any(res)
+    return is_duplicated
+
+
 def extract_acq_info(zarr_url):
     """
     Find name of acquisition (cycles, e.g. 0, 1, 2, etc) of given paths from their metadata
