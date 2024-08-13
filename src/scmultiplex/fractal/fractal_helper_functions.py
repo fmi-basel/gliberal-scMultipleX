@@ -8,13 +8,19 @@
 #
 from pathlib import Path
 import anndata as ad
+import dask.array as da
 import zarr
 import pandas as pd
 import numpy as np
+import os as os
+
+from fractal_tasks_core.labels import prepare_label_group
 from fractal_tasks_core.ngff import load_NgffWellMeta
-from fractal_tasks_core.roi import empty_bounding_box_table
+from fractal_tasks_core.roi import empty_bounding_box_table, load_region, array_to_bounding_box_table
 from functools import reduce
 from typing import Sequence
+
+from scmultiplex.meshing.MeshFunctions import labels_to_mesh, export_stl_polydata, export_vtk_polydata
 
 
 def read_table_and_attrs(zarr_url: Path, roi_table):
@@ -107,6 +113,17 @@ def find_consensus(*, df_list: Sequence[pd.DataFrame], on: Sequence[str]) -> pd.
     return consensus
 
 
+def check_for_duplicates(pd_column):
+    """
+    Check if input pandas df column contains duplicated entries.
+    Returns: is_duplicated, boolean; True if there are 1 or more duplicated item, otherwise False.
+    """
+    s = pd.Series(pd_column)
+    res = s.duplicated()
+    is_duplicated = any(res)
+    return is_duplicated
+
+
 def extract_acq_info(zarr_url):
     """
     Find name of acquisition (cycles, e.g. 0, 1, 2, etc) of given paths from their metadata
@@ -127,3 +144,103 @@ def extract_acq_info(zarr_url):
         raise ValueError(f"{zarr_url=} well metadata does not contain expected path and acquisition naming")
 
     return zarr_acquisition
+
+
+def initialize_new_label(zarr_url, shape, chunks, label_dtype, inherit_from_label, output_label_name, logger):
+    store = zarr.storage.FSStore(f"{zarr_url}/labels/{output_label_name}/0")
+
+    if len(shape) != 3 or len(chunks) != 3 or shape[0] == 1:
+        raise ValueError('Expecting 3D image')
+
+    # Add metadata to labels group
+    # Get the label_attrs correctly
+    # Note that the new label metadata matches the label_name (child) metadata
+    label_attrs = get_zattrs(zarr_url=f"{zarr_url}/labels/{inherit_from_label}")
+    _ = prepare_label_group(
+        image_group=zarr.group(zarr_url),
+        label_name=output_label_name,
+        overwrite=True,
+        label_attrs=label_attrs,
+        logger=logger,
+    )
+
+    new_label3d_array = zarr.create(
+        shape=shape,
+        chunks=chunks,
+        dtype=label_dtype,
+        store=store,
+        overwrite=True,
+        dimension_separator="/",
+    )
+    return new_label3d_array
+
+
+def save_new_label_with_overlap(new_npimg, label_str, new_label3d_array, zarr_url, output_label_name, region,
+                                label_pixmeta, compute, roi_idlist, row_int):
+    # Load dask from disk, will contain rois of the previously processed objects within for loop
+    new_label3d_dask = da.from_zarr(f"{zarr_url}/labels/{output_label_name}/0")
+    # Load region of current object from disk, will include any previously processed neighboring objects
+    seg_ondisk = load_region(
+        data_zyx=new_label3d_dask,
+        region=region,
+        compute=compute,
+    )
+
+    # Check that dimensions of rois match
+    if seg_ondisk.shape != new_npimg.shape:
+        raise ValueError('Computed label image must match image dimensions of bounding box during saving')
+
+    # Convert edge detection label image value to match object label id
+    new_npimg_label = new_npimg * int(label_str)
+    # Use fmax so that if one of the elements being compared is a NaN, then the non-nan element is returned
+    new_npimg_label_tosave = np.fmax(new_npimg_label, seg_ondisk)
+
+    # Compute and store 0-th level of new 3d label map to disk
+    da.array(new_npimg_label_tosave).to_zarr(
+        url=new_label3d_array,
+        region=region,
+        compute=True,
+    )
+
+    # make new ROI table
+    origin_zyx = convert_indices_to_origin_zyx(roi_idlist[row_int])
+
+    bbox_df = array_to_bounding_box_table(
+        new_npimg_label,
+        label_pixmeta,
+        origin_zyx=origin_zyx,
+    )
+
+    return bbox_df
+
+
+def compute_and_save_mesh(label_image, pixmeta, polynomial_degree, passband, feature_angle, target_reduction,
+                          smoothing_iterations, zarr_url, mesh_folder_name, object_name, save_as_stl):
+    # Make mesh with vtkDiscreteFlyingEdges3D algorithm
+    # Set spacing to ome-zarr pixel spacing metadata. Mesh will be in physical units (um)
+    spacing = tuple(np.array(pixmeta))  # z,y,x e.g. (0.6, 0.216, 0.216)
+
+    # Pad border with 0 so that the mesh forms a manifold
+    label_image_padded = np.pad(label_image, 1)
+
+    # Calculate mesh
+    mesh_polydata = labels_to_mesh(label_image_padded, spacing,
+                                   polynomial_degree=polynomial_degree,
+                                   pass_band_param=passband,
+                                   feature_angle=feature_angle,
+                                   target_reduction=target_reduction,
+                                   smoothing_iterations=smoothing_iterations,
+                                   margin=5,
+                                   show_progress=False)
+    # Save mesh
+    save_transform_path = f"{zarr_url}/meshes/{mesh_folder_name}"
+    os.makedirs(save_transform_path, exist_ok=True)
+
+    if save_as_stl is True:
+        save_name = f"{int(object_name)}.stl"  # save name is the parent label id
+        export_stl_polydata(os.path.join(save_transform_path, save_name), mesh_polydata)
+    # Otherwise save as .vtp
+    else:
+        save_name = f"{int(object_name)}.vtp"  # save name is the parent label id
+        export_vtk_polydata(os.path.join(save_transform_path, save_name), mesh_polydata)
+    return mesh_polydata

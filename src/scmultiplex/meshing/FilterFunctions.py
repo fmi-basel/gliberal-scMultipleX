@@ -67,19 +67,6 @@ def calculate_mean_volume(seg):
     return size_mean
 
 
-def equivalent_diam(volume):
-    """
-    Calculate equivalent diameter of sphere with a given volume
-    """
-    try:
-        diameter = 2 * math.pow((0.75 * (1/np.pi) * volume), (1/3))
-    # ValueError is raised when input value is negative
-    # in this case set diameter to 0
-    except ValueError:
-        diameter = 0
-    return diameter
-
-
 def mask_by_parent_object(seg, parent_dask, parent_idlist_parentmeta, row_int, parent_label_id):
     """
     Mask input numpy array (seg) by parent numpy array (region loaded from dask_parent)

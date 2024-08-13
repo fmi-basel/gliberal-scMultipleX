@@ -67,9 +67,7 @@ def calculate_linking_consensus(
     logger.info(
         f"Running for reference round {zarr_url=}. \n"
         f"Applying consensus finding to {roi_table=} and storing it as "
-        f"{consensus_table_name=} in reference round {ref_acquisition} directory. \n"
-        "Calculating consensus for the following cycles: "
-        f"{init_args.zarr_url_list}"
+        f"{consensus_table_name=} in reference round {ref_acquisition} directory."
     )
 
     # TODO: refactor to perform data merging on anndata without need to convert to pandas.
@@ -107,7 +105,8 @@ def calculate_linking_consensus(
     consensus['consensus_label'] = consensus['consensus_index']+1
 
     # Consensus table has columns ["R0_label", "R1_label", "R2_label", ... "consensus_index", 'consensus_label']
-    logger.info(consensus)
+    logger.info(f"Successfully calculated consensus labels for {len(consensus.index)} objects across round(s) "
+                f"{list(roi_tables.keys())} and reference round {ref_acquisition}.")
 
     # Convert to adata
     consensus_adata = ad.AnnData(X=np.array(consensus, dtype=np.float32))

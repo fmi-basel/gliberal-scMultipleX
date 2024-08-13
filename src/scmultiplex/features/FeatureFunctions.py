@@ -268,9 +268,14 @@ def mesh_equivalent_surface_area(volume):
 
 def mesh_equivalent_diameter(volume):
     """
-    The diameter of a sphere with the same volume as the object region
+    Calculate equivalent diameter of sphere with a given volume
     """
-    equiv_diam = 2 * ((0.75 * volume * (1/math.pi)) ** (1. / 3.))
+    try:
+        equiv_diam = 2 * ((0.75 * volume * (1/math.pi)) ** (1. / 3.))
+    # ValueError is raised when input value is negative
+    # in this case set diameter to 0
+    except ValueError:
+        equiv_diam = 0
     return equiv_diam
 
 
@@ -282,9 +287,12 @@ def mesh_sphericity(volume, surface_area):
     This is a 3D version of circularity.
     """
     equivalent_sa = mesh_equivalent_surface_area(volume)
-    if equivalent_sa == 0:
-        raise ValueError('Cannot calculate sphericity for object with volume = 0')
-    return surface_area / equivalent_sa
+    try:
+        sphericity = surface_area / equivalent_sa
+    except ZeroDivisionError:
+        sphericity = 0
+
+    return sphericity
 
 
 def mesh_extent(object_volume, bbox_volume):

@@ -25,7 +25,8 @@ from fractal_tasks_core.tables import write_table
 from fractal_tasks_core.tasks.io_models import InitArgsRegistration
 from pydantic.decorator import validate_arguments
 
-from scmultiplex.fractal.fractal_helper_functions import get_zattrs, read_table_and_attrs, extract_acq_info
+from scmultiplex.fractal.fractal_helper_functions import get_zattrs, read_table_and_attrs, extract_acq_info, \
+    check_for_duplicates
 from scmultiplex.linking.NucleiLinkingFunctions import relabel_RX_numpy, make_linking_dict
 
 logger = logging.getLogger(__name__)
@@ -94,30 +95,35 @@ def relabel_by_linking_consensus(
     moving_colname = "R" + str(zarr_acquisition) + "_label"
     fixed_colname = "consensus_label"
 
-    # make list of rx IDs (list of strings) that are linked across all rounds
-    # note that label IDs in ROI tables are strings, so need to convert floats in linking tables to int then str
-    id_rx = consensus_adata[:, [moving_colname]].to_df()
+    # load list of consensus linked rx IDs that have been linked across all rounds
+    # convert floats in linking tables to int then str
+    id_rx = consensus_adata[:, [moving_colname]].to_df()  # labels are floats here
     id_list = id_rx[moving_colname].tolist()
-    id_list = [str(int(x)) for x in id_list] # list of strings of integers
+    # id_list contains only consensus objects
+    id_list = [str(int(x)) for x in id_list]  # convert to list of strings of integers
 
-    # make sure that labels are stored as strings of integers
+    # convert object labels in original ROI table to strings of integers
+    # rx_label_adata contains all objects
     rx_label_adata.obs['label'] = pd.to_numeric(rx_label_adata.obs['label']).astype(int).astype(str)
 
     # filter ROI table by rx IDs that have been linked across all rounds i.e. discard non-consensus labels
-    # make new table only for the linked IDs
+    # make new ROI table, bdata, that contains only for the linked IDs
     bdata = rx_label_adata[rx_label_adata.obs['label'].isin(id_list)].copy()
 
-    # relabel rx IDs to consensus ID with a mapping dictionary
-    # key is moving label (rx ID), value is fixed label (consensus ID)
+    # relabel rx IDs to consensus ID with a matching dictionary
+    # matching_dict: key is moving label (rx ID), value is fixed label (consensus ID)
     consensus_pd_str = consensus_pd.astype(int).astype(str)
     matching_dict = make_linking_dict(consensus_pd_str, moving_colname=moving_colname, fixed_colname=fixed_colname)
     # map original rx IDs to consensus label
     bdata.obs['label'] = bdata.obs['label'].map(matching_dict)
     # reset label index
     bdata.obs.reset_index(drop=True, inplace=True)
-    bdata.obs.index = bdata.obs.index.map(str) # anndata wants indexes as strings!
+    bdata.obs.index = bdata.obs.index.map(str)  # anndata wants indexes as strings!
 
-    # logger.info(bdata.obs)
+    # check for duplicated labels after matching
+    is_duplicated = check_for_duplicates(bdata.obs['label'])
+    if is_duplicated:
+        raise ValueError('Detected duplicated labels in output ROI table.')
 
     # Save the linking table as a new table in round directory
     image_group = zarr.group(f"{zarr_url}")
@@ -167,9 +173,23 @@ def relabel_by_linking_consensus(
         f"Relabeling {zarr_url=} image..."
     )
 
-    rx_dask_relabeled, count_input, count_output = relabel_RX_numpy(rx_dask, consensus_pd,
-                                                                    moving_colname=moving_colname,
-                                                                    fixed_colname=fixed_colname, daskarr=True)
+    rx_dask_relabeled, count_input, count_output, labels_in_output = relabel_RX_numpy(rx_dask, consensus_pd,
+                                                                                      moving_colname=moving_colname,
+                                                                                      fixed_colname=fixed_colname,
+                                                                                      daskarr=True)
+    # Check outputs
+    if count_input != rx_label_adata.n_obs:
+        raise ValueError(
+            f"Input label image contains {count_input} labels while input ROI table contains {rx_label_adata.n_obs} "
+            f"labels. Does input ROI table match input label image?"
+        )
+    if count_output != bdata.n_obs:
+        roi_set = set(bdata.obs['label'].to_numpy().flatten().astype(float))
+        raise ValueError(
+            f"Label count {count_output} in relabelled image must match length of relabelled table {bdata.n_obs}. "
+            f"\nLabels in relabelled image but not in relabelled ROI table: \n{labels_in_output - roi_set}"
+            f"\nLabels in relabelled ROI table but not in relabelled image: \n{roi_set - labels_in_output}"
+        )
 
     logger.info(f"Relabeled {count_output} out of {count_input} detected labels")
 
@@ -208,11 +228,6 @@ def relabel_by_linking_consensus(
 
     logger.info(f"Built a pyramid for the {new_label_name} label image")
 
-    if count_output != bdata.n_obs:
-        raise ValueError(
-            f"Label count of {count_output} in relabelled image must match length of relabelled table of {bdata.n_obs}"
-        )
-
 
 if __name__ == "__main__":
     from fractal_tasks_core.tasks._utils import run_fractal_task
@@ -221,4 +236,3 @@ if __name__ == "__main__":
         task_function=relabel_by_linking_consensus,
         logger_name=logger.name,
     )
-

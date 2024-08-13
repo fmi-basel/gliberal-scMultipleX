@@ -364,7 +364,6 @@ def relabel_RX_numpy(rx_seg, matches, moving_colname='RX_nuc_id', fixed_colname=
     """
     # key is moving_label, value is fixed_label
     matching_dict = make_linking_dict(matches, moving_colname, fixed_colname)
-
     # convert to numpy if input is not numpy (e.g. if input is a dask array)
     if not isinstance(rx_seg, np.ndarray):
         rx_seg = np.asarray(rx_seg)
@@ -379,8 +378,8 @@ def relabel_RX_numpy(rx_seg, matches, moving_colname='RX_nuc_id', fixed_colname=
     labels_in_output = set()
     for nonzero_pixel in zip(*rx_seg_nonzero):
 
-        key = rx_seg[nonzero_pixel].item()
-        labels_in_input.add(key)
+        key = rx_seg[nonzero_pixel].item()  # fetch value of given pixel
+        labels_in_input.add(key)  # add key to set
 
         try:
             relabeled_value = matching_dict[key]
@@ -396,7 +395,7 @@ def relabel_RX_numpy(rx_seg, matches, moving_colname='RX_nuc_id', fixed_colname=
     if daskarr:
         rx_numpy_matched = da.from_array(rx_numpy_matched)
 
-    return rx_numpy_matched, count_input, count_output
+    return rx_numpy_matched, count_input, count_output, labels_in_output
 
 
 def remove_labels(seg_img, labels_to_remove, datatype):

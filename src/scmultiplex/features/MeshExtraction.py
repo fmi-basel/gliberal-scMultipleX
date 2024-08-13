@@ -1,3 +1,11 @@
+# Copyright (C) 2024 Friedrich Miescher Institute for Biomedical Research
+
+##############################################################################
+#                                                                            #
+# Author: Nicole Repina              <nicole.repina@fmi.ch>                  #
+#                                                                            #
+##############################################################################
+
 from scmultiplex.features.FeatureFunctions import mesh_sphericity, mesh_extent, mesh_solidity, mesh_concavity, \
     mesh_asymmetry, mesh_aspect_ratio, mesh_surface_area_to_volume_norm
 from scmultiplex.meshing.MeshFunctions import get_centroid, get_mass_properties, get_bounding_box, get_convex_hull

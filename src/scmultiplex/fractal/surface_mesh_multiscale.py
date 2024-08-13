@@ -1,9 +1,11 @@
-# Copyright 2024 (C) Friedrich Miescher Institute for Biomedical Research and
-# University of Zurich
-#
-# Original authors:
-# Nicole Repina <nicole.repina@fmi.ch>
-#
+# Copyright (C) 2024 Friedrich Miescher Institute for Biomedical Research
+
+##############################################################################
+#                                                                            #
+# Author: Nicole Repina              <nicole.repina@fmi.ch>                  #
+#                                                                            #
+##############################################################################
+
 
 """
 Calculates 3D surface mesh of parent object (e.g. tissue, organoid)
@@ -15,10 +17,8 @@ import anndata as ad
 import dask.array as da
 import logging
 import numpy as np
-import os
-
 import zarr
-from fractal_tasks_core.labels import prepare_label_group
+
 from fractal_tasks_core.pyramids import build_pyramid
 from fractal_tasks_core.tables import write_table
 from fractal_tasks_core.tasks.io_models import InitArgsRegistrationConsensus
@@ -29,21 +29,17 @@ from fractal_tasks_core.roi import (
     check_valid_ROI_indices,
     convert_indices_to_regions,
     convert_ROI_table_to_indices,
-    load_region, array_to_bounding_box_table, get_overlapping_pairs_3D)
-from scipy.ndimage import binary_fill_holes, binary_erosion
-
-from skimage.feature import canny
-from skimage.filters import gaussian
-from skimage.measure import label
-from skimage.morphology import disk, remove_small_objects
-from skimage.segmentation import expand_labels
+    load_region, get_overlapping_pairs_3D)
 
 from scmultiplex.features.FeatureFunctions import mesh_sphericity
-from scmultiplex.fractal.fractal_helper_functions import get_zattrs, convert_indices_to_origin_zyx, format_roi_table
+from scmultiplex.fractal.fractal_helper_functions import format_roi_table, \
+    compute_and_save_mesh, initialize_new_label, save_new_label_with_overlap
 
-from scmultiplex.meshing.FilterFunctions import equivalent_diam, mask_by_parent_object, \
-    calculate_mean_volume, load_border_values, remove_border
-from scmultiplex.meshing.MeshFunctions import labels_to_mesh, export_stl_polydata, get_mass_properties
+from scmultiplex.meshing.FilterFunctions import mask_by_parent_object
+from scmultiplex.meshing.LabelFusionFunctions import run_label_fusion
+from scmultiplex.meshing.MeshFunctions import get_mass_properties
+
+from typing import Union
 
 logger = logging.getLogger(__name__)
 
@@ -56,18 +52,18 @@ def surface_mesh_multiscale(
         init_args: InitArgsRegistrationConsensus,
         # Task-specific arguments
         label_name: str = "nuc",
-        label_name_obj: str = "org_linked",
+        group_by: Union[str, None] = None,
         roi_table: str = "org_ROI_table_linked",
+        multiscale: bool = True,
+        save_mesh: bool = True,
         expandby_factor: float = 0.6,
         sigma_factor: float = 5,
         canny_threshold: float = 0.3,
-        calculate_mesh: bool = True,
         polynomial_degree: int = 30,
         passband: float = 0.01,
         feature_angle: int = 160,
         target_reduction: float = 0.98,
         smoothing_iterations: int = 1,
-        save_labels: bool = True,
 
 ) -> dict[str, Any]:
     """
@@ -100,38 +96,57 @@ def surface_mesh_multiscale(
             zarr_url_list listing all the zarr_urls in the same well as the
             zarr_url of the reference acquisition that are being processed.
             (standard argument for Fractal tasks, managed by Fractal server).
-        label_name: Label name of child objects that will be used for multiscale surface estimation, e.g. `nuc`.
-        label_name_obj: Label name of segmented objects that are parents of
-            label_name e.g. `org`.
-        roi_table: Name of the ROI table that corresponds to label_name_obj. The task loops over ROIs in this table
-            to load the corresponding child objects.
-        expandby_factor: multiplier that specifies pixels by which to expand each nuclear mask for merging,
-            float in range [0, 1 or higher], e.g. 0.2 means that 20% of mean of nuclear equivalent diameter is used.
-        sigma_factor: float that specifies sigma (standard deviation, in pixels) for Gaussian kernel used for blurring
-            to smoothen label image prior to edge detection. Higher values correspond to more blurring.
-            Recommended range 1-8.
-        canny_threshold: image values below this threshold are set to 0 after Gaussian blur. float in range [0,1].
-            Higher values result in tighter fit of mesh to nuclear surface
-        calculate_mesh: if True, saves the mesh as .stl on disk in meshes/[labelname] folder within zarr structure.
-            Filename corresponds to object label id
-        polynomial_degree: the number of polynomial degrees during surface mesh smoothing with
+        label_name: Label name of segmentation for which mesh is calculated. When Multiscale = True, this is the label
+            name of child objects (e.g. nuclei) that will be used for multiscale surface estimation.
+        group_by: Label name of segmentated objects that are parents of label_name. If None (default), no grouping
+            is applied and meshes are calculated for the input object (label_name).
+            Instead, if a group_by label is specified, the
+            label_name objects will be masked and grouped by this object. For example, when group_by = 'org', the
+            nuclear segmentation is masked by the organoid parent and all nuclei belonging to the parent are loaded
+            as a label image. Thus, when Multiscale = False, the calculated mesh contains multiple child objects. When
+            Multiscale = True, a new labelmap is generated as a result of child fusion to generate the
+            3D parent (organoid-level) shape.
+        roi_table: Name of the ROI table used to iterate over objects and load object regions. If group_by = None, this
+            is the ROI table that corresponds to the label_name objects. If group_by is passed, this is the ROI table
+            for the group_by objects, e.g. org_ROI_table.
+        multiscale: if True, a new labelmap is generated as a result of child fusion to generate the
+            3D parent (organoid-level) shape. This label output is called {group_by}_from_{label_name},
+            with corresponding ROI table name {group_by}_ROI_table_from_{label_name}. This label image is
+            optionally saved as a mesh if save_mesh = True. If Multiscale = False, no multiscale label map computation
+            is performed and a smoothened mesh of the input label_name is generated.
+        save_mesh: if True, calculates and saves mesh on disk in the 'meshes' folder within zarr structure. Meshes
+            saved as '.stl', except for the case of multi-object meshed (e.g. multiple nuclei within a parent organoid)
+            that are saved as '.vtp' to preserve label ID information. Filename corresponds to parent object label id,
+            or to label id in the case when group_by = None.
+        expandby_factor: only used if Multiscale = True. Multiplier that specifies pixels by which to expand each
+            nuclear mask for merging, float in range [0, 1 or higher], e.g. 0.2 means that 20% of mean of
+            nuclear equivalent diameter is used.
+        sigma_factor: only used if Multiscale = True. Float that specifies sigma (standard deviation, in pixels)
+            for Gaussian kernel used for blurring to smoothen label image prior to edge detection.
+            Higher values correspond to more blurring. Recommended range 5-15.
+        canny_threshold: only used if Multiscale = True. Image values below this threshold are set to 0 after
+            Gaussian blur. float in range [0,1]. Higher values result in tighter fit of mesh to nuclear surface.
+        polynomial_degree: Mesh smoothing parameter. The number of polynomial degrees during surface mesh smoothing with
             vtkWindowedSincPolyDataFilter determines the maximum number of smoothing passes.
             This number corresponds to the degree of the polynomial that is used to approximate the windowed sinc
             function. Usually 10-20 iteration are sufficient. Higher values have little effect on smoothing.
             For further details see VTK vtkWindowedSincPolyDataFilter documentation.
-        passband: float in range [0,2] that specifies the PassBand for the windowed sinc filter in
-            vtkWindowedSincPolyDataFilter during mesh smoothing. Lower passband values produce more smoothing, due to
-            filtering of higher frequencies. For further details see VTK vtkWindowedSincPolyDataFilter documentation.
-        feature_angle: int in range [0,180] that specifies the feature angle for sharp edge identification used
-            for vtk FeatureEdgeSmoothing. Higher values result in more smoothened edges in mesh.
-            For further details see VTK vtkWindowedSincPolyDataFilter documentation.
-        target_reduction: float in range [0,1]. Target reduction is used during mesh decimation via
+        passband: Mesh smoothing parameter. Float in range [0,2] that specifies the PassBand for the windowed sinc
+            filter in vtkWindowedSincPolyDataFilter during mesh smoothing. Lower passband values produce more
+            smoothing, due to filtering of higher frequencies. For further details see
+            VTK vtkWindowedSincPolyDataFilter documentation.
+        feature_angle: Mesh smoothing parameter. Integer in range [0,180] that specifies the feature angle for sharp
+            edge identification used for vtk FeatureEdgeSmoothing. Higher values result in more smoothened
+            edges in mesh. For further details see VTK vtkWindowedSincPolyDataFilter documentation.
+        target_reduction: Mesh decimation parameter. Float in range [0,1].
+            Target reduction is used during mesh decimation via
             vtkQuadricDecimation to reduce the number of triangles in a triangle mesh, forming a good approximation to
             the original geometry. Values closer to 1 indicate larger reduction and smaller mesh file size. Note that
             target_reduction is expressed as the fraction of the original number of triangles in mesh and so is
             proportional to original mesh size. Note the actual reduction may be less depending on triangulation and
             topological constraints. For further details see VTK vtkQuadricDecimation documentation.
-        smoothing_iterations: the number of iterations that mesh smoothing and decimation is run.
+        smoothing_iterations:  Mesh smoothing parameter.
+            The number of iterations that mesh smoothing and decimation is run.
             If smoothing_iterations > 1, the decimated result is used as input for subsequent smoothing rounds.
             Recommended to start with 1 iteration and increase if resulting smoothing is insufficient. For each
             iteration after the first, the passband is reduced and feature_angle is increased incrementally to
@@ -142,7 +157,7 @@ def surface_mesh_multiscale(
             iteration will use parameters (0.005, 165, 0.1), the third (0.0025, 170, 0.1), etc. Maximum feature_angle
             is capped at 180. Note that additional iterations usually do not significantly add to processing time as
             the number of mesh verteces is typically significantly reduced after the first decimation iteration.
-        save_labels: if True, saves the calculated 3D label map as label map in 'labels' with suffix '_3d'
+
 
     """
     logger.info(
@@ -151,68 +166,55 @@ def surface_mesh_multiscale(
         f"{label_name=}."
     )
 
+    if multiscale is True and group_by is None:
+        raise ValueError(f"Multiscale calculation is not possible without a provided group_by label for parent objects."
+                         f" Check task inputs.")
+
+    if group_by in ["", " ", "   ",]:
+        raise ValueError(f"Input group_by label name is not valid. Check task inputs.")
+
     # always use highest resolution label
     level = 0
 
     # Lazily load zarr array for reference cycle
     # load well image as dask array e.g. for nuclear segmentation
-    r0_dask = da.from_zarr(f"{zarr_url}/labels/{label_name}/{level}")
+    label_dask = da.from_zarr(f"{zarr_url}/labels/{label_name}/{level}")
 
     # Read ROIs of objects
-    r0_adata = ad.read_zarr(f"{zarr_url}/tables/{roi_table}")
+    roi_adata = ad.read_zarr(f"{zarr_url}/tables/{roi_table}")
 
     # Read Zarr metadata
-    r0_ngffmeta = load_NgffImageMeta(f"{zarr_url}/labels/{label_name}")
-    r0_xycoars = r0_ngffmeta.coarsening_xy  # need to know when building new pyramids
-    r0_pixmeta = r0_ngffmeta.get_pixel_sizes_zyx(level=level)
+    label_ngffmeta = load_NgffImageMeta(f"{zarr_url}/labels/{label_name}")
+    label_xycoars = label_ngffmeta.coarsening_xy  # need to know when building new pyramids
+    label_pixmeta = label_ngffmeta.get_pixel_sizes_zyx(level=level)
 
     # Create list of indices for 3D ROIs spanning the entire Z direction
-    r0_idlist = convert_ROI_table_to_indices(
-        r0_adata,
+    # Note that this ROI list is generated based on the input ROI table; if the input ROI table is for the group_by
+    # objects, then label regions will be loaded based on the group_by ROIs
+    roi_idlist = convert_ROI_table_to_indices(
+        roi_adata,
         level=level,
-        coarsening_xy=r0_xycoars,
-        full_res_pxl_sizes_zyx=r0_pixmeta,
+        coarsening_xy=label_xycoars,
+        full_res_pxl_sizes_zyx=label_pixmeta,
     )
 
-    check_valid_ROI_indices(r0_idlist, roi_table)
+    check_valid_ROI_indices(roi_idlist, roi_table)
 
-    if len(r0_idlist) == 0:
+    if len(roi_idlist) == 0:
         logger.warning("Well contains no objects")
 
-    # initialize new zarr for 3d object label image
-    # save as same dimensions as nuclear labels from which they are calculated
-    output_label_name = label_name_obj + '_3d'
-    output_roi_table_name = roi_table + '_3d'
+    if multiscale:
+        # Initialize parameters to save the newly calculated label map
+        # Save with same dimensions as child labels from which they are calculated
 
-    if save_labels:
-        shape = r0_dask.shape
-        chunks = r0_dask.chunksize
-        label_dtype = np.uint32
-        store = zarr.storage.FSStore(f"{zarr_url}/labels/{output_label_name}/0")
+        output_label_name = f"{group_by}_from_{label_name}"
+        output_roi_table_name = f"{group_by}_ROI_table_from_{label_name}"
 
-        if len(shape) != 3 or len(chunks) != 3 or shape[0] == 1:
-            raise ValueError('Expecting 3D image')
+        shape = label_dask.shape
+        chunks = label_dask.chunksize
 
-        # Add metadata to labels group
-        # Get the label_attrs correctly
-        # Note that the new label metadata matches the nuc metadata
-        label_attrs = get_zattrs(zarr_url=f"{zarr_url}/labels/{label_name}")
-        _ = prepare_label_group(
-            image_group=zarr.group(zarr_url),
-            label_name=output_label_name,
-            overwrite=True,
-            label_attrs=label_attrs,
-            logger=logger,
-        )
-
-        new_label3d_array = zarr.create(
-            shape=shape,
-            chunks=chunks,
-            dtype=label_dtype,
-            store=store,
-            overwrite=True,
-            dimension_separator="/",
-        )
+        new_label3d_array = initialize_new_label(zarr_url, shape, chunks, np.uint32, label_name,
+                                                 output_label_name, logger)
 
         logger.info(f"Mask will have shape {shape} and chunks {chunks}")
 
@@ -223,164 +225,143 @@ def surface_mesh_multiscale(
     # Filter nuclei by parent mask ###
     ##############
 
-    # nuclei are masked by parent object (e.g. organoid) to only select nuclei belonging to parent.
-    # load well image as dask array for parent objects
-    r0_dask_parent = da.from_zarr(f"{zarr_url}/labels/{label_name_obj}/{level}")
+    if group_by is not None:
+        # Load group_by object segmentation to mask child objects by parent group_by object
+        # Load well image as dask array for parent objects
+        groupby_dask = da.from_zarr(f"{zarr_url}/labels/{group_by}/{level}")
 
-    # Read Zarr metadata
-    r0_ngffmeta_parent = load_NgffImageMeta(f"{zarr_url}/labels/{label_name_obj}")
-    r0_xycoars_parent = r0_ngffmeta_parent.coarsening_xy
-    r0_pixmeta_parent = r0_ngffmeta_parent.get_pixel_sizes_zyx(level=level)
+        # Read Zarr metadata
+        groupby_ngffmeta = load_NgffImageMeta(f"{zarr_url}/labels/{group_by}")
+        groupby_xycoars = groupby_ngffmeta.coarsening_xy
+        groupby_pixmeta = groupby_ngffmeta.get_pixel_sizes_zyx(level=level)
 
-    r0_idlist_parent = convert_ROI_table_to_indices(
-        r0_adata,
-        level=level,
-        coarsening_xy=r0_xycoars_parent,
-        full_res_pxl_sizes_zyx=r0_pixmeta_parent,
-    )
+        groupby_idlist = convert_ROI_table_to_indices(
+            roi_adata,
+            level=level,
+            coarsening_xy=groupby_xycoars,
+            full_res_pxl_sizes_zyx=groupby_pixmeta,
+        )
 
-    check_valid_ROI_indices(r0_idlist_parent, roi_table)
+        check_valid_ROI_indices(groupby_idlist, roi_table)
 
-    r0_labels = r0_adata.obs_vector('label')
-    # initialize variables
-    compute = True  # convert to numpy array from dask
-
-    # for each parent object (e.g. organoid) in r0...
+    # Get labels to iterate over
+    roi_labels = roi_adata.obs_vector('label')
+    total_label_count = len(roi_labels)
+    compute = True
     sphericity_flag = 0
     object_count = 0
-    for row in r0_adata.obs_names:
-        row_int = int(row)
-        r0_org_label = r0_labels[row_int]
-        region = convert_indices_to_regions(r0_idlist[row_int])
+    mesh_folder_name = None
 
-        # load nuclear label image for object in reference round
+    logger.info(f"Starting iteration over {total_label_count} detected objects in ROI table.")
+
+    # For each object in input ROI table...
+    for row in roi_adata.obs_names:
+        row_int = int(row)
+        label_str = roi_labels[row_int]
+        region = convert_indices_to_regions(roi_idlist[row_int])
+
+        # Load label image of label_name object as numpy array
         seg = load_region(
-            data_zyx=r0_dask,
+            data_zyx=label_dask,
             region=region,
             compute=compute,
         )
 
-        seg = mask_by_parent_object(seg, r0_dask_parent, r0_idlist_parent, row_int, r0_org_label)
+        if group_by is not None:
+            # Mask objects by parent group_by object
+            seg = mask_by_parent_object(seg, groupby_dask, groupby_idlist, row_int, label_str)
+        else:
+            # Check that label exists in object
+            if float(label_str) not in seg:
+                raise ValueError(f'Object ID {label_str} does not exist in loaded segmentation image. Does input ROI '
+                                 f'table match label map?')
+            # Select label that corresponds to current object, set all other objects to 0
+            seg[seg != float(label_str)] = 0
 
         ##############
         # Perform label fusion and edge detection  ###
         ##############
 
-        # calculate mean volume of nuclei or cells in object
-        size_mean = calculate_mean_volume(seg)
+        if multiscale:
 
-        # expand labels in each z-slice and combine together
-        seg_fill = np.zeros_like(seg)
+            # Generate new 3D label image
+            edges_canny, expandby_pix, iterations, anisotropic_sigma, padded_zslice_count = (
+                run_label_fusion(seg, expandby_factor, sigma_factor, label_pixmeta, canny_threshold))
 
-        # the number of pixels by which to expand is a function of average nuclear size within the organoid.
-        expandby_pix = int(round(expandby_factor * equivalent_diam(size_mean)))
-        if expandby_pix == 0:
-            logger.warning("Equivalent diameter is 0 or negative, thus labels not expanded. Check segmentation quality")
+            # Perform checks
+            if expandby_pix == 0:
+                logger.warning("Equivalent diameter is 0 or negative, thus labels not expanded. "
+                               "Check segmentation quality")
+            # Check whether new label map has a single value, otherwise result is discarded and object skipped
+            maxvalue = np.amax(edges_canny)
+            if maxvalue != 1:
+                if maxvalue == 0:
+                    logger.warning(f'No 3D label and mesh saved for object {label_str}. '
+                                   f'Result of canny edge detection is empty')
+                    continue
+                else:  # for max values greater than 1 or less than 0
+                    logger.warning(f'No 3D label and mesh saved for object {label_str}. Detected {maxvalue} labels. '
+                                   f'Is the shape composed of {maxvalue} distinct objects?')
+                    continue
+            logger.info(
+                f"Successfully calculated 3D label map for object label {label_str} using parameters:"
+                f"\n\texpanded by {expandby_pix} pix, \n\teroded by {iterations*2} pix, "
+                f"\n\tgaussian blurred with sigma = {np.round(anisotropic_sigma,1)}"
+            )
+            if padded_zslice_count > 0:
+                logger.info(f'Object {label_str} has non-zero pixels touching image border. Image processing '
+                            f'completed successfully, however consider reducing sigma_factor '
+                            f'or increasing the canny_threshold to reduce risk of cropping shape edges.')
 
-        iterations = int(round(expandby_pix / 2))
-
-        # loop over each zslice and expand the labels, then fill holes
-        for i, zslice in enumerate(seg):
-            zslice = expand_labels(zslice, expandby_pix)  # expand labels in each zslice in xy
-            zslice = binary_fill_holes(zslice)  # fill holes
-            # to revert the expansion, erode by half of the expanded pixels ...
-            # ...(since disk(1) has a radius of 1, i.e. diameter of 2)
-            seg_fill[i, :, :] = binary_erosion(zslice, disk(1), iterations=iterations)  # erode down to original size
-
-        # 3D gaussian blur
-        seg_fill_8bit = (seg_fill * 255).astype(np.uint8)
-
-        # calculate sigma based on z,y,x pixel spacing metadata, so that sigma scales with anisotropy
-        pixel_anisotropy = r0_pixmeta[0]/np.array(r0_pixmeta)  # (z, y, x) where z is normalized to 1, e.g. (1, 3, 3)
-        sigma = tuple([sigma_factor * x for x in pixel_anisotropy])
-        blurred = gaussian(seg_fill_8bit, sigma=sigma, preserve_range=False)
-
-        # Canny filter to detect gaussian edges
-        edges_canny = np.zeros_like(blurred)
-        # threshold
-        blurred[blurred < canny_threshold] = 0  # was 0.15, 0.3
-
-        padded_zslice_count = 0
-        for i, zslice in enumerate(blurred):
-            padded = False
-            if np.count_nonzero(zslice) == 0:  # if all values are 0, skip this zslice
-                continue
-            else:
-                image_border = load_border_values(zslice)
-                # Pad z-slice border with 0 so that Canny filter generates a closed surface when there are non-zero
-                # values at edge
-                if np.any(image_border):
-                    zslice = np.pad(zslice, 1)
-                    padded_zslice_count += 1
-                    padded = True
-
-                edges = canny(zslice)
-                edges = binary_fill_holes(edges)
-                if padded:
-                    edges = remove_border(edges)
-                edges_canny[i, :, :] = edges
-
-        edges_canny = (edges_canny * 255).astype(np.uint8)
-
-        edges_canny = label(remove_small_objects(edges_canny, int(expandby_pix/2)))
-
-        # Check whether new label map has a single value, otherwise result is discarded and object skipped
-        maxvalue = np.amax(edges_canny)
-        if maxvalue != 1:
-            if maxvalue == 0:
-                logger.warning(f'No 3D label and mesh saved for object {r0_org_label}. '
-                               f'Result of canny edge detection is empty')
-                continue
-            else:  # for max values greater than 1 or less than 0
-                logger.warning(f'No 3D label and mesh saved for object {r0_org_label}. Detected {maxvalue} labels. '
-                               f'Is the shape composed of {maxvalue} distinct objects?')
-                continue
-
-        logger.info(
-            f"Successfully calculated 3D label map for object label {r0_org_label} using parameters:"
-            f"\n\texpanded by {expandby_pix} pix, \n\teroded by {iterations*2} pix, "
-            f"\n\tgaussian blurred with sigma = {np.round(sigma,1)}"
-        )
-
-        if padded_zslice_count > 0:
-            logger.info(f'Object {r0_org_label} has non-zero pixels touching image border. Image processing '
-                        f'completed successfully, however consider reducing sigma_factor '
-                        f'or increasing the canny_threshold to reduce risk of cropping shape edges.')
-        object_count += 1
         ##############
         # Calculate and save mesh  ###
         ##############
 
-        if calculate_mesh:
-            # Make mesh with vtkDiscreteFlyingEdges3D algorithm
-            # Set spacing to ome-zarr pixel spacing metadata. Mesh will be in physical units (um)
-            spacing = tuple(np.array(r0_pixmeta)) # z,y,x e.g. (0.6, 0.216, 0.216)
+        if save_mesh and multiscale:
+            # Mesh calculation for a new 3D object calculated from child objects (multiscale)
+            label_image = edges_canny
+            mesh_folder_name = f"{group_by}_from_{label_name}"
+            object_name = label_str
+            sphericity_check = True
+            save_as_stl = True
+        elif save_mesh and group_by is not None and multiscale is False:
+            # Mesh calculation for existing child objects that are part of the group_by object
+            label_image = seg
+            mesh_folder_name = f"{label_name}_grouped"
+            object_name = label_str
+            sphericity_check = False
+            # Save as .vtp, since .stl does not support multiple object labels
+            save_as_stl = False
+        elif save_mesh and group_by is None and multiscale is False:
+            label_image = seg
+            mesh_folder_name = f"{label_name}"
+            object_name = label_str
+            sphericity_check = True
+            save_as_stl = True
+        else:
+            logger.info(f"Skipping mesh saving. If this is undesired, did you input correct labels and ROI tables?")
+            continue
 
-            # Pad border with 0 so that the mesh forms a manifold
-            edges_canny_padded = np.pad(edges_canny, 1)
-            mesh_polydata_organoid = labels_to_mesh(edges_canny_padded, spacing,
-                                                    polynomial_degree=polynomial_degree,
-                                                    pass_band_param=passband,
-                                                    feature_angle=feature_angle,
-                                                    target_reduction=target_reduction,
-                                                    smoothing_iterations=smoothing_iterations,
-                                                    margin=5,
-                                                    show_progress=False)
-            # Save mesh
-            save_transform_path = f"{zarr_url}/meshes/{label_name_obj}_from_{label_name}"
-            os.makedirs(save_transform_path, exist_ok=True)
-            # Save name is the organoid label id
-            save_name = f"{int(r0_org_label)}.stl"
-            export_stl_polydata(os.path.join(save_transform_path, save_name), mesh_polydata_organoid)
+        # Check that label image contains an object
+        if np.amax(label_image) == 0:
+            logger.warning(f"Label image is empty. Skipping mesh saving!")
+            continue
 
-            logger.info(f"Successfully generated surface mesh for object label {r0_org_label}")
+        mesh_polydata = compute_and_save_mesh(label_image, label_pixmeta, polynomial_degree, passband, feature_angle,
+                                              target_reduction, smoothing_iterations, zarr_url,
+                                              mesh_folder_name, object_name, save_as_stl)
 
-            volume, surface_area = get_mass_properties(mesh_polydata_organoid)
+        object_count += 1
+
+        logger.info(f"Successfully generated surface mesh for object label {label_str}")
+
+        if sphericity_check:
+            volume, surface_area = get_mass_properties(mesh_polydata)
             sphr = mesh_sphericity(volume, surface_area)
 
             if sphr > 1.2:
                 logger.warning(
-                    f"Detected high sphericity = {np.round(sphr,3)} for object {r0_org_label}. "
+                    f"Detected high sphericity = {np.round(sphr,3)} for object {label_str}. "
                     f"Check mesh quality."
                 )
                 sphericity_flag += 1
@@ -389,78 +370,36 @@ def surface_mesh_multiscale(
         # Save labels and make ROI table ###
         ##############
 
-        if save_labels:
-            # store labels as new label map in zarr
-            # note that pixels of overlap in the case where two meshes are touching are overwritten by the last
+        if multiscale:
+            # Store labels as new label map in zarr
+            # Note that pixels of overlap in the case where two meshes are touching are overwritten by the last
             # written object
-            # thus meshes are the most accurate representation of surface, labels may be cropped
+            # Thus meshes are the most accurate representation of surface, labels may be cropped
 
-            # # TODO delete
-            # fake_numpy = np.zeros_like(seg)
-            # fake_numpy[1,2,2] = 2
-            #
-            # # Compute and store 0-th level to disk
-            # da.array(fake_numpy).to_zarr(
-            #     url=new_label3d_array,
-            #     region=region,
-            #     compute=True,
-            # )
-
-            # load dask from disk, will contain rois of the previously processed objects within for loop
-            new_label3d_dask = da.from_zarr(f"{zarr_url}/labels/{output_label_name}/0")
-            # load region of current object from disk, will include any previously processed neighboring objects
-            seg_ondisk = load_region(
-                data_zyx=new_label3d_dask,
-                region=region,
-                compute=compute,
-            )
-
-            # check that dimensions of rois match
-            if seg_ondisk.shape != edges_canny.shape:
-                raise ValueError('Computed label image must match image dimensions of bounding box during saving')
-
-            # convert edge detection label image value to match object label id
-            edges_canny_label = edges_canny * int(r0_org_label)
-            # use fmax so that if one of the elements being compared is a NaN, then the non-nan element is returned
-            edges_canny_label_tosave = np.fmax(edges_canny_label, seg_ondisk)
-
-            # Compute and store 0-th level of new 3d label map to disk
-            da.array(edges_canny_label_tosave).to_zarr(
-                url=new_label3d_array,
-                region=region,
-                compute=True,
-            )
-
-            # make new ROI table
-            origin_zyx = convert_indices_to_origin_zyx(r0_idlist[row_int])
-
-            bbox_df = array_to_bounding_box_table(
-                edges_canny_label,
-                r0_pixmeta,
-                origin_zyx=origin_zyx,
-            )
-
+            bbox_df = save_new_label_with_overlap(edges_canny, label_str, new_label3d_array, zarr_url,
+                                                  output_label_name, region, label_pixmeta, compute,
+                                                  roi_idlist, row_int)
             bbox_dataframe_list.append(bbox_df)
 
             overlap_list = []
             for df in bbox_dataframe_list:
                 overlap_list.extend(
-                    get_overlapping_pairs_3D(df, r0_pixmeta)
+                    get_overlapping_pairs_3D(df, label_pixmeta)
                 )
+
             if len(overlap_list) > 0:
                 logger.warning(
                     f"{len(overlap_list)} bounding-box pairs overlap"
                 )
 
-    # Starting from on-disk highest-resolution data, build and write to disk a
-    # pyramid of coarser levels
-    if save_labels:
+    # Starting from on-disk highest-resolution data, build and write to disk a pyramid of coarser levels
+    if multiscale:
 
         build_pyramid(
             zarrurl=f"{zarr_url}/labels/{output_label_name}",
             overwrite=True,
-            num_levels=r0_ngffmeta.num_levels,
-            coarsening_xy=r0_ngffmeta.coarsening_xy,
+            num_levels=label_ngffmeta.num_levels,
+            coarsening_xy=label_ngffmeta.coarsening_xy,
             chunksize=chunks,
             aggregation_function=np.max,
         )
@@ -485,7 +424,7 @@ def surface_mesh_multiscale(
             table_attrs=table_attrs,
         )
 
-    if calculate_mesh:
+    if save_mesh and multiscale:
         # Check how many objects out of well have a sphericity flag
         logger.info(f"{sphericity_flag} out of {object_count} meshed objects are flagged for high sphericity, "
                     f"which can indicate a highly complex mesh surface.")
@@ -493,8 +432,10 @@ def surface_mesh_multiscale(
             # if more than 10% of objects have a sphericity flag, raise warning
             logger.warning(f"Detected high fraction of suspicious organoid meshes in well. Inspect mesh quality "
                            f"and tune task parameters for label expansion and mesh smoothing accordingly. ")
-
-    logger.info(f"End surface_mesh_multiscale task for {zarr_url}/labels/{output_label_name}")
+    if save_mesh:
+        logger.info(f"Meshes saved in folder name {mesh_folder_name}")
+    logger.info(f"Successfully processed {object_count} out of {total_label_count} labels.")
+    logger.info(f"End surface_mesh_multiscale task for {zarr_url}/labels/{label_name}")
 
     return {}
 
