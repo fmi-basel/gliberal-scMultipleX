@@ -513,79 +513,78 @@
             "title": "Label Name",
             "default": "nuc",
             "type": "string",
-            "description": "Label name of child objects that will be used for multiscale surface estimation, e.g. `nuc`."
+            "description": "Label name of segmentation for which mesh is calculated. When Multiscale = True, this is the label name of child objects (e.g. nuclei) that will be used for multiscale surface estimation."
           },
-          "label_name_obj": {
-            "title": "Label Name Obj",
-            "default": "org_linked",
+          "group_by": {
+            "title": "Group By",
             "type": "string",
-            "description": "Label name of segmented objects that are parents of label_name e.g. `org`."
+            "description": "Label name of segmentated objects that are parents of label_name. If None (default), no grouping is applied and meshes are calculated for the input object (label_name). Instead, if a group_by label is specified, the label_name objects will be masked and grouped by this object. For example, when group_by = 'org', the nuclear segmentation is masked by the organoid parent and all nuclei belonging to the parent are loaded as a label image. Thus, when Multiscale = False, the calculated mesh contains multiple child objects. When Multiscale = True, a new labelmap is generated as a result of child fusion to generate the 3D parent (organoid-level) shape."
           },
           "roi_table": {
             "title": "Roi Table",
             "default": "org_ROI_table_linked",
             "type": "string",
-            "description": "Name of the ROI table that corresponds to label_name_obj. The task loops over ROIs in this table to load the corresponding child objects."
+            "description": "Name of the ROI table used to iterate over objects and load object regions. If group_by = None, this is the ROI table that corresponds to the label_name objects. If group_by is passed, this is the ROI table for the group_by objects, e.g. org_ROI_table."
+          },
+          "multiscale": {
+            "title": "Multiscale",
+            "default": true,
+            "type": "boolean",
+            "description": "if True, a new labelmap is generated as a result of child fusion to generate the 3D parent (organoid-level) shape. This label output is called {group_by}_from_{label_name}, with corresponding ROI table name {group_by}_ROI_table_from_{label_name}. This label image is optionally saved as a mesh if save_mesh = True. If Multiscale = False, no multiscale label map computation is performed and a smoothened mesh of the input label_name is generated."
+          },
+          "save_mesh": {
+            "title": "Save Mesh",
+            "default": true,
+            "type": "boolean",
+            "description": "if True, calculates and saves mesh on disk in the 'meshes' folder within zarr structure. Meshes saved as '.stl', except for the case of multi-object meshed (e.g. multiple nuclei within a parent organoid) that are saved as '.vtp' to preserve label ID information. Filename corresponds to parent object label id, or to label id in the case when group_by = None."
           },
           "expandby_factor": {
             "title": "Expandby Factor",
             "default": 0.6,
             "type": "number",
-            "description": "multiplier that specifies pixels by which to expand each nuclear mask for merging, float in range [0, 1 or higher], e.g. 0.2 means that 20% of mean of nuclear equivalent diameter is used."
+            "description": "only used if Multiscale = True. Multiplier that specifies pixels by which to expand each nuclear mask for merging, float in range [0, 1 or higher], e.g. 0.2 means that 20% of mean of nuclear equivalent diameter is used."
           },
           "sigma_factor": {
             "title": "Sigma Factor",
             "default": 5,
             "type": "number",
-            "description": "float that specifies sigma (standard deviation, in pixels) for Gaussian kernel used for blurring to smoothen label image prior to edge detection. Higher values correspond to more blurring. Recommended range 1-8."
+            "description": "only used if Multiscale = True. Float that specifies sigma (standard deviation, in pixels) for Gaussian kernel used for blurring to smoothen label image prior to edge detection. Higher values correspond to more blurring. Recommended range 5-15."
           },
           "canny_threshold": {
             "title": "Canny Threshold",
             "default": 0.3,
             "type": "number",
-            "description": "image values below this threshold are set to 0 after Gaussian blur. float in range [0,1]. Higher values result in tighter fit of mesh to nuclear surface"
-          },
-          "calculate_mesh": {
-            "title": "Calculate Mesh",
-            "default": true,
-            "type": "boolean",
-            "description": "if True, saves the mesh as .stl on disk in meshes/[labelname] folder within zarr structure. Filename corresponds to object label id"
+            "description": "only used if Multiscale = True. Image values below this threshold are set to 0 after Gaussian blur. float in range [0,1]. Higher values result in tighter fit of mesh to nuclear surface."
           },
           "polynomial_degree": {
             "title": "Polynomial Degree",
             "default": 30,
             "type": "integer",
-            "description": "the number of polynomial degrees during surface mesh smoothing with vtkWindowedSincPolyDataFilter determines the maximum number of smoothing passes. This number corresponds to the degree of the polynomial that is used to approximate the windowed sinc function. Usually 10-20 iteration are sufficient. Higher values have little effect on smoothing. For further details see VTK vtkWindowedSincPolyDataFilter documentation."
+            "description": "Mesh smoothing parameter. The number of polynomial degrees during surface mesh smoothing with vtkWindowedSincPolyDataFilter determines the maximum number of smoothing passes. This number corresponds to the degree of the polynomial that is used to approximate the windowed sinc function. Usually 10-20 iteration are sufficient. Higher values have little effect on smoothing. For further details see VTK vtkWindowedSincPolyDataFilter documentation."
           },
           "passband": {
             "title": "Passband",
             "default": 0.01,
             "type": "number",
-            "description": "float in range [0,2] that specifies the PassBand for the windowed sinc filter in vtkWindowedSincPolyDataFilter during mesh smoothing. Lower passband values produce more smoothing, due to filtering of higher frequencies. For further details see VTK vtkWindowedSincPolyDataFilter documentation."
+            "description": "Mesh smoothing parameter. Float in range [0,2] that specifies the PassBand for the windowed sinc filter in vtkWindowedSincPolyDataFilter during mesh smoothing. Lower passband values produce more smoothing, due to filtering of higher frequencies. For further details see VTK vtkWindowedSincPolyDataFilter documentation."
           },
           "feature_angle": {
             "title": "Feature Angle",
             "default": 160,
             "type": "integer",
-            "description": "int in range [0,180] that specifies the feature angle for sharp edge identification used for vtk FeatureEdgeSmoothing. Higher values result in more smoothened edges in mesh. For further details see VTK vtkWindowedSincPolyDataFilter documentation."
+            "description": "Mesh smoothing parameter. Integer in range [0,180] that specifies the feature angle for sharp edge identification used for vtk FeatureEdgeSmoothing. Higher values result in more smoothened edges in mesh. For further details see VTK vtkWindowedSincPolyDataFilter documentation."
           },
           "target_reduction": {
             "title": "Target Reduction",
             "default": 0.98,
             "type": "number",
-            "description": "float in range [0,1]. Target reduction is used during mesh decimation via vtkQuadricDecimation to reduce the number of triangles in a triangle mesh, forming a good approximation to the original geometry. Values closer to 1 indicate larger reduction and smaller mesh file size. Note that target_reduction is expressed as the fraction of the original number of triangles in mesh and so is proportional to original mesh size. Note the actual reduction may be less depending on triangulation and topological constraints. For further details see VTK vtkQuadricDecimation documentation."
+            "description": "Mesh decimation parameter. Float in range [0,1]. Target reduction is used during mesh decimation via vtkQuadricDecimation to reduce the number of triangles in a triangle mesh, forming a good approximation to the original geometry. Values closer to 1 indicate larger reduction and smaller mesh file size. Note that target_reduction is expressed as the fraction of the original number of triangles in mesh and so is proportional to original mesh size. Note the actual reduction may be less depending on triangulation and topological constraints. For further details see VTK vtkQuadricDecimation documentation."
           },
           "smoothing_iterations": {
             "title": "Smoothing Iterations",
             "default": 1,
             "type": "integer",
-            "description": "the number of iterations that mesh smoothing and decimation is run. If smoothing_iterations > 1, the decimated result is used as input for subsequent smoothing rounds. Recommended to start with 1 iteration and increase if resulting smoothing is insufficient. For each iteration after the first, the passband is reduced and feature_angle is increased incrementally to enhance smoothing. Specifically, the passband is reduced by factor 1/(2^n), and the feature_angle is increased by an increment of (5 * n), where n = iteration round (n=0 is the first iteration). The target_reduction is fixed to 0.1 smoothing_iterations > 1. For example if user inputs (0.01, 160, 0.98) for (passband, feature_angle, target_reduction), the second iteration will use parameters (0.005, 165, 0.1), the third (0.0025, 170, 0.1), etc. Maximum feature_angle is capped at 180. Note that additional iterations usually do not significantly add to processing time as the number of mesh verteces is typically significantly reduced after the first decimation iteration."
-          },
-          "save_labels": {
-            "title": "Save Labels",
-            "default": true,
-            "type": "boolean",
-            "description": "if True, saves the calculated 3D label map as label map in 'labels' with suffix '_3d'"
+            "description": " Mesh smoothing parameter. The number of iterations that mesh smoothing and decimation is run. If smoothing_iterations > 1, the decimated result is used as input for subsequent smoothing rounds. Recommended to start with 1 iteration and increase if resulting smoothing is insufficient. For each iteration after the first, the passband is reduced and feature_angle is increased incrementally to enhance smoothing. Specifically, the passband is reduced by factor 1/(2^n), and the feature_angle is increased by an increment of (5 * n), where n = iteration round (n=0 is the first iteration). The target_reduction is fixed to 0.1 smoothing_iterations > 1. For example if user inputs (0.01, 160, 0.98) for (passband, feature_angle, target_reduction), the second iteration will use parameters (0.005, 165, 0.1), the third (0.0025, 170, 0.1), etc. Maximum feature_angle is capped at 180. Note that additional iterations usually do not significantly add to processing time as the number of mesh verteces is typically significantly reduced after the first decimation iteration."
           }
         },
         "required": [
