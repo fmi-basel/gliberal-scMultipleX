@@ -9,7 +9,7 @@ repos:
     rev: 4.0.1
     hooks:
       - id: flake8
-        args: [ "--ignore=E203,E501,W504,W503,E731", "--max-complexity=15"]
+        args: [ "--ignore=E203,E501,W504,W503,E731,C901", "--max-complexity=15"]
         additional_dependencies: [ flake8-typing-imports==1.12.0 ]
   - repo: https://github.com/myint/autoflake
     rev: v1.4

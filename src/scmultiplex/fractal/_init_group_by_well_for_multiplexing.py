@@ -14,14 +14,15 @@ Applies the multiplexing translation to all ROI tables
 """
 import logging
 
-from fractal_tasks_core.tasks.init_group_by_well_for_multiplexing import init_group_by_well_for_multiplexing
-from pydantic.decorator import validate_arguments
-
+from fractal_tasks_core.tasks.init_group_by_well_for_multiplexing import (
+    init_group_by_well_for_multiplexing,
+)
+from pydantic import validate_call
 
 logger = logging.getLogger(__name__)
 
 
-@validate_arguments
+@validate_call
 def _init_group_by_well_for_multiplexing(
     *,
     # Fractal parameters
@@ -49,9 +50,11 @@ def _init_group_by_well_for_multiplexing(
 
     # reference round is given as zarr url, single round for the zarr_url
     # all rounds are given as init_args
-    return init_group_by_well_for_multiplexing(zarr_urls=zarr_urls,
-                                               zarr_dir=zarr_dir,
-                                               reference_acquisition=reference_acquisition)
+    return init_group_by_well_for_multiplexing(
+        zarr_urls=zarr_urls,
+        zarr_dir=zarr_dir,
+        reference_acquisition=reference_acquisition,
+    )
 
 
 if __name__ == "__main__":
