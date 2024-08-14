@@ -8,12 +8,18 @@
 #                                                                            #
 ##############################################################################
 
+import math
+
 import numpy as np
 import scipy
 import scipy.stats
-import math
-
-from skimage.measure import marching_cubes, mesh_surface_area, label, moments, regionprops
+from skimage.measure import (
+    label,
+    marching_cubes,
+    mesh_surface_area,
+    moments,
+    regionprops,
+)
 from skimage.morphology import binary_erosion
 
 from scmultiplex.meshing.MeshFunctions import get_max_length
@@ -38,20 +44,17 @@ def fixed_percentiles(region_mask, intensity):
 
 
 def skewness(region_mask, intensity):
-    """Return skewness of pixel intensity distribution of raw image masked by segmentation
-    """
+    """Return skewness of pixel intensity distribution of raw image masked by segmentation"""
     return scipy.stats.skew(intensity[region_mask])
 
 
 def kurtos(region_mask, intensity):
-    """Return kurtosis of pixel intensity distribution of raw image masked by segmentation
-    """
+    """Return kurtosis of pixel intensity distribution of raw image masked by segmentation"""
     return scipy.stats.kurtosis(intensity[region_mask])
 
 
 def stdv(region_mask, intensity):
-    """Return standard deviation of pixel intensity distribution of raw image masked by segmentation
-    """
+    """Return standard deviation of pixel intensity distribution of raw image masked by segmentation"""
     # ddof=1 for sample var
     return np.std(intensity[region_mask], ddof=1)
 
@@ -81,8 +84,8 @@ def convex_hull_area_resid(prop_2D):
 # https://github.com/angelolab/ark-analysis/blob/main/src/ark/segmentation/regionprops_extraction.py
 def convex_hull_centroid_dif(prop_2D, spacing):
     """Return the normalized euclidian distance between the centroid of the object label
-        and the centroid of the convex hull
-        Normalize to the object area
+    and the centroid of the convex hull
+    Normalize to the object area
     """
 
     if len(spacing) != 2:
@@ -91,19 +94,31 @@ def convex_hull_centroid_dif(prop_2D, spacing):
     # Use image that has same size as bounding box (not original seg)
     object_image = prop_2D.image
     object_moments = moments(object_image)
-    object_centroid = np.array([object_moments[1, 0] / object_moments[0, 0], object_moments[0, 1] / object_moments[0, 0]])
+    object_centroid = np.array(
+        [
+            object_moments[1, 0] / object_moments[0, 0],
+            object_moments[0, 1] / object_moments[0, 0],
+        ]
+    )
 
     # Convex hull image has same size as bounding box
     convex_image = prop_2D.convex_image
     convex_moments = moments(convex_image)
-    convex_centroid = np.array([convex_moments[1, 0] / convex_moments[0, 0], convex_moments[0, 1] / convex_moments[0, 0]])
+    convex_centroid = np.array(
+        [
+            convex_moments[1, 0] / convex_moments[0, 0],
+            convex_moments[0, 1] / convex_moments[0, 0],
+        ]
+    )
 
     # rescale to correct scaling
     object_centroid_scaled = object_centroid * spacing
     convex_centroid_scaled = convex_centroid * spacing
 
     # calculate 2-norm (Euclidean distance) and normalize
-    centroid_dist = np.linalg.norm(object_centroid_scaled - convex_centroid_scaled) / np.sqrt(prop_2D.area)
+    centroid_dist = np.linalg.norm(
+        object_centroid_scaled - convex_centroid_scaled
+    ) / np.sqrt(prop_2D.area)
 
     return centroid_dist
 
@@ -118,16 +133,14 @@ def circularity(prop_2D):
 
 
 def aspect_ratio(prop):
-    """Return the ratio of major axis length to equivalent diameter
-    """
+    """Return the ratio of major axis length to equivalent diameter"""
     return prop.major_axis_length / prop.equivalent_diameter
 
 
 def minor_major_axis_ratio(prop):
-    """Return the ratio of major to minor axis
-    """
+    """Return the ratio of major to minor axis"""
     if prop.major_axis_length == 0:
-        return np.float('NaN')
+        return np.float64("NaN")
     else:
         return prop.minor_axis_length / prop.major_axis_length
 
@@ -156,10 +169,9 @@ def concavity_count(prop_2D, min_area_fraction=0.005):
 
 
 def disconnected_component(mask_2D):
-    """Return boolean True if disconnected components detected in input labelmap
-    """
+    """Return boolean True if disconnected components detected in input labelmap"""
     if len(np.unique(mask_2D)) > 2:
-        raise ValueError('mask must be binary')
+        raise ValueError("mask must be binary")
     disconnected = False
     labeled_mask_img = label(mask_2D, connectivity=2)
     if len(np.unique(labeled_mask_img)) > 2:
@@ -168,11 +180,10 @@ def disconnected_component(mask_2D):
 
 
 def surface_area_marchingcube(mask_3D):
-    """Return surface area of 3D label image
-    """
+    """Return surface area of 3D label image"""
     regionmask_int = mask_3D.astype(np.uint16)
     # add zero-pad on all sides, otherwise mesh is smaller than it should be
-    regionmask_int = np.pad(regionmask_int, 1, 'constant')
+    regionmask_int = np.pad(regionmask_int, 1, "constant")
     verts, faces, normals, values = marching_cubes(regionmask_int, spacing=spacing)
     surface_area = mesh_surface_area(verts, faces)
     return surface_area
@@ -216,7 +227,9 @@ def is_touching_border_xy(labeled_obj, img_shape):
         else:
             return False
     else:
-        raise NotImplementedError("Only 2D and 3D images are supported in is_touching_border_xy")
+        raise NotImplementedError(
+            "Only 2D and 3D images are supported in is_touching_border_xy"
+        )
 
 
 def is_touching_border_z(labeled_obj, img_shape):
@@ -232,20 +245,19 @@ def is_touching_border_z(labeled_obj, img_shape):
         else:
             return False
     else:
-        raise NotImplementedError("Only 3D images are supported in is_touching_border_z")
-
-
-def centroid_weighted_correct(labeled_obj, spacing):
-    centroid_local = labeled_obj.centroid_weighted_local
-    bb_origin = np.array([x.start for x in labeled_obj.slice])
-    bb_origin_scaled = bb_origin * spacing
-    return bb_origin_scaled + centroid_local
+        raise NotImplementedError(
+            "Only 3D images are supported in is_touching_border_z"
+        )
 
 
 def centroid_weighted_correct(labeled_obj):
     centroid_local = labeled_obj.centroid_weighted_local
-    return tuple(idx + slc.start * spc
-                 for idx, slc, spc in zip(centroid_local, labeled_obj.slice, labeled_obj._spacing))
+    return tuple(
+        idx + slc.start * spc
+        for idx, slc, spc in zip(
+            centroid_local, labeled_obj.slice, labeled_obj._spacing
+        )
+    )
 
 
 ########################
@@ -258,10 +270,10 @@ def mesh_equivalent_surface_area(volume):
     Calculate the surface area of a sphere with a given volume.
     """
     if volume < 0:
-        raise ValueError('Cannot calculate radius of sphere with a negative volume')
+        raise ValueError("Cannot calculate radius of sphere with a negative volume")
 
-    radius = (0.75 * volume * (1/math.pi)) ** (1. / 3.)
-    equivalent_sa = 4 * math.pi * (radius ** 2.)
+    radius = (0.75 * volume * (1 / math.pi)) ** (1.0 / 3.0)
+    equivalent_sa = 4 * math.pi * (radius**2.0)
 
     return equivalent_sa
 
@@ -271,7 +283,7 @@ def mesh_equivalent_diameter(volume):
     Calculate equivalent diameter of sphere with a given volume
     """
     try:
-        equiv_diam = 2 * ((0.75 * volume * (1/math.pi)) ** (1. / 3.))
+        equiv_diam = 2 * ((0.75 * volume * (1 / math.pi)) ** (1.0 / 3.0))
     # ValueError is raised when input value is negative
     # in this case set diameter to 0
     except ValueError:
@@ -321,12 +333,14 @@ def mesh_concavity(object_volume, convex_hull_volume):
 
 def mesh_asymmetry(object_volume, object_centroid, convex_hull_centroid):
     """Return the normalized euclidian distance between the centroid of the object point cloud
-        and the centroid of the convex hull
-        Normalize to the cubed root of object volume
+    and the centroid of the convex hull
+    Normalize to the cubed root of object volume
     """
 
     # calculate 2-norm (Euclidean distance) and normalize
-    centroid_dist = np.linalg.norm(object_centroid - convex_hull_centroid) / np.cbrt(object_volume)
+    centroid_dist = np.linalg.norm(object_centroid - convex_hull_centroid) / np.cbrt(
+        object_volume
+    )
 
     return centroid_dist
 
@@ -343,15 +357,15 @@ def mesh_aspect_ratio(object_volume, polydata):
 
 
 def mesh_surface_area_to_volume(object_volume, object_surface_area):
-    """ Return surface are to volume ratio"""
+    """Return surface are to volume ratio"""
     return object_surface_area / object_volume
 
 
 def mesh_surface_area_to_volume_norm(object_volume, object_surface_area):
-    """ Return square root of surface are to cubed root of volume ratio.
+    """Return square root of surface are to cubed root of volume ratio.
     Normalized by factor a so that value is 1.0 for spherical objects
     This metric is invariant to object size, unlike simple surface area to volume ratio
     which scales with 3/radius for spherical objects"""
-    a = (3**(1/3))*((4*np.pi)**(1/6))
-    ratio = (object_surface_area**(1/2)) / (object_volume**(1/3) * a)
+    a = (3 ** (1 / 3)) * ((4 * np.pi) ** (1 / 6))
+    ratio = (object_surface_area ** (1 / 2)) / (object_volume ** (1 / 3) * a)
     return ratio

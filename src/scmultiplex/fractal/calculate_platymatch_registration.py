@@ -11,32 +11,35 @@
 Calculates label-based linking between pairs of multiplexing rounds for segmented objects (e.g. nuclei, cells)
 that are children of linked parent objects (e.g. organoids)
 """
-from typing import Any, Optional
+import logging
+import os
+import sys
+from traceback import print_exc
+from typing import Any
 
 import anndata as ad
 import dask.array as da
-import logging
 import numpy as np
-import os
 import pandas as pd
 import SimpleITK as sitk
-import sys
-
 import zarr
-from fractal_tasks_core.channels import get_channel_from_image_zarr, OmeroChannel, ChannelNotFoundError
-from fractal_tasks_core.tasks.io_models import InitArgsRegistration
-from fractal_tasks_core.upscale_array import upscale_array
-from fractal_tasks_core.tables import write_table
-from pydantic.decorator import validate_arguments
-
-from fractal_tasks_core.channels import ChannelInputModel
+from fractal_tasks_core.channels import (
+    ChannelInputModel,
+    ChannelNotFoundError,
+    OmeroChannel,
+    get_channel_from_image_zarr,
+)
 from fractal_tasks_core.ngff import load_NgffImageMeta
 from fractal_tasks_core.roi import (
     check_valid_ROI_indices,
     convert_indices_to_regions,
     convert_ROI_table_to_indices,
-    load_region)
-
+    load_region,
+)
+from fractal_tasks_core.tables import write_table
+from fractal_tasks_core.tasks.io_models import InitArgsRegistration
+from fractal_tasks_core.upscale_array import upscale_array
+from pydantic import validate_call
 from skimage.measure import regionprops_table
 
 # this is an hack to run platymatch without modifying its code. In some parts of the code
@@ -44,36 +47,36 @@ from skimage.measure import regionprops_table
 # rather than a relative way. Maybe we can create a pull request to switch those import statements to relative
 import scmultiplex
 from scmultiplex.fractal.fractal_helper_functions import extract_acq_info
+from scmultiplex.linking.NucleiLinkingFunctions import (
+    remove_labels,
+    run_affine,
+    run_ffd,
+)
 from scmultiplex.meshing.FilterFunctions import filter_small_sizes_per_round
 
-sys.path.append(os.path.join(scmultiplex.__path__[0], r'platymatch'))
-
-from platymatch.utils.utils import generate_affine_transformed_image
-from scmultiplex.linking.NucleiLinkingFunctions import run_affine, run_ffd, remove_labels
-
-from traceback import print_exc
+sys.path.append(os.path.join(scmultiplex.__path__[0], r"platymatch"))
+from platymatch.utils.utils import generate_affine_transformed_image  # noqa
 
 logger = logging.getLogger(__name__)
 
 
-@validate_arguments
+@validate_call
 def calculate_platymatch_registration(
-        *,
-        # Fractal arguments
-        zarr_url: str,
-        init_args: InitArgsRegistration,
-        # Task-specific arguments
-        seg_channel: ChannelInputModel,
-        label_name_to_register: str = "nuc",
-        label_name_obj: str = "org_linked",
-        roi_table: str = "org_ROI_table_linked",
-        level: int = 0,
-        save_transformation: bool = True,
-        mask_by_parent: bool = True,
-        calculate_ffd: bool = True,
-        volume_filter: bool = True,
-        volume_filter_threshold: float = 0.05,
-
+    *,
+    # Fractal arguments
+    zarr_url: str,
+    init_args: InitArgsRegistration,
+    # Task-specific arguments
+    seg_channel: ChannelInputModel,
+    label_name_to_register: str = "nuc",
+    label_name_obj: str = "org_linked",
+    roi_table: str = "org_ROI_table_linked",
+    level: int = 0,
+    save_transformation: bool = True,
+    mask_by_parent: bool = True,
+    calculate_ffd: bool = True,
+    volume_filter: bool = True,
+    volume_filter_threshold: float = 0.05,
 ) -> dict[str, Any]:
     """
     Calculate point-cloud-based registration with PlatyMatch.
@@ -141,18 +144,18 @@ def calculate_platymatch_registration(
     # Read Zarr metadata
     r0_ngffmeta = load_NgffImageMeta(f"{r0_zarr_path}/labels/{label_name_to_register}")
     rx_ngffmeta = load_NgffImageMeta(f"{zarr_url}/labels/{label_name_to_register}")
-    r0_xycoars = r0_ngffmeta.coarsening_xy # need to know when building new pyramids
+    r0_xycoars = r0_ngffmeta.coarsening_xy  # need to know when building new pyramids
     rx_xycoars = rx_ngffmeta.coarsening_xy
     r0_pixmeta = r0_ngffmeta.get_pixel_sizes_zyx(level=level)
     rx_pixmeta = rx_ngffmeta.get_pixel_sizes_zyx(level=level)
 
     if r0_pixmeta != rx_pixmeta:
-        raise ValueError(
-            "Pixel sizes need to be equal between cycles for registration"
-        )
+        raise ValueError("Pixel sizes need to be equal between cycles for registration")
 
     if len(r0_adata) != len(rx_adata):
-        raise ValueError("Number of objects does not match between reference object {input_paths=} and alignment round")
+        raise ValueError(
+            "Number of objects does not match between reference object {input_paths=} and alignment round"
+        )
 
     logger.info(
         f"Found {len(r0_adata)} objects in reference and "
@@ -186,7 +189,9 @@ def calculate_platymatch_registration(
         rx_dask_parent = da.from_zarr(f"{zarr_url}/labels/{label_name_obj}/{level}")
 
         # Read Zarr metadata
-        r0_ngffmeta_parent = load_NgffImageMeta(f"{r0_zarr_path}/labels/{label_name_obj}")
+        r0_ngffmeta_parent = load_NgffImageMeta(
+            f"{r0_zarr_path}/labels/{label_name_obj}"
+        )
         rx_ngffmeta_parent = load_NgffImageMeta(f"{zarr_url}/labels/{label_name_obj}")
         r0_xycoars_parent = r0_ngffmeta_parent.coarsening_xy
         rx_xycoars_parent = rx_ngffmeta_parent.coarsening_xy
@@ -224,8 +229,7 @@ def calculate_platymatch_registration(
             )
         except ChannelNotFoundError as e:
             logger.warning(
-                "Channel not found, exit from the task.\n"
-                f"Original error: {str(e)}"
+                "Channel not found, exit from the task.\n" f"Original error: {str(e)}"
             )
             return {}
         r0_channel = tmp_channel.index
@@ -239,8 +243,7 @@ def calculate_platymatch_registration(
             )
         except ChannelNotFoundError as e:
             logger.warning(
-                "Channel not found, exit from the task.\n"
-                f"Original error: {str(e)}"
+                "Channel not found, exit from the task.\n" f"Original error: {str(e)}"
             )
             return {}
         rx_channel = tmp_channel.index
@@ -279,8 +282,8 @@ def calculate_platymatch_registration(
     ##############
 
     # TODO add check that adata is numerically increasing incrementally
-    r0_labels = r0_adata.obs_vector('label') #unsorted, match row order
-    rx_labels = rx_adata.obs_vector('label') #unsorted, match row order
+    r0_labels = r0_adata.obs_vector("label")  # unsorted, match row order
+    rx_labels = rx_adata.obs_vector("label")  # unsorted, match row order
 
     # sort labels numerically; if labels were remapped during organoid registration, may not be in order
     r0_labels_sorted = r0_labels[r0_labels.astype(float).argsort()]
@@ -297,18 +300,25 @@ def calculate_platymatch_registration(
     # for each object in r0...
     for r0_org_label, rx_org_label in zip(r0_labels_sorted, rx_labels_sorted):
 
-        transform_affine = None # clear transform from previous organoid pair
+        transform_affine = None  # clear transform from previous organoid pair
 
         if r0_org_label != rx_org_label:
-            raise ValueError(f'Label mismatch between reference object {r0_org_label} of round {ref_acquisition}'
-                             f'and alignment object {rx_org_label} of round {zarr_acquisition}. \n'
-                             f'Platymatch registration must be run on consensus-linked objects')
+            raise ValueError(
+                f"Label mismatch between reference object {r0_org_label} of round {ref_acquisition}"
+                f"and alignment object {rx_org_label} of round {zarr_acquisition}. \n"
+                f"Platymatch registration must be run on consensus-linked objects"
+            )
 
-        if len(np.where(r0_labels == r0_org_label)[0]) > 1 or len(np.where(rx_labels == rx_org_label)[0]) > 1:
-            raise ValueError(f'Organoid label values are not unique')
+        if (
+            len(np.where(r0_labels == r0_org_label)[0]) > 1
+            or len(np.where(rx_labels == rx_org_label)[0]) > 1
+        ):
+            raise ValueError("Organoid label values are not unique")
 
-        logger.info(f"Loading images for reference object label {r0_org_label} "
-                    f"and alignment object label {rx_org_label}")
+        logger.info(
+            f"Loading images for reference object label {r0_org_label} "
+            f"and alignment object label {rx_org_label}"
+        )
 
         # identify index that corresponds to label id
         r0_rowid = np.where(r0_labels == r0_org_label)[0][0]
@@ -346,17 +356,25 @@ def calculate_platymatch_registration(
             # if object segmentation was run at a different level than nuclear segmentation,
             # need to upscale arrays to match shape
             if r0_parent.shape != r0.shape:
-                r0_parent = upscale_array(array=r0_parent, target_shape=r0.shape, pad_with_zeros=False)
+                r0_parent = upscale_array(
+                    array=r0_parent, target_shape=r0.shape, pad_with_zeros=False
+                )
 
             if rx_parent.shape != rx.shape:
-                rx_parent = upscale_array(array=rx_parent, target_shape=rx.shape, pad_with_zeros=False)
+                rx_parent = upscale_array(
+                    array=rx_parent, target_shape=rx.shape, pad_with_zeros=False
+                )
 
             # mask nuclei by parent object
             r0_parent_mask = np.zeros_like(r0_parent)
             rx_parent_mask = np.zeros_like(rx_parent)
 
-            r0_parent_mask[r0_parent == int(r0_org_label)] = 1  # select only current object and binarize object mask
-            rx_parent_mask[rx_parent == int(rx_org_label)] = 1  # select only current object and binarize object mask
+            r0_parent_mask[
+                r0_parent == int(r0_org_label)
+            ] = 1  # select only current object and binarize object mask
+            rx_parent_mask[
+                rx_parent == int(rx_org_label)
+            ] = 1  # select only current object and binarize object mask
 
             r0 = r0 * r0_parent_mask
             rx = rx * rx_parent_mask
@@ -365,35 +383,63 @@ def calculate_platymatch_registration(
         # note that registration is performed on unscaled image
         # TODO: consider upscaling label image prior to alignment, in cases where z-anisotropy is
         #  extreme upscaling could lead to improved performance
-        r0_props = regionprops_table(label_image=r0, properties=('label', 'centroid', 'area'))  # zyx
-        rx_props = regionprops_table(label_image=rx, properties=('label', 'centroid', 'area'))
+        r0_props = regionprops_table(
+            label_image=r0, properties=("label", "centroid", "area")
+        )  # zyx
+        rx_props = regionprops_table(
+            label_image=rx, properties=("label", "centroid", "area")
+        )
 
         # output column order must be: ["label", "x_centroid", "y_centroid", "z_centroid", "volume"]
-        r0_props = (pd.DataFrame(r0_props,
-                                 columns=['label', 'centroid-2', 'centroid-1', 'centroid-0', 'area'])).to_numpy()
-        rx_props = (pd.DataFrame(rx_props,
-                                 columns=['label', 'centroid-2', 'centroid-1', 'centroid-0', 'area'])).to_numpy()
+        r0_props = (
+            pd.DataFrame(
+                r0_props,
+                columns=["label", "centroid-2", "centroid-1", "centroid-0", "area"],
+            )
+        ).to_numpy()
+        rx_props = (
+            pd.DataFrame(
+                rx_props,
+                columns=["label", "centroid-2", "centroid-1", "centroid-0", "area"],
+            )
+        ).to_numpy()
 
         if volume_filter:
             # discard segmentations that have a volume less than fraction of median nuclear volume (segmented debris)
             # reference round
-            (r0_props, fixed_removed, r0_removed_size_mean, r0_size_mean, r0_volume_cutoff) = (
-                filter_small_sizes_per_round(r0_props, column=-1, threshold=volume_filter_threshold))
+            (
+                r0_props,
+                fixed_removed,
+                r0_removed_size_mean,
+                r0_size_mean,
+                r0_volume_cutoff,
+            ) = filter_small_sizes_per_round(
+                r0_props, column=-1, threshold=volume_filter_threshold
+            )
 
-            logger.info(f"Volume filtering removed {len(fixed_removed)} cell(s) from object {r0_org_label} of round "
-                        f"{ref_acquisition} that have a volume below the calculated {r0_volume_cutoff} pixel threshold"
-                        f"\n Removed labels have a mean volume of {r0_removed_size_mean} and are the label id(s): "
-                        f"\n {fixed_removed}"
-                        )
+            logger.info(
+                f"Volume filtering removed {len(fixed_removed)} cell(s) from object {r0_org_label} of round "
+                f"{ref_acquisition} that have a volume below the calculated {r0_volume_cutoff} pixel threshold"
+                f"\n Removed labels have a mean volume of {r0_removed_size_mean} and are the label id(s): "
+                f"\n {fixed_removed}"
+            )
             # rx
-            (rx_props, moving_removed, rx_removed_size_mean, rx_size_mean, rx_volume_cutoff) = (
-                filter_small_sizes_per_round(rx_props, column=-1, threshold=volume_filter_threshold))
+            (
+                rx_props,
+                moving_removed,
+                rx_removed_size_mean,
+                rx_size_mean,
+                rx_volume_cutoff,
+            ) = filter_small_sizes_per_round(
+                rx_props, column=-1, threshold=volume_filter_threshold
+            )
 
-            logger.info(f"Volume filtering removed {len(moving_removed)} cell(s) from object {rx_org_label} of round "
-                        f"{zarr_acquisition} that have a volume below the calculated {rx_volume_cutoff} pixel threshold"
-                        f"\n Removed labels have a mean volume of {rx_removed_size_mean} and are the label id(s): "
-                        f"\n {moving_removed}"
-                        )
+            logger.info(
+                f"Volume filtering removed {len(moving_removed)} cell(s) from object {rx_org_label} of round "
+                f"{zarr_acquisition} that have a volume below the calculated {rx_volume_cutoff} pixel threshold"
+                f"\n Removed labels have a mean volume of {rx_removed_size_mean} and are the label id(s): "
+                f"\n {moving_removed}"
+            )
 
         # TODO add disconnected component detection here to remove nuclei that don't belong to main organoid
 
@@ -403,42 +449,57 @@ def calculate_platymatch_registration(
 
         # if insufficient nuclear count, skip this organoid pair
         if r0_props.shape[0] <= 3 or rx_props.shape[0] <= 3:
-            logger.info(f"Skipping organoid pair [ reference object {r0_org_label} of round {ref_acquisition}, "
-                        f"alignment object {rx_org_label} of round {zarr_acquisition} ] of shape "
-                        f"[{r0_props.shape[0]}, {rx_props.shape[0]}] due to insufficient child object count. ")
+            logger.info(
+                f"Skipping organoid pair [ reference object {r0_org_label} of round {ref_acquisition}, "
+                f"alignment object {rx_org_label} of round {zarr_acquisition} ] of shape "
+                f"[{r0_props.shape[0]}, {rx_props.shape[0]}] due to insufficient child object count. "
+            )
             continue
 
         try:
-            logger.info(f"Trying affine matching for reference object label {r0_org_label} "
-                        f"and alignment object label {rx_org_label} of round {zarr_acquisition}")
+            logger.info(
+                f"Trying affine matching for reference object label {r0_org_label} "
+                f"and alignment object label {rx_org_label} of round {zarr_acquisition}"
+            )
 
             (affine_matches, transform_affine) = run_affine(
-                rx_props,
-                r0_props, ransac_iterations=4000, icp_iterations=50)
+                rx_props, r0_props, ransac_iterations=4000, icp_iterations=50
+            )
 
-            logger.info(f"Successful affine matching of reference object label {r0_org_label} "
-                        f"and alignment object label {rx_org_label}")
+            logger.info(
+                f"Successful affine matching of reference object label {r0_org_label} "
+                f"and alignment object label {rx_org_label}"
+            )
 
-            affine_matches = pd.DataFrame(affine_matches,
-                                          columns=["R" + str(ref_acquisition) + "_label",
-                                                   "R" + str(zarr_acquisition) + "_label",
-                                                   "pixdist",
-                                                   "confidence"]
-                                          )
+            affine_matches = pd.DataFrame(
+                affine_matches,
+                columns=[
+                    "R" + str(ref_acquisition) + "_label",
+                    "R" + str(zarr_acquisition) + "_label",
+                    "pixdist",
+                    "confidence",
+                ],
+            )
 
             linked_df_list_affine.append(affine_matches)
 
             if save_transformation and transform_affine is not None:
                 # store the transformation matrix on disk
                 # check if transformation folder exists, if not create it
-                save_transform_path = f"{zarr_url}/transforms/{roi_table}_{label_name_to_register}_affine"
+                save_transform_path = (
+                    f"{zarr_url}/transforms/{roi_table}_{label_name_to_register}_affine"
+                )
                 os.makedirs(save_transform_path, exist_ok=True)
                 # saving name is row in obs_names of tables anndata; so matches with input tables ROI naming
                 save_name = f"{r0_org_label}.npy"
-                np.save(f"{save_transform_path}/{save_name}", transform_affine, allow_pickle=False)
+                np.save(
+                    f"{save_transform_path}/{save_name}",
+                    transform_affine,
+                    allow_pickle=False,
+                )
 
         except Exception as e:
-            print('Exception!', r0_org_label, rx_org_label, e)
+            print("Exception!", r0_org_label, rx_org_label, e)
             print_exc()
 
         ##############
@@ -473,17 +534,21 @@ def calculate_platymatch_registration(
             #  parameter in calculate_platymatch_registration
 
             if r0_channel_raw.shape != r0.shape or rx_channel_raw.shape != rx.shape:
-                raise ValueError("Image shape must match between raw and segmentation image")
+                raise ValueError(
+                    "Image shape must match between raw and segmentation image"
+                )
 
             try:
                 # generate transformed affine images
-                (moving_transformed_affine_raw_image, moving_transformed_affine_label_image) = \
-                    generate_affine_transformed_image(
-                        transform_matrix=transform_affine,
-                        fixed_raw_image=r0_channel_raw,
-                        moving_raw_image=rx_channel_raw,
-                        moving_label_image=rx,
-                    )
+                (
+                    moving_transformed_affine_raw_image,
+                    moving_transformed_affine_label_image,
+                ) = generate_affine_transformed_image(
+                    transform_matrix=transform_affine,
+                    fixed_raw_image=r0_channel_raw,
+                    moving_raw_image=rx_channel_raw,
+                    moving_label_image=rx,
+                )
 
                 # run ffd matching
                 # for now only use ffd_matches result, do not save transform or transformed image
@@ -496,15 +561,19 @@ def calculate_platymatch_registration(
                     r0,
                 )
 
-                logger.info(f"Successful ffd matching of reference object label {r0_org_label} "
-                            f"and alignment object label {rx_org_label}")
+                logger.info(
+                    f"Successful ffd matching of reference object label {r0_org_label} "
+                    f"and alignment object label {rx_org_label}"
+                )
 
-                ffd_matches = pd.DataFrame(ffd_matches,
-                                           columns=["R" + str(ref_acquisition) + "_label",
-                                                    "R" + str(zarr_acquisition) + "_label",
-                                                    "pixdist"]
-
-                                           )
+                ffd_matches = pd.DataFrame(
+                    ffd_matches,
+                    columns=[
+                        "R" + str(ref_acquisition) + "_label",
+                        "R" + str(zarr_acquisition) + "_label",
+                        "pixdist",
+                    ],
+                )
                 linked_df_list_ffd.append(ffd_matches)
 
                 if save_transformation and transform_ffd is not None:
@@ -514,10 +583,12 @@ def calculate_platymatch_registration(
                     os.makedirs(save_transform_path, exist_ok=True)
                     # saving name is row in obs_names of tables anndata; so matches with input tables ROI naming
                     save_name = f"{r0_org_label}.tfm"
-                    sitk.WriteTransform(transform_ffd, f"{save_transform_path}/{save_name}")
+                    sitk.WriteTransform(
+                        transform_ffd, f"{save_transform_path}/{save_name}"
+                    )
 
             except Exception as e:
-                print('Exception!', r0_org_label, rx_org_label, e)
+                print("Exception!", r0_org_label, rx_org_label, e)
                 print_exc()
 
     # concatenate list to generate single df for all nuclei in well
@@ -590,6 +661,7 @@ def calculate_platymatch_registration(
 
 if __name__ == "__main__":
     from fractal_tasks_core.tasks._utils import run_fractal_task
+
     # from multiprocessing import freeze_support
     #
     # freeze_support()
@@ -598,4 +670,3 @@ if __name__ == "__main__":
         task_function=calculate_platymatch_registration,
         logger_name=logger.name,
     )
-

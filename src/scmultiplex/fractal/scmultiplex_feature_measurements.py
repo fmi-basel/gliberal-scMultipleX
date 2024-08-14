@@ -13,7 +13,7 @@ Wrapper of scMultipleX measurements for Fractal
 """
 
 import logging
-from typing import Dict
+from typing import Dict, Union
 
 import anndata as ad
 import dask.array as da
@@ -34,7 +34,7 @@ from fractal_tasks_core.roi import (
 )
 from fractal_tasks_core.tables import write_table
 from fractal_tasks_core.upscale_array import upscale_array
-from pydantic.decorator import validate_arguments
+from pydantic import validate_call
 
 from scmultiplex.features.feature_wrapper import get_regionprops_measurements
 
@@ -44,7 +44,7 @@ __OME_NGFF_VERSION__ = fractal_tasks_core.__OME_NGFF_VERSION__
 logger = logging.getLogger(__name__)
 
 
-@validate_arguments
+@validate_call
 def scmultiplex_feature_measurements(  # noqa: C901
     *,
     # Default arguments for fractal tasks:
@@ -52,7 +52,7 @@ def scmultiplex_feature_measurements(  # noqa: C901
     # Task-specific arguments:
     label_image: str,
     output_table_name: str,
-    input_channels: Dict[str, ChannelInputModel] = None,
+    input_channels: Union[Dict[str, ChannelInputModel], None] = None,
     input_ROI_table: str = "well_ROI_table",
     level: int = 0,
     label_level: int = 0,

@@ -15,14 +15,15 @@ Initializes the parallelization list for registration in HCS plates.
 import logging
 from typing import Any
 
-from pydantic.decorator import validate_arguments
-
-from fractal_tasks_core.tasks.image_based_registration_hcs_init import image_based_registration_hcs_init
+from fractal_tasks_core.tasks.image_based_registration_hcs_init import (
+    image_based_registration_hcs_init,
+)
+from pydantic import validate_call
 
 logger = logging.getLogger(__name__)
 
 
-@validate_arguments
+@validate_call
 def _image_based_registration_hcs_init(
     *,
     # Fractal parameters
@@ -60,9 +61,11 @@ def _image_based_registration_hcs_init(
 
     # zarr url is the cycle x image, will have a list of non-reference rounds
     # in init args you have the reference zarr url
-    return image_based_registration_hcs_init(zarr_urls=zarr_urls,
-                                             zarr_dir=zarr_dir,
-                                             reference_acquisition=reference_acquisition)
+    return image_based_registration_hcs_init(
+        zarr_urls=zarr_urls,
+        zarr_dir=zarr_dir,
+        reference_acquisition=reference_acquisition,
+    )
 
 
 if __name__ == "__main__":

@@ -11,60 +11,60 @@
 Calculates 3D surface mesh of parent object (e.g. tissue, organoid)
 from 3D cell-level segmentation of children (e.g. nuclei)
 """
-from typing import Any
+import logging
+from typing import Any, Union
 
 import anndata as ad
 import dask.array as da
-import logging
 import numpy as np
 import zarr
-
-from fractal_tasks_core.pyramids import build_pyramid
-from fractal_tasks_core.tables import write_table
-from fractal_tasks_core.tasks.io_models import InitArgsRegistrationConsensus
-from pydantic.decorator import validate_arguments
-
 from fractal_tasks_core.ngff import load_NgffImageMeta
+from fractal_tasks_core.pyramids import build_pyramid
 from fractal_tasks_core.roi import (
     check_valid_ROI_indices,
     convert_indices_to_regions,
     convert_ROI_table_to_indices,
-    load_region, get_overlapping_pairs_3D)
+    get_overlapping_pairs_3D,
+    load_region,
+)
+from fractal_tasks_core.tables import write_table
+from fractal_tasks_core.tasks.io_models import InitArgsRegistrationConsensus
+from pydantic import validate_call
 
 from scmultiplex.features.FeatureFunctions import mesh_sphericity
-from scmultiplex.fractal.fractal_helper_functions import format_roi_table, \
-    compute_and_save_mesh, initialize_new_label, save_new_label_with_overlap
-
+from scmultiplex.fractal.fractal_helper_functions import (
+    compute_and_save_mesh,
+    format_roi_table,
+    initialize_new_label,
+    save_new_label_with_overlap,
+)
 from scmultiplex.meshing.FilterFunctions import mask_by_parent_object
 from scmultiplex.meshing.LabelFusionFunctions import run_label_fusion
 from scmultiplex.meshing.MeshFunctions import get_mass_properties
 
-from typing import Union
-
 logger = logging.getLogger(__name__)
 
 
-@validate_arguments
+@validate_call
 def surface_mesh_multiscale(
-        *,
-        # Fractal arguments
-        zarr_url: str,
-        init_args: InitArgsRegistrationConsensus,
-        # Task-specific arguments
-        label_name: str = "nuc",
-        group_by: Union[str, None] = None,
-        roi_table: str = "org_ROI_table_linked",
-        multiscale: bool = True,
-        save_mesh: bool = True,
-        expandby_factor: float = 0.6,
-        sigma_factor: float = 5,
-        canny_threshold: float = 0.3,
-        polynomial_degree: int = 30,
-        passband: float = 0.01,
-        feature_angle: int = 160,
-        target_reduction: float = 0.98,
-        smoothing_iterations: int = 1,
-
+    *,
+    # Fractal arguments
+    zarr_url: str,
+    init_args: InitArgsRegistrationConsensus,
+    # Task-specific arguments
+    label_name: str = "nuc",
+    group_by: Union[str, None] = None,
+    roi_table: str = "org_ROI_table_linked",
+    multiscale: bool = True,
+    save_mesh: bool = True,
+    expandby_factor: float = 0.6,
+    sigma_factor: float = 5,
+    canny_threshold: float = 0.3,
+    polynomial_degree: int = 30,
+    passband: float = 0.01,
+    feature_angle: int = 160,
+    target_reduction: float = 0.98,
+    smoothing_iterations: int = 1,
 ) -> dict[str, Any]:
     """
     Calculate 3D surface mesh of parent object (e.g. tissue, organoid)
@@ -167,11 +167,17 @@ def surface_mesh_multiscale(
     )
 
     if multiscale is True and group_by is None:
-        raise ValueError(f"Multiscale calculation is not possible without a provided group_by label for parent objects."
-                         f" Check task inputs.")
+        raise ValueError(
+            "Multiscale calculation is not possible without a provided group_by label for parent objects."
+            " Check task inputs."
+        )
 
-    if group_by in ["", " ", "   ",]:
-        raise ValueError(f"Input group_by label name is not valid. Check task inputs.")
+    if group_by in [
+        "",
+        " ",
+        "   ",
+    ]:
+        raise ValueError("Input group_by label name is not valid. Check task inputs.")
 
     # always use highest resolution label
     level = 0
@@ -185,7 +191,9 @@ def surface_mesh_multiscale(
 
     # Read Zarr metadata
     label_ngffmeta = load_NgffImageMeta(f"{zarr_url}/labels/{label_name}")
-    label_xycoars = label_ngffmeta.coarsening_xy  # need to know when building new pyramids
+    label_xycoars = (
+        label_ngffmeta.coarsening_xy
+    )  # need to know when building new pyramids
     label_pixmeta = label_ngffmeta.get_pixel_sizes_zyx(level=level)
 
     # Create list of indices for 3D ROIs spanning the entire Z direction
@@ -213,8 +221,9 @@ def surface_mesh_multiscale(
         shape = label_dask.shape
         chunks = label_dask.chunksize
 
-        new_label3d_array = initialize_new_label(zarr_url, shape, chunks, np.uint32, label_name,
-                                                 output_label_name, logger)
+        new_label3d_array = initialize_new_label(
+            zarr_url, shape, chunks, np.uint32, label_name, output_label_name, logger
+        )
 
         logger.info(f"Mask will have shape {shape} and chunks {chunks}")
 
@@ -245,14 +254,16 @@ def surface_mesh_multiscale(
         check_valid_ROI_indices(groupby_idlist, roi_table)
 
     # Get labels to iterate over
-    roi_labels = roi_adata.obs_vector('label')
+    roi_labels = roi_adata.obs_vector("label")
     total_label_count = len(roi_labels)
     compute = True
     sphericity_flag = 0
     object_count = 0
     mesh_folder_name = None
 
-    logger.info(f"Starting iteration over {total_label_count} detected objects in ROI table.")
+    logger.info(
+        f"Starting iteration over {total_label_count} detected objects in ROI table."
+    )
 
     # For each object in input ROI table...
     for row in roi_adata.obs_names:
@@ -269,12 +280,16 @@ def surface_mesh_multiscale(
 
         if group_by is not None:
             # Mask objects by parent group_by object
-            seg = mask_by_parent_object(seg, groupby_dask, groupby_idlist, row_int, label_str)
+            seg = mask_by_parent_object(
+                seg, groupby_dask, groupby_idlist, row_int, label_str
+            )
         else:
             # Check that label exists in object
             if float(label_str) not in seg:
-                raise ValueError(f'Object ID {label_str} does not exist in loaded segmentation image. Does input ROI '
-                                 f'table match label map?')
+                raise ValueError(
+                    f"Object ID {label_str} does not exist in loaded segmentation image. Does input ROI "
+                    f"table match label map?"
+                )
             # Select label that corresponds to current object, set all other objects to 0
             seg[seg != float(label_str)] = 0
 
@@ -285,23 +300,36 @@ def surface_mesh_multiscale(
         if multiscale:
 
             # Generate new 3D label image
-            edges_canny, expandby_pix, iterations, anisotropic_sigma, padded_zslice_count = (
-                run_label_fusion(seg, expandby_factor, sigma_factor, label_pixmeta, canny_threshold))
+            (
+                edges_canny,
+                expandby_pix,
+                iterations,
+                anisotropic_sigma,
+                padded_zslice_count,
+            ) = run_label_fusion(
+                seg, expandby_factor, sigma_factor, label_pixmeta, canny_threshold
+            )
 
             # Perform checks
             if expandby_pix == 0:
-                logger.warning("Equivalent diameter is 0 or negative, thus labels not expanded. "
-                               "Check segmentation quality")
+                logger.warning(
+                    "Equivalent diameter is 0 or negative, thus labels not expanded. "
+                    "Check segmentation quality"
+                )
             # Check whether new label map has a single value, otherwise result is discarded and object skipped
             maxvalue = np.amax(edges_canny)
             if maxvalue != 1:
                 if maxvalue == 0:
-                    logger.warning(f'No 3D label and mesh saved for object {label_str}. '
-                                   f'Result of canny edge detection is empty')
+                    logger.warning(
+                        f"No 3D label and mesh saved for object {label_str}. "
+                        f"Result of canny edge detection is empty"
+                    )
                     continue
                 else:  # for max values greater than 1 or less than 0
-                    logger.warning(f'No 3D label and mesh saved for object {label_str}. Detected {maxvalue} labels. '
-                                   f'Is the shape composed of {maxvalue} distinct objects?')
+                    logger.warning(
+                        f"No 3D label and mesh saved for object {label_str}. Detected {maxvalue} labels. "
+                        f"Is the shape composed of {maxvalue} distinct objects?"
+                    )
                     continue
             logger.info(
                 f"Successfully calculated 3D label map for object label {label_str} using parameters:"
@@ -309,9 +337,11 @@ def surface_mesh_multiscale(
                 f"\n\tgaussian blurred with sigma = {np.round(anisotropic_sigma,1)}"
             )
             if padded_zslice_count > 0:
-                logger.info(f'Object {label_str} has non-zero pixels touching image border. Image processing '
-                            f'completed successfully, however consider reducing sigma_factor '
-                            f'or increasing the canny_threshold to reduce risk of cropping shape edges.')
+                logger.info(
+                    f"Object {label_str} has non-zero pixels touching image border. Image processing "
+                    f"completed successfully, however consider reducing sigma_factor "
+                    f"or increasing the canny_threshold to reduce risk of cropping shape edges."
+                )
 
         ##############
         # Calculate and save mesh  ###
@@ -339,17 +369,30 @@ def surface_mesh_multiscale(
             sphericity_check = True
             save_as_stl = True
         else:
-            logger.info(f"Skipping mesh saving. If this is undesired, did you input correct labels and ROI tables?")
+            logger.info(
+                "Skipping mesh saving. If this is undesired, did you input "
+                "correct labels and ROI tables?"
+            )
             continue
 
         # Check that label image contains an object
         if np.amax(label_image) == 0:
-            logger.warning(f"Label image is empty. Skipping mesh saving!")
+            logger.warning("Label image is empty. Skipping mesh saving!")
             continue
 
-        mesh_polydata = compute_and_save_mesh(label_image, label_pixmeta, polynomial_degree, passband, feature_angle,
-                                              target_reduction, smoothing_iterations, zarr_url,
-                                              mesh_folder_name, object_name, save_as_stl)
+        mesh_polydata = compute_and_save_mesh(
+            label_image,
+            label_pixmeta,
+            polynomial_degree,
+            passband,
+            feature_angle,
+            target_reduction,
+            smoothing_iterations,
+            zarr_url,
+            mesh_folder_name,
+            object_name,
+            save_as_stl,
+        )
 
         object_count += 1
 
@@ -376,21 +419,26 @@ def surface_mesh_multiscale(
             # written object
             # Thus meshes are the most accurate representation of surface, labels may be cropped
 
-            bbox_df = save_new_label_with_overlap(edges_canny, label_str, new_label3d_array, zarr_url,
-                                                  output_label_name, region, label_pixmeta, compute,
-                                                  roi_idlist, row_int)
+            bbox_df = save_new_label_with_overlap(
+                edges_canny,
+                label_str,
+                new_label3d_array,
+                zarr_url,
+                output_label_name,
+                region,
+                label_pixmeta,
+                compute,
+                roi_idlist,
+                row_int,
+            )
             bbox_dataframe_list.append(bbox_df)
 
             overlap_list = []
             for df in bbox_dataframe_list:
-                overlap_list.extend(
-                    get_overlapping_pairs_3D(df, label_pixmeta)
-                )
+                overlap_list.extend(get_overlapping_pairs_3D(df, label_pixmeta))
 
             if len(overlap_list) > 0:
-                logger.warning(
-                    f"{len(overlap_list)} bounding-box pairs overlap"
-                )
+                logger.warning(f"{len(overlap_list)} bounding-box pairs overlap")
 
     # Starting from on-disk highest-resolution data, build and write to disk a pyramid of coarser levels
     if multiscale:
@@ -404,11 +452,15 @@ def surface_mesh_multiscale(
             aggregation_function=np.max,
         )
 
-        logger.info(f"Built a pyramid for the {zarr_url}/labels/{output_label_name} label image")
+        logger.info(
+            f"Built a pyramid for the {zarr_url}/labels/{output_label_name} label image"
+        )
 
         bbox_table = format_roi_table(bbox_dataframe_list)
         # Write to zarr group
-        logger.info(f"Writing new bounding-box ROI table to {zarr_url}/tables/{output_roi_table_name}")
+        logger.info(
+            f"Writing new bounding-box ROI table to {zarr_url}/tables/{output_roi_table_name}"
+        )
 
         table_attrs = {
             "type": "ngff:region_table",
@@ -426,15 +478,21 @@ def surface_mesh_multiscale(
 
     if save_mesh and multiscale:
         # Check how many objects out of well have a sphericity flag
-        logger.info(f"{sphericity_flag} out of {object_count} meshed objects are flagged for high sphericity, "
-                    f"which can indicate a highly complex mesh surface.")
+        logger.info(
+            f"{sphericity_flag} out of {object_count} meshed objects are flagged for high sphericity, "
+            "which can indicate a highly complex mesh surface."
+        )
         if sphericity_flag > 0.1 * object_count:
             # if more than 10% of objects have a sphericity flag, raise warning
-            logger.warning(f"Detected high fraction of suspicious organoid meshes in well. Inspect mesh quality "
-                           f"and tune task parameters for label expansion and mesh smoothing accordingly. ")
+            logger.warning(
+                "Detected high fraction of suspicious organoid meshes in well. Inspect mesh quality "
+                "and tune task parameters for label expansion and mesh smoothing accordingly. "
+            )
     if save_mesh:
         logger.info(f"Meshes saved in folder name {mesh_folder_name}")
-    logger.info(f"Successfully processed {object_count} out of {total_label_count} labels.")
+    logger.info(
+        f"Successfully processed {object_count} out of {total_label_count} labels."
+    )
     logger.info(f"End surface_mesh_multiscale task for {zarr_url}/labels/{label_name}")
 
     return {}

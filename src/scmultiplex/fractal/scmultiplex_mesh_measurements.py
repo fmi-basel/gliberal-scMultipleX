@@ -9,45 +9,48 @@
 Extract shape features of 3D input meshes.
 """
 
-import anndata as ad
 import logging
 import os
-import pandas as pd
-import zarr
-
-from fractal_tasks_core.tables import write_table
-from fractal_tasks_core.tasks.io_models import InitArgsRegistrationConsensus
-from pydantic.decorator import validate_arguments
 from typing import Any
 
+import anndata as ad
+import pandas as pd
+import zarr
+from fractal_tasks_core.tables import write_table
+from fractal_tasks_core.tasks.io_models import InitArgsRegistrationConsensus
+from pydantic import validate_call
+from vtkmodules.util import numpy_support
+
+from scmultiplex.aics_shparam import shtools
 from scmultiplex.aics_shparam.shparam import calculate_spherical_harmonics
 from scmultiplex.features.MeshExtraction import get_mesh_measurements
 from scmultiplex.fractal.fractal_helper_functions import format_roi_table
-from scmultiplex.meshing.MeshFunctions import (read_stl_polydata, get_gaussian_curvatures,
-                                               export_vtk_polydata, export_stl_polydata)
-from scmultiplex.aics_shparam import shtools
-from vtkmodules.util import numpy_support
+from scmultiplex.meshing.MeshFunctions import (
+    export_stl_polydata,
+    export_vtk_polydata,
+    get_gaussian_curvatures,
+    read_stl_polydata,
+)
 
 logger = logging.getLogger(__name__)
 
 
-@validate_arguments
+@validate_call
 def scmultiplex_mesh_measurements(
-        *,
-        # Fractal arguments
-        zarr_url: str,
-        init_args: InitArgsRegistrationConsensus,
-        # Task-specific arguments
-        mesh_name: str,
-        roi_table: str,
-        output_table_name: str,
-        save_hulls: bool = True,
-        calculate_curvature: bool = True,
-        calculate_harmonics: bool = True,
-        lmax: int = 2,
-        translate_to_origin: bool = True,
-        save_reconstructed_mesh: bool = True,
-
+    *,
+    # Fractal arguments
+    zarr_url: str,
+    init_args: InitArgsRegistrationConsensus,
+    # Task-specific arguments
+    mesh_name: str,
+    roi_table: str,
+    output_table_name: str,
+    save_hulls: bool = True,
+    calculate_curvature: bool = True,
+    calculate_harmonics: bool = True,
+    lmax: int = 2,
+    translate_to_origin: bool = True,
+    save_reconstructed_mesh: bool = True,
 ) -> dict[str, Any]:
     """
     Extract shape features of 3D input meshes.
@@ -107,7 +110,7 @@ def scmultiplex_mesh_measurements(
 
     # Read ROIs of objects
     adata = ad.read_zarr(f"{zarr_url}/tables/{roi_table}")
-    labels = adata.obs_vector('label')
+    labels = adata.obs_vector("label")
 
     if len(labels) == 0:
         logger.warning("Well contains no objects")
@@ -123,9 +126,9 @@ def scmultiplex_mesh_measurements(
         org_label = labels[row_int]
 
         if not isinstance(org_label, str):
-            raise TypeError('Label index must be string. Check ROI table obs naming.')
+            raise TypeError("Label index must be string. Check ROI table obs naming.")
 
-        mesh_fname = org_label + '.stl'
+        mesh_fname = org_label + ".stl"
         mesh_path = f"{zarr_url}/meshes/{mesh_name}/{mesh_fname}"
 
         # Check that mesh for corresponding label id exists, if not continue to next id
@@ -138,8 +141,12 @@ def scmultiplex_mesh_measurements(
         ##############
         # Extract features  ###
         ##############
-        measurements = {'label': org_label}
-        vtk_measurements, convex_hull_polydata, bounding_box_polydata = get_mesh_measurements(polydata)
+        measurements = {"label": org_label}
+        (
+            vtk_measurements,
+            convex_hull_polydata,
+            bounding_box_polydata,
+        ) = get_mesh_measurements(polydata)
 
         logger.info(f"Successfully extracted features for mesh {mesh_fname}.")
 
@@ -155,22 +162,30 @@ def scmultiplex_mesh_measurements(
             os.makedirs(save_transform_path, exist_ok=True)
             # Save name is the organoid label id
             save_name = f"{int(org_label)}.vtp"
-            export_vtk_polydata(os.path.join(save_transform_path, save_name), convex_hull_polydata)
+            export_vtk_polydata(
+                os.path.join(save_transform_path, save_name), convex_hull_polydata
+            )
 
             # save bounding box
             save_transform_path = f"{zarr_url}/meshes/{mesh_name}_bounding_box"
             os.makedirs(save_transform_path, exist_ok=True)
-            export_vtk_polydata(os.path.join(save_transform_path, save_name), bounding_box_polydata)
+            export_vtk_polydata(
+                os.path.join(save_transform_path, save_name), bounding_box_polydata
+            )
 
         if calculate_curvature:
             # Calculate curvature
-            polydata_curv, scalar_range, curvatures_numpy = get_gaussian_curvatures(polydata)
+            polydata_curv, scalar_range, curvatures_numpy = get_gaussian_curvatures(
+                polydata
+            )
             # Save mesh
             save_transform_path = f"{zarr_url}/meshes/{mesh_name}_curvature"
             os.makedirs(save_transform_path, exist_ok=True)
             # Save name is the organoid label id
             save_name_curv = f"{int(org_label)}.vtp"
-            export_vtk_polydata(os.path.join(save_transform_path, save_name_curv), polydata_curv)
+            export_vtk_polydata(
+                os.path.join(save_transform_path, save_name_curv), polydata_curv
+            )
 
         ##############
         # Compute spherical harmonics coefficients  ###
@@ -188,14 +203,18 @@ def scmultiplex_mesh_measurements(
 
             # Calculate spherical harmonic decomposition
             # Note that meshes are not 2d aligned, orientation is as they are imaged in plate
-            coeffs, grid_rec, grid_down = calculate_spherical_harmonics(mesh=polydata, lmax=lmax)
+            coeffs, grid_rec, grid_down = calculate_spherical_harmonics(
+                mesh=polydata, lmax=lmax
+            )
 
             # Calculate reconstruction error
             mse = shtools.get_reconstruction_error(grid_down, grid_rec)
-            coeffs.update({'mse': mse, 'label': org_label})
+            coeffs.update({"mse": mse, "label": org_label})
             df_coeffs.append(coeffs)
 
-            logger.info(f"Successfully calculated spherical harmonics for mesh {mesh_fname}.")
+            logger.info(
+                f"Successfully calculated spherical harmonics for mesh {mesh_fname}."
+            )
 
             if save_reconstructed_mesh:
                 # Reconstruct mesh from grid
@@ -203,8 +222,12 @@ def scmultiplex_mesh_measurements(
                 save_transform_path = f"{zarr_url}/meshes/{mesh_name}_reconstructed"
                 os.makedirs(save_transform_path, exist_ok=True)
                 # save name is the organoid label id
-                export_stl_polydata(os.path.join(save_transform_path, mesh_fname), mesh_rec)
-                logger.info(f"Saved reconstructed mesh from harmonics for mesh {mesh_fname}.")
+                export_stl_polydata(
+                    os.path.join(save_transform_path, mesh_fname), mesh_rec
+                )
+                logger.info(
+                    f"Saved reconstructed mesh from harmonics for mesh {mesh_fname}."
+                )
 
     ##############
     # Save extracted features as measurement table  ###
@@ -234,7 +257,9 @@ def scmultiplex_mesh_measurements(
         overwrite=True,
         table_attrs=table_attrs,
     )
-    logger.info(f"Successfully saved extracted features as feature table {output_table_name}")
+    logger.info(
+        f"Successfully saved extracted features as feature table {output_table_name}"
+    )
 
     ##############
     # Save spherical harmonics as measurement table  ###
@@ -258,7 +283,7 @@ def scmultiplex_mesh_measurements(
             "instance_key": "label",
         }
 
-        output_table_harmonics_name = output_table_name + '_harmonics'
+        output_table_harmonics_name = output_table_name + "_harmonics"
         write_table(
             image_group,
             output_table_harmonics_name,
@@ -266,8 +291,10 @@ def scmultiplex_mesh_measurements(
             overwrite=True,
             table_attrs=table_attrs,
         )
-        logger.info(f"Successfully saved spherical harmonic coefficients as feature table "
-                    f"{output_table_harmonics_name}")
+        logger.info(
+            f"Successfully saved spherical harmonic coefficients as feature table "
+            f"{output_table_harmonics_name}"
+        )
 
     logger.info(f"End scmultiplex_mesh_measurements task for {zarr_url=}")
 

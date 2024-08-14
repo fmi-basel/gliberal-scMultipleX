@@ -16,16 +16,13 @@ with reference round specified in init args.
 import logging
 from typing import Any
 
-from pydantic.decorator import validate_arguments
-
-from fractal_tasks_core.tasks._registration_utils import (
-    create_well_acquisition_dict,
-)
+from fractal_tasks_core.utils import create_well_acquisition_dict
+from pydantic import validate_call
 
 logger = logging.getLogger(__name__)
 
 
-@validate_arguments
+@validate_call
 def _image_based_registration_hcs_allrounds_init(
     *,
     # Fractal parameters
@@ -54,9 +51,7 @@ def _image_based_registration_hcs_allrounds_init(
         task_output: Dictionary for Fractal server that contains a
             parallelization list.
     """
-    logger.info(
-        f"Running `image_based_registration_hcs_init` for {zarr_urls=}"
-    )
+    logger.info(f"Running `image_based_registration_hcs_init` for {zarr_urls=}")
     image_groups = create_well_acquisition_dict(zarr_urls)
 
     # Create the parallelization list

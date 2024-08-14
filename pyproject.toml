@@ -9,3 +9,6 @@ write_to = "src/scmultiplex/_version.py"
 [tool.pytest.ini_options]
 log_cli = "True"
 log_cli_level = "INFO"
+
+[tool.coverage.run]
+source = ["src/scmultiplex"]
