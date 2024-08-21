@@ -158,8 +158,8 @@ def select_largest_component(label_image):
     roi_count = len(rois)
 
     if roi_count > 1:
-        label_with_largest_volume = None
-        largest_volume = None
+        label_with_largest_volume = 0
+        largest_volume = 0
         for r in rois:
             rlabel = r.label
             rvolume = r.area
