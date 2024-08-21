@@ -13,11 +13,12 @@ from glob import glob
 from os.path import basename, exists, isdir, join, split, splitext
 from typing import List, Pattern, Tuple
 
+from tqdm import tqdm
+
 from scmultiplex.faim_hcs.hcs.Experiment import Experiment
 from scmultiplex.faim_hcs.records.OrganoidRecord import OrganoidRecord
 from scmultiplex.faim_hcs.records.PlateRecord import PlateRecord
 from scmultiplex.faim_hcs.records.WellRecord import WellRecord
-from tqdm import tqdm
 
 
 def prepare_and_add_organoids(
@@ -61,7 +62,11 @@ def prepare_and_add_well(
     )
 
     seg_files = get_well_overview_segs(
-        plate=plate, well_id=well_id, well_path_to_well_id=well_path_to_well_id,mip_ovr_name=mip_ovr_name,org_seg_name=org_seg_name,
+        plate=plate,
+        well_id=well_id,
+        well_path_to_well_id=well_path_to_well_id,
+        mip_ovr_name=mip_ovr_name,
+        org_seg_name=org_seg_name,
     )
     return add_well(
         plate=plate,
@@ -215,7 +220,9 @@ def create_experiment(
                     )
                 )
 
-            organoid_parent_dir = join(exp.root_dir, plate.plate_id, org_seg_name + "_ROI")
+            organoid_parent_dir = join(
+                exp.root_dir, plate.plate_id, org_seg_name + "_ROI"
+            )
             if exists(organoid_parent_dir):
                 for well in wells:
                     prepare_and_add_organoids(

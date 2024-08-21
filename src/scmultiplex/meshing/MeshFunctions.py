@@ -9,23 +9,17 @@
 
 
 import numpy as np
+import vtk
+from scipy.ndimage import find_objects
 from scipy.spatial.distance import cdist
 from tqdm import tqdm
-import vtk
-from vtkmodules.util import numpy_support
 from vtkmodules.numpy_interface import dataset_adapter as dsa
-from vtkmodules.vtkCommonCore import (
-    VTK_DOUBLE,
-    vtkIdList,
-)
-from vtkmodules.vtkFiltersCore import (
-    vtkFeatureEdges,
-    vtkIdFilter
-)
-from scipy.ndimage import find_objects
+from vtkmodules.util import numpy_support
+from vtkmodules.vtkCommonCore import VTK_DOUBLE, vtkIdList
+from vtkmodules.vtkFiltersCore import vtkFeatureEdges, vtkIdFilter
 
 
-def numpy_img_to_vtk(img, spacing, origin=(0., 0., 0.), deep_copy=True):
+def numpy_img_to_vtk(img, spacing, origin=(0.0, 0.0, 0.0), deep_copy=True):
     """Converts a numpy array to vtk image data.
 
     Args:
@@ -36,8 +30,9 @@ def numpy_img_to_vtk(img, spacing, origin=(0., 0., 0.), deep_copy=True):
         It requires keeping a handle on the numpy array to prevent garbage collection.
     """
 
-    vtk_data = numpy_support.numpy_to_vtk(num_array=img.ravel(order='C'),
-                                          deep=deep_copy)
+    vtk_data = numpy_support.numpy_to_vtk(
+        num_array=img.ravel(order="C"), deep=deep_copy
+    )
     imageVTK = vtk.vtkImageData()
     imageVTK.SetSpacing(spacing[::-1])
     imageVTK.SetOrigin(origin[::-1])
@@ -47,16 +42,22 @@ def numpy_img_to_vtk(img, spacing, origin=(0., 0., 0.), deep_copy=True):
     return imageVTK
 
 
-def smooth_me(vtkalgorithmoutput, smoothing_iterations, pass_band_param, feature_angle, target_reduction):
+def smooth_me(
+    vtkalgorithmoutput,
+    smoothing_iterations,
+    pass_band_param,
+    feature_angle,
+    target_reduction,
+):
     smoother = vtk.vtkWindowedSincPolyDataFilter()
     smoother.SetInputConnection(vtkalgorithmoutput)
     smoother.SetNumberOfIterations(
-        smoothing_iterations)  # this has little effect on the error!
+        smoothing_iterations
+    )  # this has little effect on the error!
     smoother.BoundarySmoothingOff()
     smoother.FeatureEdgeSmoothingOn()
     smoother.SetFeatureAngle(feature_angle)
-    smoother.SetPassBand(
-        pass_band_param)  # from 0 to 2, 2 keeps high frequencies
+    smoother.SetPassBand(pass_band_param)  # from 0 to 2, 2 keeps high frequencies
     smoother.NonManifoldSmoothingOn()
     smoother.NormalizeCoordinatesOn()
     smoother.GenerateErrorScalarsOff()
@@ -73,13 +74,15 @@ def smooth_me(vtkalgorithmoutput, smoothing_iterations, pass_band_param, feature
     return decimate
 
 
-def extract_smooth_mesh(imageVTK,
-                        label_range,
-                        polynomial_degree=30,
-                        pass_band_param=0.01,
-                        feature_angle=160,
-                        target_reduction=0.98,
-                        smoothing_iterations=1):
+def extract_smooth_mesh(
+    imageVTK,
+    label_range,
+    polynomial_degree=30,
+    pass_band_param=0.01,
+    feature_angle=160,
+    target_reduction=0.98,
+    smoothing_iterations=1,
+):
     """Extract mesh/contour for labels in imageVTK, smooth and decimate.
 
     Multiple labels can be extracted at once, however touching labels
@@ -104,13 +107,13 @@ def extract_smooth_mesh(imageVTK,
     # tight crops
     dfe = vtk.vtkDiscreteFlyingEdges3D()
     dfe.SetInputData(imageVTK)
-    dfe.ComputeScalarsOff(
-    )  # numpy image labels --> cells (faces) scalar values
+    dfe.ComputeScalarsOff()  # numpy image labels --> cells (faces) scalar values
     dfe.ComputeNormalsOff()
     dfe.ComputeGradientsOff()
     dfe.InterpolateAttributesOff()
-    dfe.GenerateValues(n_contours, label_range[0],
-                       label_range[1])  # numContours, rangeStart, rangeEnd
+    dfe.GenerateValues(
+        n_contours, label_range[0], label_range[1]
+    )  # numContours, rangeStart, rangeEnd
     dfe.Update()
 
     algorithmoutput = dfe.GetOutputPort()
@@ -124,7 +127,7 @@ def extract_smooth_mesh(imageVTK,
 
         if n > 0:
             tr = 0.1
-            pbp = pbp / (2 ** n)
+            pbp = pbp / (2**n)
             fa = fa + (5 * n)
 
         # cap feature_angle at 180 degrees
@@ -141,15 +144,17 @@ def extract_smooth_mesh(imageVTK,
             continue
 
 
-def labels_to_mesh(labels,
-                   spacing,
-                   polynomial_degree,
-                   pass_band_param,
-                   feature_angle,
-                   target_reduction,
-                   smoothing_iterations,
-                   margin,
-                   show_progress=False):
+def labels_to_mesh(
+    labels,
+    spacing,
+    polynomial_degree,
+    pass_band_param,
+    feature_angle,
+    target_reduction,
+    smoothing_iterations,
+    margin,
+    show_progress=False,
+):
     """Extract mesh/contour for a labels provided as a numpy array, smooth and decimate.
 
     Meshes are extracted one label at a time one object crop.
@@ -180,24 +185,28 @@ def labels_to_mesh(labels,
     for idx, loc in enumerate(iterable, start=1):
         if loc:
             loc = tuple(
-                slice(max(0, sl.start - margin), sl.stop + margin)
-                for sl in loc)
+                slice(max(0, sl.start - margin), sl.stop + margin) for sl in loc
+            )
             crop = (labels[loc] == idx).astype(np.uint8)
             origin = tuple(sl.start * s for sl, s in zip(loc, spacing))
             imageVTK = numpy_img_to_vtk(crop, spacing, origin, deep_copy=False)
-            instance_mesh = extract_smooth_mesh(imageVTK, (1, 1),
-                                                polynomial_degree,
-                                                pass_band_param,
-                                                feature_angle,
-                                                target_reduction,
-                                                smoothing_iterations)
+            instance_mesh = extract_smooth_mesh(
+                imageVTK,
+                (1, 1),
+                polynomial_degree,
+                pass_band_param,
+                feature_angle,
+                target_reduction,
+                smoothing_iterations,
+            )
 
             # add the label id as point data
             scalars = numpy_support.numpy_to_vtk(
                 num_array=np.ones(instance_mesh.GetNumberOfPoints()) * idx,
                 deep=True,
-                array_type=vtk.VTK_INT)
-            scalars.SetName('label_id')
+                array_type=vtk.VTK_INT,
+            )
+            scalars.SetName("label_id")
             instance_mesh.GetPointData().SetScalars(scalars)
 
             appendFilter.AddInputData(instance_mesh)
@@ -224,8 +233,7 @@ def add_mesh_points_attribute(mesh, attribute_name, label_mapping):
     for key, val in label_mapping.items():
         lut[key] = val
 
-    point_labels = numpy_support.vtk_to_numpy(
-        mesh.GetPointData().GetAttribute(0))
+    point_labels = numpy_support.vtk_to_numpy(mesh.GetPointData().GetAttribute(0))
     attributes_array = lut[point_labels]
     scalars = numpy_support.numpy_to_vtk(attributes_array, deep=True)
     scalars.SetName(attribute_name)
@@ -288,7 +296,7 @@ def get_centroid(polydata):
 
 def get_max_length(polydata):
     coords = numpy_support.vtk_to_numpy(polydata.GetPoints().GetData())
-    hdist = cdist(coords, coords, metric='euclidean')
+    hdist = cdist(coords, coords, metric="euclidean")
 
     # Get the farthest apart points and their distance
     indeces = np.unravel_index(hdist.argmax(), hdist.shape)
@@ -353,7 +361,7 @@ def adjust_edge_curvatures(source, curvature_name, epsilon=1.0e-08):
     curvatures = np_source.PointData[curvature_name]
 
     #  Get the boundary point IDs.
-    array_name = 'ids'
+    array_name = "ids"
     id_filter = vtkIdFilter()
     id_filter.SetInputData(source)
     id_filter.SetPointIds(True)
@@ -407,9 +415,9 @@ def adjust_edge_curvatures(source, curvature_name, epsilon=1.0e-08):
     if epsilon != 0.0:
         curvatures = np.where(abs(curvatures) < epsilon, 0, curvatures)
         # Curvatures is now an ndarray
-        curv = numpy_support.numpy_to_vtk(num_array=curvatures.ravel(),
-                                          deep=True,
-                                          array_type=VTK_DOUBLE)
+        curv = numpy_support.numpy_to_vtk(
+            num_array=curvatures.ravel(), deep=True, array_type=VTK_DOUBLE
+        )
         curv.SetName(curvature_name)
         source.GetPointData().RemoveArray(curvature_name)
         source.GetPointData().AddArray(curv)
@@ -418,7 +426,7 @@ def adjust_edge_curvatures(source, curvature_name, epsilon=1.0e-08):
 
 
 # TODO: generalize to also calculate 'Mean_Curvature'.
-def get_gaussian_curvatures(polydata, curvature_type='Gauss_Curvature'):
+def get_gaussian_curvatures(polydata, curvature_type="Gauss_Curvature"):
     """
     Calculate Gaussian Curvature for a 3D mesh. See also https://vtk.org/doc/nightly/html/classvtkCurvatures.html
 
@@ -435,10 +443,14 @@ def get_gaussian_curvatures(polydata, curvature_type='Gauss_Curvature'):
     curvatures.Update()
 
     adjust_edge_curvatures(curvatures.GetOutput(), curvature_type)
-    polydata.GetPointData().AddArray(curvatures.GetOutput().GetPointData().GetAbstractArray(curvature_type))
+    polydata.GetPointData().AddArray(
+        curvatures.GetOutput().GetPointData().GetAbstractArray(curvature_type)
+    )
     scalar_range = polydata.GetPointData().GetScalars(curvature_type).GetRange()
 
-    polydata.GetPointData().SetActiveScalars(curvature_type)  # visualize curvature when load into viewer
+    polydata.GetPointData().SetActiveScalars(
+        curvature_type
+    )  # visualize curvature when load into viewer
     np_source = dsa.WrapDataObject(polydata)
     curvatures_numpy = np_source.PointData[curvature_type]
 

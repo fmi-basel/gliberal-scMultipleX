@@ -42,4 +42,3 @@ measure_morphology = True
 
 [02OrganoidLinking]
 iou_cutoff = 0.2
-

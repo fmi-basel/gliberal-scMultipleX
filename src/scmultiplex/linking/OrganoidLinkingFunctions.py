@@ -9,8 +9,9 @@
 
 import numpy as np
 import pandas as pd
-from skimage.registration import phase_cross_correlation
 from scipy.ndimage import shift
+from skimage.registration import phase_cross_correlation
+
 from scmultiplex.linking.matching import matching
 
 
@@ -82,14 +83,18 @@ def calculate_shift(img0, imgX, bin):
     # pad so that images have same shape
     img0_pad, imgX_pad = pad_img_set(img0, imgX)
 
-    if (img0_pad.shape[0] != imgX_pad.shape[0]) | (img0_pad.shape[1] != imgX_pad.shape[1]):
+    if (img0_pad.shape[0] != imgX_pad.shape[0]) | (
+        img0_pad.shape[1] != imgX_pad.shape[1]
+    ):
         raise ValueError("image pair must have same dimensions")
 
     # binarize padded overviews
     img0_pad_binary, imgX_pad_binary = binarize_img(img0_pad), binarize_img(imgX_pad)
 
     # subsample so that registration runs faster
-    img0_pad_binary_bin, imgX_pad_binary_bin = subsample_image(img0_pad_binary, bin=bin), subsample_image(imgX_pad_binary, bin=bin)
+    img0_pad_binary_bin, imgX_pad_binary_bin = subsample_image(
+        img0_pad_binary, bin=bin
+    ), subsample_image(imgX_pad_binary, bin=bin)
 
     # calculate shifts and take into account subsampling
     result = phase_cross_correlation(img0_pad_binary_bin, imgX_pad_binary_bin)
@@ -132,11 +137,3 @@ def calculate_matching(img0, imgX, iou_cutoff):
     df_filt = df[df["iou"] > iou_cutoff]
 
     return stat, df, df_filt
-
-
-
-
-
-
-
-

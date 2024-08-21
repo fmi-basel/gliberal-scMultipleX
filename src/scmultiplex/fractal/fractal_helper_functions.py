@@ -6,21 +6,29 @@
 # Tommaso Comparin <tommaso.comparin@exact-lab.it>
 # Joel Lüthi <joel.luethi@uzh.ch>
 #
-from pathlib import Path
-import anndata as ad
-import dask.array as da
-import zarr
-import pandas as pd
-import numpy as np
 import os as os
-
-from fractal_tasks_core.labels import prepare_label_group
-from fractal_tasks_core.ngff import load_NgffWellMeta
-from fractal_tasks_core.roi import empty_bounding_box_table, load_region, array_to_bounding_box_table
 from functools import reduce
+from pathlib import Path
 from typing import Sequence
 
-from scmultiplex.meshing.MeshFunctions import labels_to_mesh, export_stl_polydata, export_vtk_polydata
+import anndata as ad
+import dask.array as da
+import numpy as np
+import pandas as pd
+import zarr
+from fractal_tasks_core.labels import prepare_label_group
+from fractal_tasks_core.ngff import load_NgffWellMeta
+from fractal_tasks_core.roi import (
+    array_to_bounding_box_table,
+    empty_bounding_box_table,
+    load_region,
+)
+
+from scmultiplex.meshing.MeshFunctions import (
+    export_stl_polydata,
+    export_vtk_polydata,
+    labels_to_mesh,
+)
 
 
 def read_table_and_attrs(zarr_url: Path, roi_table):
@@ -78,7 +86,9 @@ def format_roi_table(bbox_dataframe_list):
     return bbox_table
 
 
-def are_linking_table_columns_valid(*, table: ad.AnnData, reference_cycle: int, alignment_cycle: int) -> None:
+def are_linking_table_columns_valid(
+    *, table: ad.AnnData, reference_cycle: int, alignment_cycle: int
+) -> None:
     """
     Verify some validity assumptions on a ROI table.
 
@@ -91,15 +101,19 @@ def are_linking_table_columns_valid(*, table: ad.AnnData, reference_cycle: int, 
         alignment_cycle: alignment round id which is being linked to reference
     """
     # Hard constraint: table columns must include some expected ones
-    columns = ["R" + str(reference_cycle) + "_label",
-               "R" + str(alignment_cycle) + "_label"]
+    columns = [
+        "R" + str(reference_cycle) + "_label",
+        "R" + str(alignment_cycle) + "_label",
+    ]
     for column in columns:
         if column not in table.var_names:
             raise ValueError(f"Column {column} is not present in linking table")
     return
 
 
-def find_consensus(*, df_list: Sequence[pd.DataFrame], on: Sequence[str]) -> pd.DataFrame:
+def find_consensus(
+    *, df_list: Sequence[pd.DataFrame], on: Sequence[str]
+) -> pd.DataFrame:
     """
     Find consensus df from a list of dfs where only common ref IDs are kept
 
@@ -108,7 +122,9 @@ def find_consensus(*, df_list: Sequence[pd.DataFrame], on: Sequence[str]) -> pd.
         on: column name(s) that are in common between rounds
     """
 
-    consensus = reduce(lambda left, right: pd.merge(left, right, on=on, how='outer'), df_list)
+    consensus = reduce(
+        lambda left, right: pd.merge(left, right, on=on, how="outer"), df_list
+    )
 
     return consensus
 
@@ -136,21 +152,27 @@ def extract_acq_info(zarr_url):
     zarr_acquisition = None
 
     zarr_pathname = Path(zarr_url).name
-    wellmeta = load_NgffWellMeta(str(Path(zarr_url).parent)).well.images  # list of dictionaries for each round
+    wellmeta = load_NgffWellMeta(
+        str(Path(zarr_url).parent)
+    ).well.images  # list of dictionaries for each round
     for img in wellmeta:
         if img.path == zarr_pathname:
             zarr_acquisition = img.acquisition
     if zarr_acquisition is None:
-        raise ValueError(f"{zarr_url=} well metadata does not contain expected path and acquisition naming")
+        raise ValueError(
+            f"{zarr_url=} well metadata does not contain expected path and acquisition naming"
+        )
 
     return zarr_acquisition
 
 
-def initialize_new_label(zarr_url, shape, chunks, label_dtype, inherit_from_label, output_label_name, logger):
+def initialize_new_label(
+    zarr_url, shape, chunks, label_dtype, inherit_from_label, output_label_name, logger
+):
     store = zarr.storage.FSStore(f"{zarr_url}/labels/{output_label_name}/0")
 
     if len(shape) != 3 or len(chunks) != 3 or shape[0] == 1:
-        raise ValueError('Expecting 3D image')
+        raise ValueError("Expecting 3D image")
 
     # Add metadata to labels group
     # Get the label_attrs correctly
@@ -175,8 +197,18 @@ def initialize_new_label(zarr_url, shape, chunks, label_dtype, inherit_from_labe
     return new_label3d_array
 
 
-def save_new_label_with_overlap(new_npimg, label_str, new_label3d_array, zarr_url, output_label_name, region,
-                                label_pixmeta, compute, roi_idlist, row_int):
+def save_new_label_with_overlap(
+    new_npimg,
+    label_str,
+    new_label3d_array,
+    zarr_url,
+    output_label_name,
+    region,
+    label_pixmeta,
+    compute,
+    roi_idlist,
+    row_int,
+):
     # Load dask from disk, will contain rois of the previously processed objects within for loop
     new_label3d_dask = da.from_zarr(f"{zarr_url}/labels/{output_label_name}/0")
     # Load region of current object from disk, will include any previously processed neighboring objects
@@ -188,7 +220,9 @@ def save_new_label_with_overlap(new_npimg, label_str, new_label3d_array, zarr_ur
 
     # Check that dimensions of rois match
     if seg_ondisk.shape != new_npimg.shape:
-        raise ValueError('Computed label image must match image dimensions of bounding box during saving')
+        raise ValueError(
+            "Computed label image must match image dimensions of bounding box during saving"
+        )
 
     # Convert edge detection label image value to match object label id
     new_npimg_label = new_npimg * int(label_str)
@@ -214,8 +248,19 @@ def save_new_label_with_overlap(new_npimg, label_str, new_label3d_array, zarr_ur
     return bbox_df
 
 
-def compute_and_save_mesh(label_image, pixmeta, polynomial_degree, passband, feature_angle, target_reduction,
-                          smoothing_iterations, zarr_url, mesh_folder_name, object_name, save_as_stl):
+def compute_and_save_mesh(
+    label_image,
+    pixmeta,
+    polynomial_degree,
+    passband,
+    feature_angle,
+    target_reduction,
+    smoothing_iterations,
+    zarr_url,
+    mesh_folder_name,
+    object_name,
+    save_as_stl,
+):
     # Make mesh with vtkDiscreteFlyingEdges3D algorithm
     # Set spacing to ome-zarr pixel spacing metadata. Mesh will be in physical units (um)
     spacing = tuple(np.array(pixmeta))  # z,y,x e.g. (0.6, 0.216, 0.216)
@@ -224,14 +269,17 @@ def compute_and_save_mesh(label_image, pixmeta, polynomial_degree, passband, fea
     label_image_padded = np.pad(label_image, 1)
 
     # Calculate mesh
-    mesh_polydata = labels_to_mesh(label_image_padded, spacing,
-                                   polynomial_degree=polynomial_degree,
-                                   pass_band_param=passband,
-                                   feature_angle=feature_angle,
-                                   target_reduction=target_reduction,
-                                   smoothing_iterations=smoothing_iterations,
-                                   margin=5,
-                                   show_progress=False)
+    mesh_polydata = labels_to_mesh(
+        label_image_padded,
+        spacing,
+        polynomial_degree=polynomial_degree,
+        pass_band_param=passband,
+        feature_angle=feature_angle,
+        target_reduction=target_reduction,
+        smoothing_iterations=smoothing_iterations,
+        margin=5,
+        show_progress=False,
+    )
     # Save mesh
     save_transform_path = f"{zarr_url}/meshes/{mesh_folder_name}"
     os.makedirs(save_transform_path, exist_ok=True)

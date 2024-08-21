@@ -8,16 +8,14 @@
 #                                                                            #
 ##############################################################################
 
-import time
-import warnings
+
+import os.path
+import sys
+from copy import deepcopy
 
 import dask.array as da
 import numpy as np
-import os.path
 import SimpleITK as sitk
-import sys
-import tifffile
-from copy import deepcopy
 from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
 
@@ -25,19 +23,14 @@ from scipy.spatial.distance import cdist
 # platymatch will import other submodules from itself in an absolute way (i.e. from platymatch.xxx import ....)
 # rather than a relative way. Maybe we can create a pull request to switch those import statements to relative
 import scmultiplex
-sys.path.append(os.path.join(scmultiplex.__path__[0], r'platymatch'))
 
-from platymatch.estimate_transform.apply_transform import (
-    apply_affine_transform,
-)
+sys.path.append(os.path.join(scmultiplex.__path__[0], r"platymatch"))
+
+from platymatch.estimate_transform.apply_transform import apply_affine_transform
 from platymatch.estimate_transform.perform_icp import perform_icp
-from platymatch.estimate_transform.shape_context import (
-    do_ransac_complete,
-    get_unary,
-)
+from platymatch.estimate_transform.shape_context import do_ransac_complete, get_unary
 from platymatch.utils.utils import (
     compute_average_bg_intensity,
-    generate_affine_transformed_image,
     generate_ffd_transformed_image,
     get_centroid,
     get_mean_distance,
@@ -76,7 +69,9 @@ def calculate_quantiles(pc, q=0.5, column=-1):
     q is quantile in range [0,1] to calclulate
     """
     quantile = np.quantile(pc[:, column].transpose(), q)
-    iqr = np.quantile(pc[:, column].transpose(), 0.75) - np.quantile(pc[:, column].transpose(), 0.25)
+    iqr = np.quantile(pc[:, column].transpose(), 0.75) - np.quantile(
+        pc[:, column].transpose(), 0.25
+    )
     return quantile, iqr
 
 
@@ -97,7 +92,9 @@ def calculate_nucleus_size(moving_pc, fixed_pc):
     Calculate lower size cutoff of nuclear volumes in organoid in fixed and moving image
     Helper function used during affine linking
     """
-    moving_nuclei_size_mean, moving_nuclei_size_std = calculate_stats(moving_pc, column=-1)
+    moving_nuclei_size_mean, moving_nuclei_size_std = calculate_stats(
+        moving_pc, column=-1
+    )
     moving_nuclei_size = calculate_size(moving_nuclei_size_mean, moving_nuclei_size_std)
 
     fixed_nuclei_size_mean, fixed_nuclei_size_std = calculate_stats(fixed_pc, column=-1)
@@ -133,7 +130,9 @@ def run_affine(moving_pc, fixed_pc, ransac_iterations, icp_iterations):
     fixed_detections = np.flip(fixed_pc[:, 1:-1], 1).transpose()  # z y x, 3 x N
 
     # Calculate nucleus size
-    moving_nuclei_size, fixed_nuclei_size = calculate_nucleus_size_non_normal(moving_pc, fixed_pc, q=0.3)
+    moving_nuclei_size, fixed_nuclei_size = calculate_nucleus_size_non_normal(
+        moving_pc, fixed_pc, q=0.3
+    )
     # ransac error should be roughly cell diameter, in pixels
     ransac_error = 0.5 * (moving_nuclei_size ** (1 / 3) + fixed_nuclei_size ** (1 / 3))
 
@@ -196,9 +195,7 @@ def run_affine(moving_pc, fixed_pc, ransac_iterations, icp_iterations):
     transform_matrix_icp, icp_residuals = perform_icp(
         transformed_moving_detections, fixed_detections, icp_iterations, "Affine"
     )
-    transform_affine = np.matmul(
-        transform_matrix_icp, transform_matrix_shape_context
-    )
+    transform_affine = np.matmul(transform_matrix_icp, transform_matrix_shape_context)
 
     # Apply Affine Transform
     transformed_moving_detections = apply_affine_transform(
@@ -285,27 +282,33 @@ def run_ffd(
 
     # Generate Free Form Deformation transform (based on Intensity Correlation) --> Note this may take some time
     transform_ffd = generate_ffd_transformed_image(
-        fixed_image=sitk.GetImageFromArray(fixed_raw_image_normalized.astype(np.float32)),
+        fixed_image=sitk.GetImageFromArray(
+            fixed_raw_image_normalized.astype(np.float32)
+        ),
         moving_image=sitk.GetImageFromArray(
-            moving_transformed_affine_raw_image_normalized.astype(np.float32)))
+            moving_transformed_affine_raw_image_normalized.astype(np.float32)
+        ),
+    )
 
     # Generate FFD-transformed label image
-    transformed_ffd_label_image_sitk = sitk.Resample(sitk.GetImageFromArray(moving_transformed_affine_label_image),
-                                                     sitk.GetImageFromArray(fixed_raw_image),
-                                                     transform_ffd,
-                                                     sitk.sitkNearestNeighbor,
-                                                     0.0,
-                                                     sitk.GetImageFromArray(
-                                                         moving_transformed_affine_label_image).GetPixelID())
-    transformed_ffd_label_image = sitk.GetArrayFromImage(transformed_ffd_label_image_sitk).astype(
-        fixed_label_image.dtype)
+    transformed_ffd_label_image_sitk = sitk.Resample(
+        sitk.GetImageFromArray(moving_transformed_affine_label_image),
+        sitk.GetImageFromArray(fixed_raw_image),
+        transform_ffd,
+        sitk.sitkNearestNeighbor,
+        0.0,
+        sitk.GetImageFromArray(moving_transformed_affine_label_image).GetPixelID(),
+    )
+    transformed_ffd_label_image = sitk.GetArrayFromImage(
+        transformed_ffd_label_image_sitk
+    ).astype(fixed_label_image.dtype)
 
     # obtain accuracy after performing FFD
-    ids = moving_pc[:, 0].transpose() # same as moving_ids in run_affine functions
+    ids = moving_pc[:, 0].transpose()  # same as moving_ids in run_affine functions
     moving_ffd_ids = []
     transformed_moving_ffd_detections = []
 
-    for id in ids: # for id in original moving label image...
+    for id in ids:  # for id in original moving label image...
         # find centroid for same id in FFD-transformed label image
         z, y, x = np.where(transformed_ffd_label_image == id)
         zm, ym, xm = np.mean(z), np.mean(y), np.mean(x)
@@ -322,7 +325,7 @@ def run_ffd(
 
     # Return matching ids
     results_ffd = np.column_stack(
-        (   
+        (
             fixed_ids[col_indices].transpose(),
             moving_ffd_ids[row_indices].transpose(),
             cost_matrix[row_indices, col_indices],
@@ -332,10 +335,12 @@ def run_ffd(
     return results_ffd, transform_ffd, transformed_ffd_label_image
 
 
-def generate_ffd_rawimage_from_affine(moving_transformed_affine_raw_image,
-                                      fixed_raw_image,
-                                      fixed_label_image,
-                                      transform_ffd):
+def generate_ffd_rawimage_from_affine(
+    moving_transformed_affine_raw_image,
+    fixed_raw_image,
+    fixed_label_image,
+    transform_ffd,
+):
     """
     Apply ffd transform to intensity image. Intended to be applied to moving image that has been affine-transformed.
     :moving_transformed_affine_raw_image: numpy array of moving raw intensity image that has been affine-transformed, e.g. RX raw affine
@@ -346,19 +351,29 @@ def generate_ffd_rawimage_from_affine(moving_transformed_affine_raw_image,
         moving_transformed_ffd_raw_image: numpy array, result of ffd transformation of input moving affine image
         Note: image has some intensity normalization internally - ask Manan, TO-DO
     """
-    transformed_ffd_raw_image_sitk = sitk.Resample(sitk.GetImageFromArray(moving_transformed_affine_raw_image),
-                                                   sitk.GetImageFromArray(fixed_raw_image),
-                                                   transform_ffd,
-                                                   sitk.sitkLinear,
-                                                   compute_average_bg_intensity(fixed_raw_image, fixed_label_image),
-                                                   sitk.GetImageFromArray(moving_transformed_affine_raw_image).GetPixelID())
+    transformed_ffd_raw_image_sitk = sitk.Resample(
+        sitk.GetImageFromArray(moving_transformed_affine_raw_image),
+        sitk.GetImageFromArray(fixed_raw_image),
+        transform_ffd,
+        sitk.sitkLinear,
+        compute_average_bg_intensity(fixed_raw_image, fixed_label_image),
+        sitk.GetImageFromArray(moving_transformed_affine_raw_image).GetPixelID(),
+    )
 
-    moving_transformed_ffd_raw_image = sitk.GetArrayFromImage(transformed_ffd_raw_image_sitk).astype(fixed_raw_image.dtype)
+    moving_transformed_ffd_raw_image = sitk.GetArrayFromImage(
+        transformed_ffd_raw_image_sitk
+    ).astype(fixed_raw_image.dtype)
 
     return moving_transformed_ffd_raw_image
 
 
-def relabel_RX_numpy(rx_seg, matches, moving_colname='RX_nuc_id', fixed_colname='R0_nuc_id', daskarr=False):
+def relabel_RX_numpy(
+    rx_seg,
+    matches,
+    moving_colname="RX_nuc_id",
+    fixed_colname="R0_nuc_id",
+    daskarr=False,
+):
     """
     Relabel RX label map to match R0 labels based on linking. Matches is affine or ffd pandas df after platymatch matching
     """
@@ -413,6 +428,5 @@ def remove_labels(seg_img, labels_to_remove, datatype):
 
 
 def make_linking_dict(matches, moving_colname, fixed_colname):
-    linking_dict = matches.set_index(moving_colname).T.to_dict('index')[fixed_colname]
+    linking_dict = matches.set_index(moving_colname).T.to_dict("index")[fixed_colname]
     return linking_dict
-

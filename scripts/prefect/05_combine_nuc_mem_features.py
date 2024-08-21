@@ -12,14 +12,12 @@
 
 import argparse
 import os
-import prefect
 import sys
 
-from scmultiplex.faim_hcs.hcs.Experiment import Experiment
+import prefect
 from prefect import Flow, Parameter, task
 from prefect.executors import LocalDaskExecutor
 from prefect.run_configs import LocalRun
-from traceback import format_exc
 
 from scmultiplex import version
 from scmultiplex.config import (
@@ -27,13 +25,14 @@ from scmultiplex.config import (
     get_round_names,
     summary_csv_path,
 )
+from scmultiplex.faim_hcs.hcs.Experiment import Experiment
+from scmultiplex.logging import get_scmultiplex_logger, setup_prefect_handlers
+from scmultiplex.utils import get_core_count
 from scmultiplex.utils.accumulate_utils import (
     write_merged_nuc_membrane_features,
     write_nuc_to_mem_linking,
 )
 
-from scmultiplex.logging import get_scmultiplex_logger,setup_prefect_handlers
-from scmultiplex.utils import get_core_count
 
 @task()
 def load_experiment(exp_path):
@@ -48,7 +47,7 @@ def write_nuc_to_mem_linking_task(exp):
         write_nuc_to_mem_linking(exp)
     except RuntimeWarning as e:
         logger = get_scmultiplex_logger()
-        logger.info('%s' % str(e))
+        logger.info("%s" % str(e))
     else:
         write_merged_nuc_membrane_features(exp)
 
@@ -75,17 +74,18 @@ def run_flow(r_params, cpus):
 
 
 def get_config_params(config_file_path):
-    
+
     round_names = get_round_names(config_file_path)
     round_params = {}
     for ro in round_names:
         compute_param = {
-            'exp_path': (
-                summary_csv_path,[
-                    ('00BuildExperiment', 'base_dir_save'),
-                    ('00BuildExperiment.round_%s' % ro, 'name')
-                    ]
-                ),
+            "exp_path": (
+                summary_csv_path,
+                [
+                    ("00BuildExperiment", "base_dir_save"),
+                    ("00BuildExperiment.round_%s" % ro, "name"),
+                ],
+            ),
         }
         rp = compute_workflow_params(config_file_path, compute_param)
         round_params[ro] = rp
@@ -94,9 +94,9 @@ def get_config_params(config_file_path):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", required = True)
+    parser.add_argument("--config", required=True)
     parser.add_argument("--cpus", type=int, default=get_core_count())
-    parser.add_argument("--prefect-logfile", required = True)
+    parser.add_argument("--prefect-logfile", required=True)
 
     args = parser.parse_args()
     cpus = args.cpus
@@ -104,13 +104,13 @@ def main():
 
     setup_prefect_handlers(prefect.utilities.logging.get_logger(), prefect_logfile)
 
-    print('Running scMultipleX version %s' % version)
+    print("Running scMultipleX version %s" % version)
 
     r_params = get_config_params(args.config)
 
     ret = run_flow(r_params, cpus)
     if ret == 0:
-        print('%s completed successfully' % os.path.basename(sys.argv[0]))
+        print("%s completed successfully" % os.path.basename(sys.argv[0]))
     return ret
 
 

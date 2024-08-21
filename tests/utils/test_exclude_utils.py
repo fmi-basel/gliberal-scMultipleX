@@ -3,7 +3,6 @@ from unittest import TestCase
 from scmultiplex.faim_hcs.hcs.Experiment import Experiment
 from scmultiplex.faim_hcs.records.PlateRecord import PlateRecord
 from scmultiplex.faim_hcs.records.WellRecord import WellRecord
-
 from src.scmultiplex.utils.exclude_utils import exclude_conditions
 
 

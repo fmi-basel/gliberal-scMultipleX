@@ -13,6 +13,7 @@ from os.path import join
 
 import numpy as np
 import pandas as pd
+
 from scmultiplex.faim_hcs.hcs.Experiment import Experiment
 
 
@@ -89,11 +90,10 @@ def accumulate_tables(exp: Experiment):
     return org_df
 
 
-def split_shape_vs_channel_feats(df,tidy_id):
-    """identify object (shape) features vs. channel features in columns of df
-    """
+def split_shape_vs_channel_feats(df, tidy_id):
+    """identify object (shape) features vs. channel features in columns of df"""
     # split by tidy id; each group is a nucleus
-    splits =df.groupby(tidy_id)
+    splits = df.groupby(tidy_id)
 
     # for each nuc, calculate how many unique values of each measurement there are
     # take the max over all nuclei
@@ -566,7 +566,7 @@ def merge_org_linking(exp: Experiment):
             )  # saves csv
 
 
-def merge_platymatch_linking(exp: Experiment, transform = "affine"):
+def merge_platymatch_linking(exp: Experiment, transform="affine"):
     # pool together organoid linking files
     exp.only_iterate_over_wells(False)
     exp.reset_iterator()
@@ -616,7 +616,10 @@ def merge_platymatch_linking(exp: Experiment, transform = "affine"):
                 nuc_link_df_dict[key], ignore_index=True, sort=False
             )
             nuc_link_df.to_csv(
-                join(exp.get_experiment_dir(), ("linking_nuc_" + key + "_" + transform + "_df.csv")),
+                join(
+                    exp.get_experiment_dir(),
+                    ("linking_nuc_" + key + "_" + transform + "_df.csv"),
+                ),
                 index=False,
             )  # saves csv
 
@@ -782,7 +785,9 @@ def write_organoid_linking_over_multiplexing_rounds(round_names, round_summary_c
     )  # saves csv
 
 
-def write_nuclear_linking_over_multiplexing_rounds(round_names, round_summary_csvs, transform = "affine"):
+def write_nuclear_linking_over_multiplexing_rounds(
+    round_names, round_summary_csvs, transform="affine"
+):
     # Load the data
     exp_list = []
     df_list = []
@@ -814,7 +819,8 @@ def write_nuclear_linking_over_multiplexing_rounds(round_names, round_summary_cs
         # skip R0
         if i > 0:
             path = os.path.join(
-                exps["R0"].get_experiment_dir(), ("linking_nuc_R" + str(i) + "_" + transform + "_df.csv")
+                exps["R0"].get_experiment_dir(),
+                ("linking_nuc_R" + str(i) + "_" + transform + "_df.csv"),
             )
             isExist = os.path.exists(path)
 

@@ -11,7 +11,8 @@
 from os.path import join
 
 import pandas as pd
-from scmultiplex.faim_hcs.records.WellRecord import WellRecord, OrganoidRecord
+
+from scmultiplex.faim_hcs.records.WellRecord import OrganoidRecord, WellRecord
 
 
 def save_to_record(record, name: str, df: pd.DataFrame):
@@ -20,7 +21,9 @@ def save_to_record(record, name: str, df: pd.DataFrame):
     elif isinstance(record, WellRecord):
         path = join(record.well_dir, name + ".csv")
     else:
-        raise ValueError("input object type must be FAIM-HCS OrganoidRecord or WellRecord")
+        raise ValueError(
+            "input object type must be FAIM-HCS OrganoidRecord or WellRecord"
+        )
 
     # Save measurement into the record directory.
     df.to_csv(path, index=False)  # saves csv
@@ -41,5 +44,3 @@ def save_to_well(well: WellRecord, name: str, df: pd.DataFrame):
     # Add the measurement to the faim-hcs datastructure and save.
     well.add_measurement(name, path)
     well.save()  # updates json file
-
-

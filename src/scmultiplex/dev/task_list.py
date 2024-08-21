@@ -11,9 +11,7 @@
 """
 Fractal task list.
 """
-from fractal_tasks_core.dev.task_models import CompoundTask
-from fractal_tasks_core.dev.task_models import NonParallelTask
-from fractal_tasks_core.dev.task_models import ParallelTask
+from fractal_tasks_core.dev.task_models import CompoundTask, ParallelTask
 
 # executable relative to base folder to src/scmultiplex folder
 # TODO: check CPU and GPU usage for each task and allocate more accurate values

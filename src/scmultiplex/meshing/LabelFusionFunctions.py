@@ -7,15 +7,19 @@
 ##############################################################################
 
 import numpy as np
-from scipy.ndimage import binary_fill_holes, binary_erosion
-from skimage.morphology import disk, remove_small_objects
-from skimage.segmentation import expand_labels
+from scipy.ndimage import binary_erosion, binary_fill_holes
 from skimage.feature import canny
 from skimage.filters import gaussian
 from skimage.measure import label, regionprops
+from skimage.morphology import disk, remove_small_objects
+from skimage.segmentation import expand_labels
 
 from scmultiplex.features.FeatureFunctions import mesh_equivalent_diameter
-from scmultiplex.meshing.FilterFunctions import calculate_mean_volume, load_border_values, remove_border
+from scmultiplex.meshing.FilterFunctions import (
+    calculate_mean_volume,
+    load_border_values,
+    remove_border,
+)
 
 
 def fuse_labels(seg, expandby_factor):
@@ -43,18 +47,22 @@ def fuse_labels(seg, expandby_factor):
         zslice = binary_fill_holes(zslice)
         # Revert the expansion (i.e. erode down to original size)
         # Erode by half of the expanded pixels since disk(1) has a radius of 1, i.e. diameter of 2
-        seg_binary[i, :, :] = binary_erosion(zslice, disk(1), iterations=iterations)  # returns binary image, max val 1
+        seg_binary[i, :, :] = binary_erosion(
+            zslice, disk(1), iterations=iterations
+        )  # returns binary image, max val 1
 
     return seg_binary, expandby_pix, iterations
 
 
-def anisotropic_gaussian_blur(seg_binary, sigma, pixmeta, convert_to_8bit = True):
+def anisotropic_gaussian_blur(seg_binary, sigma, pixmeta, convert_to_8bit=True):
     """
     Perform gaussian blur of binary 3D image with anisotropic sigma. Sigma anisotropy calculated from pixel spacing.
     """
     # Scale sigma to match pixel anisotropy
-    spacing = np.array(pixmeta)/pixmeta[1]  # (z, y, x) where x,y is normalized to 1 e.g. (3, 1, 1)
-    anisotropic_sigma = tuple([sigma * (spacing[1] / x) for x in spacing])
+    spacing = (
+        np.array(pixmeta) / pixmeta[1]
+    )  # (z, y, x) where x,y is normalized to 1 e.g. (3, 1, 1)
+    anisotropic_sigma = tuple(sigma * (spacing[1] / x) for x in spacing)
 
     # Perform 3D gaussian blur
     # Output image has value range 0-1 (not always max 1)
@@ -171,24 +179,35 @@ def run_label_fusion(seg, expandby_factor, sigma, pixmeta, canny_threshold):
     return edges_canny, expandby_pix, iterations, anisotropic_sigma, padded_zslice_count
 
 
-def run_thresholding(raw_image, intensity_threshold, gaus_sigma_raw_img, gaus_sigma_thresh_img,
-                     small_objects_diameter, canny_threshold, pixmeta_raw, seg):
+def run_thresholding(
+    raw_image,
+    intensity_threshold,
+    gaus_sigma_raw_img,
+    gaus_sigma_thresh_img,
+    small_objects_diameter,
+    canny_threshold,
+    pixmeta_raw,
+    seg,
+):
     # Apply 3D gaussian blur to raw intensity image prior to thresholding
-    blurred, anisotropic_sigma = anisotropic_gaussian_blur(raw_image,
-                                                           gaus_sigma_raw_img,
-                                                           pixmeta_raw,
-                                                           convert_to_8bit=False)
+    blurred, anisotropic_sigma = anisotropic_gaussian_blur(
+        raw_image, gaus_sigma_raw_img, pixmeta_raw, convert_to_8bit=False
+    )
     # Generate binary mask
     # Simple intensity threshold; values above threshold set to 1, values below set to 0
     combo_binary = np.where(blurred > intensity_threshold, 1, 0)
 
     # Clean up binary mask by filling holes, removing small objects, and gaussian blur by z-slice
     small_objects_2dthreshold = np.pi * (small_objects_diameter / 2) ** 2
-    cleaned = clean_binary_image(combo_binary, gaus_sigma_thresh_img, small_objects_2dthreshold)
+    cleaned = clean_binary_image(
+        combo_binary, gaus_sigma_thresh_img, small_objects_2dthreshold
+    )
 
     # Smoothen edges of mask via Canny edge detection
     small_objects_3dthreshold = (4 / 3) * np.pi * (small_objects_diameter / 2) ** 3
-    contour, padded_zslice_count = find_edges(cleaned, canny_threshold, small_objects_3dthreshold)
+    contour, padded_zslice_count = find_edges(
+        cleaned, canny_threshold, small_objects_3dthreshold
+    )
 
     # Filter by organoid label image from 2D segmentation (converted to 3D)
     # This removes debris that is far from organoid (only in xy)

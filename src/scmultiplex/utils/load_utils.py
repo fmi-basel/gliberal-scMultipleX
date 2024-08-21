@@ -31,7 +31,9 @@ def load_ovr(well: WellRecord, ovr_channel: str):
             ovr_seg_tiles = ovr_seg[1]  # second image is drogon tiling
         elif dims == 2:
             ovr_seg_img = ovr_seg
-            ovr_seg_tiles = well.get_raw_data(ovr_channel)[1]  # load raw MIP image where second image is Drogon tiling
+            ovr_seg_tiles = well.get_raw_data(ovr_channel)[
+                1
+            ]  # load raw MIP image where second image is Drogon tiling
         else:
             raise NotImplementedError("only supporting 2D or 3D images")
 

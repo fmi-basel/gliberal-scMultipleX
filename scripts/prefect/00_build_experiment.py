@@ -11,7 +11,6 @@
 ##############################################################################
 
 import argparse
-import configparser
 import os
 import re
 import sys
@@ -29,8 +28,8 @@ from scmultiplex.config import (
     parse_spacing,
 )
 from scmultiplex.logging import get_scmultiplex_logger, setup_prefect_handlers
-from scmultiplex.utils.parse_utils import create_experiment
 from scmultiplex.utils import get_core_count
+from scmultiplex.utils.parse_utils import create_experiment
 
 
 @task(nout=5)
@@ -137,45 +136,39 @@ def run_flow(r_params, cpus):
 def get_config_params(config_file_path):
     round_names = get_round_names(config_file_path)
     config_params = {
-        'well_pattern':     ('00BuildExperiment', 'well_pattern'),
-        'raw_ch_pattern':   ('00BuildExperiment', 'raw_ch_pattern'),
-        'mask_ending':      ('00BuildExperiment', 'mask_ending'),
-        'save_dir':         ('00BuildExperiment', 'base_dir_save'),
-        }
+        "well_pattern": ("00BuildExperiment", "well_pattern"),
+        "raw_ch_pattern": ("00BuildExperiment", "raw_ch_pattern"),
+        "mask_ending": ("00BuildExperiment", "mask_ending"),
+        "save_dir": ("00BuildExperiment", "base_dir_save"),
+    }
     common_params = get_workflow_params(config_file_path, config_params)
-    
+
     compute_param = {
-        'spacing': (
-            parse_spacing,[
-                ('00BuildExperiment', 'spacing')
-                ]
-            ),
-        'overview_spacing': (
-            parse_spacing,[
-                ('00BuildExperiment', 'overview_spacing')
-                ]
-            ),
-        }
+        "spacing": (parse_spacing, [("00BuildExperiment", "spacing")]),
+        "overview_spacing": (
+            parse_spacing,
+            [("00BuildExperiment", "overview_spacing")],
+        ),
+    }
     common_params.update(compute_workflow_params(config_file_path, compute_param))
-    
+
     round_params = {}
     for ro in round_names:
         config_params = {
-            'name':                 ('00BuildExperiment.round_%s' % ro, 'name'),
-            'nuc_ending':           ('00BuildExperiment.round_%s' % ro, 'nuc_ending'),
-            'mem_ending':           ('00BuildExperiment.round_%s' % ro, 'mem_ending'),
-            'mip_ovr_name':         ('00BuildExperiment.round_%s' % ro, 'mip_ovr_name'),
-            'org_seg_name':         ('00BuildExperiment.round_%s' % ro, 'org_seg_name'),
-            'root_dir':             ('00BuildExperiment.round_%s' % ro, 'root_dir'),
-            }
+            "name": ("00BuildExperiment.round_%s" % ro, "name"),
+            "nuc_ending": ("00BuildExperiment.round_%s" % ro, "nuc_ending"),
+            "mem_ending": ("00BuildExperiment.round_%s" % ro, "mem_ending"),
+            "mip_ovr_name": ("00BuildExperiment.round_%s" % ro, "mip_ovr_name"),
+            "org_seg_name": ("00BuildExperiment.round_%s" % ro, "org_seg_name"),
+            "root_dir": ("00BuildExperiment.round_%s" % ro, "root_dir"),
+        }
         rp = common_params.copy()
         rp.update(get_workflow_params(config_file_path, config_params))
         compute_param = {
-            'fname_barcode_index': (
-                int,[
-                    ('00BuildExperiment.round_%s' % ro, 'fname_barcode_index')
-                    ]
-                ),
+            "fname_barcode_index": (
+                int,
+                [("00BuildExperiment.round_%s" % ro, "fname_barcode_index")],
+            ),
         }
         rp.update(compute_workflow_params(config_file_path, compute_param))
         round_params[ro] = rp
@@ -184,22 +177,22 @@ def get_config_params(config_file_path):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", required = True)
+    parser.add_argument("--config", required=True)
     parser.add_argument("--cpus", type=int, default=get_core_count())
-    parser.add_argument("--prefect-logfile", required = True)
+    parser.add_argument("--prefect-logfile", required=True)
 
     args = parser.parse_args()
     cpus = args.cpus
     prefect_logfile = args.prefect_logfile
-    
+
     setup_prefect_handlers(prefect.utilities.logging.get_logger(), prefect_logfile)
 
-    print('Running scMultipleX version %s' % version)
+    print("Running scMultipleX version %s" % version)
 
     r_params = get_config_params(args.config)
     ret = run_flow(r_params, cpus)
     if ret == 0:
-        print('%s completed successfully' % os.path.basename(sys.argv[0]))
+        print("%s completed successfully" % os.path.basename(sys.argv[0]))
     return ret
 
 

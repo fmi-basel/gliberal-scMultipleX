@@ -6,8 +6,9 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
-from ..records.WellRecord import WellRecord
 from scmultiplex.logging import get_faim_hcs_logger
+
+from ..records.WellRecord import WellRecord
 
 if TYPE_CHECKING:
     from ..hcs.Experiment import Experiment

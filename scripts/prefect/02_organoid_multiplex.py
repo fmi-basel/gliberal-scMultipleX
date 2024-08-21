@@ -11,13 +11,11 @@
 ##############################################################################
 
 import argparse
-import configparser
 import os
 import sys
 from typing import List
 
 import prefect
-from scmultiplex.faim_hcs.hcs.Experiment import Experiment
 from prefect import Flow, Parameter, task, unmapped
 from prefect.executors import LocalDaskExecutor
 from prefect.run_configs import LocalRun
@@ -30,11 +28,12 @@ from scmultiplex.config import (
     get_workflow_params,
     summary_csv_path,
 )
+from scmultiplex.faim_hcs.hcs.Experiment import Experiment
 from scmultiplex.linking.OrganoidLinking import get_linking_stats, link_organoids
 from scmultiplex.logging import get_scmultiplex_logger, setup_prefect_handlers
+from scmultiplex.utils import get_core_count
 from scmultiplex.utils.exclude_utils import exclude_conditions
 from scmultiplex.utils.load_utils import load_experiment
-from scmultiplex.utils import get_core_count
 
 
 @task(nout=2)
@@ -56,8 +55,20 @@ def get_seg_and_folder_name(RX_name, org_seg_name_RX):
 def get_wells(exp: Experiment, excluded_plates: List[str], excluded_wells: List[str]):
     return exclude_conditions(exp, excluded_plates, excluded_wells)
 
+
 @task()
-def link_organoids_and_get_stats_task(well, org_seg_ch, folder_name, R0, RX, seg_name,  mip_ovr_name_R0,  mip_ovr_name_RX, iou_cutoff, names):
+def link_organoids_and_get_stats_task(
+    well,
+    org_seg_ch,
+    folder_name,
+    R0,
+    RX,
+    seg_name,
+    mip_ovr_name_R0,
+    mip_ovr_name_RX,
+    iou_cutoff,
+    names,
+):
     link_organoids(
         well=well,
         ovr_channel=org_seg_ch,
@@ -65,8 +76,8 @@ def link_organoids_and_get_stats_task(well, org_seg_ch, folder_name, R0, RX, seg
         R0=R0,
         RX=RX,
         seg_name=seg_name,
-        mip_ovr_name_R0= mip_ovr_name_R0,
-        mip_ovr_name_RX= mip_ovr_name_RX,
+        mip_ovr_name_R0=mip_ovr_name_R0,
+        mip_ovr_name_RX=mip_ovr_name_RX,
         logger=get_scmultiplex_logger(),
     )
     get_linking_stats(
@@ -79,6 +90,7 @@ def link_organoids_and_get_stats_task(well, org_seg_ch, folder_name, R0, RX, seg
         logger=get_scmultiplex_logger(),
     )
     return
+
 
 # keep threading for time being
 def run_flow(r_params, cpus):
@@ -106,7 +118,7 @@ def run_flow(r_params, cpus):
         wells = get_wells(
             R0, excluded_plates=excluded_plates, excluded_wells=excluded_wells
         )
-        
+
         link_organoids_and_get_stats_task.map(
             wells,
             unmapped(org_seg_ch),
@@ -130,61 +142,56 @@ def run_flow(r_params, cpus):
 
 
 def get_config_params(config_file_path):
-    
+
     round_names = get_round_names(config_file_path)
     if len(round_names) < 2:
-        raise RuntimeError('At least two rounds are required to perform organoid linking')
+        raise RuntimeError(
+            "At least two rounds are required to perform organoid linking"
+        )
     rounds_tobelinked = round_names[1:]
-    
+
     config_params = {
-        'mip_ovr_name_R0':         ('00BuildExperiment.round_%s' % round_names[0],  'mip_ovr_name'),
-        }
-    
+        "mip_ovr_name_R0": (
+            "00BuildExperiment.round_%s" % round_names[0],
+            "mip_ovr_name",
+        ),
+    }
+
     common_params = get_workflow_params(config_file_path, config_params)
-    
+
     compute_param = {
-        'excluded_plates': (
-            commasplit,[
-                ('01FeatureExtraction', 'excluded_plates')
-                ]
-            ),
-        'excluded_wells': (
-            commasplit,[
-                ('01FeatureExtraction', 'excluded_wells')
-                ]
-            ),
-        'iou_cutoff': (
-            float,[
-                ('02OrganoidLinking', 'iou_cutoff')
-                ]
-            ),
-        'R0_path': (
-                summary_csv_path,[
-                    ('00BuildExperiment', 'base_dir_save'),
-                    ('00BuildExperiment.round_%s' % round_names[0], 'name')
-                    ]
-                ),
-        }
+        "excluded_plates": (commasplit, [("01FeatureExtraction", "excluded_plates")]),
+        "excluded_wells": (commasplit, [("01FeatureExtraction", "excluded_wells")]),
+        "iou_cutoff": (float, [("02OrganoidLinking", "iou_cutoff")]),
+        "R0_path": (
+            summary_csv_path,
+            [
+                ("00BuildExperiment", "base_dir_save"),
+                ("00BuildExperiment.round_%s" % round_names[0], "name"),
+            ],
+        ),
+    }
     common_params.update(compute_workflow_params(config_file_path, compute_param))
-    
+
     round_tobelinked_params = {}
     for ro in rounds_tobelinked:
         config_params = {
-            'org_seg_ch':           ('00BuildExperiment.round_%s' % ro, 'organoid_seg_channel'),
-            'mip_ovr_name_RX':      ('00BuildExperiment.round_%s' % ro,  'mip_ovr_name'),
-            'org_seg_name_RX':      ('00BuildExperiment.round_%s' % ro,  'org_seg_name'),
-            }
+            "org_seg_ch": ("00BuildExperiment.round_%s" % ro, "organoid_seg_channel"),
+            "mip_ovr_name_RX": ("00BuildExperiment.round_%s" % ro, "mip_ovr_name"),
+            "org_seg_name_RX": ("00BuildExperiment.round_%s" % ro, "org_seg_name"),
+        }
         rp = common_params.copy()
         rp.update(get_workflow_params(config_file_path, config_params))
 
-        rp['RX_name'] = ro
+        rp["RX_name"] = ro
         compute_param = {
-            'RX_path': (
-                summary_csv_path,[
-                    ('00BuildExperiment', 'base_dir_save'),
-                    ('00BuildExperiment.round_%s' % ro, 'name')
-                    ]
-                ),
+            "RX_path": (
+                summary_csv_path,
+                [
+                    ("00BuildExperiment", "base_dir_save"),
+                    ("00BuildExperiment.round_%s" % ro, "name"),
+                ],
+            ),
         }
         rp.update(compute_workflow_params(config_file_path, compute_param))
         round_tobelinked_params[ro] = rp
@@ -193,9 +200,9 @@ def get_config_params(config_file_path):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", required = True)
+    parser.add_argument("--config", required=True)
     parser.add_argument("--cpus", type=int, default=get_core_count())
-    parser.add_argument("--prefect-logfile", required = True)
+    parser.add_argument("--prefect-logfile", required=True)
 
     args = parser.parse_args()
     cpus = args.cpus
@@ -203,13 +210,13 @@ def main():
 
     setup_prefect_handlers(prefect.utilities.logging.get_logger(), prefect_logfile)
 
-    print('Running scMultipleX version %s' % version)
+    print("Running scMultipleX version %s" % version)
 
     r_params = get_config_params(args.config)
 
     ret = run_flow(r_params, cpus)
     if ret == 0:
-        print('%s completed successfully' % os.path.basename(sys.argv[0]))
+        print("%s completed successfully" % os.path.basename(sys.argv[0]))
     return ret
 
 

@@ -1,15 +1,15 @@
-import vtk
-import pyshtools
+from typing import List, Tuple
+
 import numpy as np
-from typing import Tuple, List
+import pyshtools
+import vtk
+from scipy import interpolate as sciinterp
 from scipy import stats as scistats
-from skimage import transform as sktrans
 from skimage import filters as skfilters
 from skimage import morphology as skmorpho
-from scipy import interpolate as sciinterp
-from vtkmodules.util import numpy_support as vtknp
+from skimage import transform as sktrans
 from sklearn import decomposition as skdecomp
-
+from vtkmodules.util import numpy_support as vtknp
 
 EPS = 1e-12
 
@@ -19,7 +19,7 @@ def get_mesh_from_image(
     sigma: float = 0,
     lcc: bool = True,
     translate_to_origin: bool = True,
-    spacing: tuple = None, #zyx
+    spacing: tuple = None,  # zyx
 ):
     """Converts a numpy array into a vtkImageData and then into a 3d mesh
     using vtkContourFilter. The input is assumed to be binary and the
@@ -85,10 +85,12 @@ def get_mesh_from_image(
     if sigma > 0:
         # scale sigma by anisotropic spacing
         if spacing:
-            sigma_scaled = tuple([sigma * (spacing[1] / x) for x in spacing])
+            sigma_scaled = tuple(sigma * (spacing[1] / x) for x in spacing)
             img = skfilters.gaussian(img.astype(np.float32), sigma=sigma_scaled)
         else:
-            img = skfilters.gaussian(img.astype(np.float32), sigma=(sigma, sigma, sigma))
+            img = skfilters.gaussian(
+                img.astype(np.float32), sigma=(sigma, sigma, sigma)
+            )
 
         img[img < 1.0 / np.exp(1.0)] = 0
         img[img > 0] = 1

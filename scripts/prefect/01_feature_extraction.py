@@ -11,45 +11,40 @@
 ##############################################################################
 
 import argparse
-import configparser
 import os
 import sys
 from typing import List
 
 import prefect
-from scmultiplex.faim_hcs.hcs.Experiment import Experiment
-from scmultiplex.faim_hcs.records.WellRecord import WellRecord
 from prefect import Flow, Parameter, task, unmapped
 from prefect.executors import LocalDaskExecutor
 from prefect.run_configs import LocalRun
 
-import scmultiplex.config
 from scmultiplex import version
-from scmultiplex.features.FeatureFunctions import set_spacing
-from scmultiplex.logging import setup_prefect_handlers
-from scmultiplex.utils import get_core_count
-
 from scmultiplex.config import (
     commasplit,
     compute_workflow_params,
     get_round_names,
     get_workflow_params,
     parse_spacing,
-    summary_csv_path,
     spacing_anisotropy_tuple,
-    str2bool
+    str2bool,
+    summary_csv_path,
 )
+from scmultiplex.faim_hcs.hcs.Experiment import Experiment
+from scmultiplex.faim_hcs.records.WellRecord import WellRecord
 from scmultiplex.features.FeatureExtraction import (
     extract_organoid_features,
     extract_well_features,
     link_nuc_to_membrane,
 )
-from scmultiplex.features.FeatureFunctions import flag_touching
+from scmultiplex.features.FeatureFunctions import set_spacing
+from scmultiplex.logging import setup_prefect_handlers
+from scmultiplex.utils import get_core_count
 from scmultiplex.utils.exclude_utils import exclude_conditions
 
 # wrap a function in a prefect task
-from scmultiplex.utils.load_utils import load_experiment, load_ovr
-from scmultiplex.utils.save_utils import save_to_well
+from scmultiplex.utils.load_utils import load_experiment
 
 
 @task(nout=2)
@@ -98,8 +93,17 @@ def get_organoids(
 
 @task()
 def organoid_feature_extraction_and_linking_task(
-    organoid, nuc_ending: str, mem_ending: str, mask_ending: str, spacing: List[float], measure_morphology,
-        org_seg_ch, nuc_seg_ch, mem_seg_ch, iop_cutoff):
+    organoid,
+    nuc_ending: str,
+    mem_ending: str,
+    mask_ending: str,
+    spacing: List[float],
+    measure_morphology,
+    org_seg_ch,
+    nuc_seg_ch,
+    mem_seg_ch,
+    iop_cutoff,
+):
 
     set_spacing(spacing)
     extract_organoid_features(
@@ -146,12 +150,12 @@ def run_flow(r_params, cpus):
 
         exp, wells = load_task(exp_path, excluded_plates, excluded_wells)
 
-        wfeo_t = well_feature_extraction_ovr_task.map(
-            wells, unmapped(org_seg_ch)
+        wfeo_t = well_feature_extraction_ovr_task.map(wells, unmapped(org_seg_ch))
+
+        organoids = get_organoids(
+            exp, mask_ending, excluded_plates, excluded_wells, upstream_tasks=[wfeo_t]
         )
 
-        organoids = get_organoids(exp, mask_ending, excluded_plates, excluded_wells, upstream_tasks = [wfeo_t])
-        
         organoid_feature_extraction_and_linking_task.map(
             organoids,
             unmapped(nuc_ending),
@@ -163,7 +167,7 @@ def run_flow(r_params, cpus):
             unmapped(nuc_seg_ch),
             unmapped(mem_seg_ch),
             unmapped(iop_cutoff),
-            upstream_tasks = [organoids],
+            upstream_tasks=[organoids],
         )
 
     ret = 0
@@ -176,66 +180,49 @@ def run_flow(r_params, cpus):
 
 
 def get_config_params(config_file_path):
-    
+
     round_names = get_round_names(config_file_path)
     config_params = {
-        'mask_ending':     ('00BuildExperiment', 'mask_ending'),
-        'measure_morphology': ('01FeatureExtraction', 'measure_morphology'),
-        }
+        "mask_ending": ("00BuildExperiment", "mask_ending"),
+        "measure_morphology": ("01FeatureExtraction", "measure_morphology"),
+    }
     common_params = get_workflow_params(config_file_path, config_params)
 
     compute_param = {
-        'excluded_plates': (
-            commasplit,[
-                ('01FeatureExtraction', 'excluded_plates')
-                ]
-            ),
-        'excluded_wells': (
-            commasplit,[
-                ('01FeatureExtraction', 'excluded_wells')
-                ]
-            ),
-        'iop_cutoff': (
-            float,[
-                ('01FeatureExtraction', 'iop_cutoff')
-                ]
-            ),
-        'measure_morphology': (
-            str2bool,[
-                ('01FeatureExtraction', 'measure_morphology')
-            ]
+        "excluded_plates": (commasplit, [("01FeatureExtraction", "excluded_plates")]),
+        "excluded_wells": (commasplit, [("01FeatureExtraction", "excluded_wells")]),
+        "iop_cutoff": (float, [("01FeatureExtraction", "iop_cutoff")]),
+        "measure_morphology": (
+            str2bool,
+            [("01FeatureExtraction", "measure_morphology")],
         ),
-        'spacing': (
-            parse_spacing,[
-                ('00BuildExperiment', 'spacing')
-                ]
-            ),
-
-        }
+        "spacing": (parse_spacing, [("00BuildExperiment", "spacing")]),
+    }
     common_params.update(compute_workflow_params(config_file_path, compute_param))
 
     # for feature extraction, use spacing normalized to x-dim spacing
-    parsed_spacing = common_params['spacing']
-    common_params['spacing'] = spacing_anisotropy_tuple(parsed_spacing)
-    
+    parsed_spacing = common_params["spacing"]
+    common_params["spacing"] = spacing_anisotropy_tuple(parsed_spacing)
+
     round_params = {}
     for ro in round_names:
         config_params = {
-            'nuc_ending':           ('00BuildExperiment.round_%s' % ro, 'nuc_ending'),
-            'mem_ending':           ('00BuildExperiment.round_%s' % ro, 'mem_ending'),
-            'org_seg_ch':           ('00BuildExperiment.round_%s' % ro, 'organoid_seg_channel'),
-            'nuc_seg_ch':           ('00BuildExperiment.round_%s' % ro, 'nuclear_seg_channel'),
-            'mem_seg_ch':           ('00BuildExperiment.round_%s' % ro, 'membrane_seg_channel'),
-            }
+            "nuc_ending": ("00BuildExperiment.round_%s" % ro, "nuc_ending"),
+            "mem_ending": ("00BuildExperiment.round_%s" % ro, "mem_ending"),
+            "org_seg_ch": ("00BuildExperiment.round_%s" % ro, "organoid_seg_channel"),
+            "nuc_seg_ch": ("00BuildExperiment.round_%s" % ro, "nuclear_seg_channel"),
+            "mem_seg_ch": ("00BuildExperiment.round_%s" % ro, "membrane_seg_channel"),
+        }
         rp = common_params.copy()
         rp.update(get_workflow_params(config_file_path, config_params))
         compute_param = {
-            'exp_path': (
-                summary_csv_path,[
-                    ('00BuildExperiment', 'base_dir_save'),
-                    ('00BuildExperiment.round_%s' % ro, 'name')
-                    ]
-                ),
+            "exp_path": (
+                summary_csv_path,
+                [
+                    ("00BuildExperiment", "base_dir_save"),
+                    ("00BuildExperiment.round_%s" % ro, "name"),
+                ],
+            ),
         }
         rp.update(compute_workflow_params(config_file_path, compute_param))
         round_params[ro] = rp
@@ -244,9 +231,9 @@ def get_config_params(config_file_path):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", required = True)
+    parser.add_argument("--config", required=True)
     parser.add_argument("--cpus", type=int, default=get_core_count())
-    parser.add_argument("--prefect-logfile", required = True)
+    parser.add_argument("--prefect-logfile", required=True)
 
     args = parser.parse_args()
     cpus = args.cpus
@@ -254,13 +241,13 @@ def main():
 
     setup_prefect_handlers(prefect.utilities.logging.get_logger(), prefect_logfile)
 
-    print('Running scMultipleX version %s' % version)
+    print("Running scMultipleX version %s" % version)
 
     r_params = get_config_params(args.config)
 
     ret = run_flow(r_params, cpus)
     if ret == 0:
-        print('%s completed successfully' % os.path.basename(sys.argv[0]))
+        print("%s completed successfully" % os.path.basename(sys.argv[0]))
     return ret
 
 

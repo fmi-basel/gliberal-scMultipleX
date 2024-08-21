@@ -18,6 +18,12 @@ import anndata as ad
 import dask.array as da
 import numpy as np
 import zarr
+from fractal_tasks_core.channels import (
+    ChannelInputModel,
+    ChannelNotFoundError,
+    OmeroChannel,
+    get_channel_from_image_zarr,
+)
 from fractal_tasks_core.ngff import load_NgffImageMeta
 from fractal_tasks_core.pyramids import build_pyramid
 from fractal_tasks_core.roi import (
@@ -26,13 +32,6 @@ from fractal_tasks_core.roi import (
     convert_ROI_table_to_indices,
     get_overlapping_pairs_3D,
     load_region,
-)
-
-from fractal_tasks_core.channels import (
-    ChannelInputModel,
-    ChannelNotFoundError,
-    OmeroChannel,
-    get_channel_from_image_zarr,
 )
 from fractal_tasks_core.tables import write_table
 from fractal_tasks_core.tasks.io_models import InitArgsRegistrationConsensus
@@ -65,7 +64,6 @@ def segment_by_intensity_threshold(
     gaus_sigma_thresh_img: float = 20,
     small_objects_diameter: float = 20,
     canny_threshold: float = 0.2,
-
 ) -> dict[str, Any]:
     """
     Calculate full 3D object segmentation after 2D MIP-based segmentation using intensity thresholding of
@@ -275,7 +273,7 @@ def segment_by_intensity_threshold(
         )
 
         if seg.shape != ch1_raw.shape:
-            raise ValueError('Shape of label and raw images must match.')
+            raise ValueError("Shape of label and raw images must match.")
 
         # Check that label exists in object
         if float(label_str) not in seg:
@@ -298,24 +296,36 @@ def segment_by_intensity_threshold(
         # TODO: consider using https://github.com/seung-lab/fill_voids to fill luman holes
         # TODO: account for z-decay of intensity
         # TODO: update Zenodo test dataset so that org seg matches raw image level
-        seg3d, padded_zslice_count, roi_count = run_thresholding(combo, intensity_threshold, gaus_sigma_raw_img,
-                                                      gaus_sigma_thresh_img, small_objects_diameter,
-                                                      canny_threshold, pixmeta_raw, seg)
+        seg3d, padded_zslice_count, roi_count = run_thresholding(
+            combo,
+            intensity_threshold,
+            gaus_sigma_raw_img,
+            gaus_sigma_thresh_img,
+            small_objects_diameter,
+            canny_threshold,
+            pixmeta_raw,
+            seg,
+        )
 
         # Check whether is binary
         if np.amax(seg3d) not in [0, 1]:
-            raise ValueError('Image not binary')
+            raise ValueError("Image not binary")
 
         if roi_count > 0:
             logger.info(
-                f"Successfully calculated 3D label map for object label {label_str}.")
+                f"Successfully calculated 3D label map for object label {label_str}."
+            )
             object_count += 1
             if roi_count > 1:
-                logger.info(f"Object {label_str} contains more than 1 component. "
-                            f"Largest component selected as label mask.")
+                logger.info(
+                    f"Object {label_str} contains more than 1 component. "
+                    f"Largest component selected as label mask."
+                )
         else:
-            logger.warning(f"Empty result for object label  {label_str}. No label calculated. "
-                        f"Is small_objects_diameter or intensity_threshold too high?")
+            logger.warning(
+                f"Empty result for object label  {label_str}. No label calculated. "
+                f"Is small_objects_diameter or intensity_threshold too high?"
+            )
 
         if padded_zslice_count > 0:
             logger.info(
@@ -392,7 +402,9 @@ def segment_by_intensity_threshold(
     logger.info(
         f"Successfully processed {object_count} out of {total_label_count} labels."
     )
-    logger.info(f"End segment_by_intensity_threshold task for {zarr_url}/labels/{label_name}")
+    logger.info(
+        f"End segment_by_intensity_threshold task for {zarr_url}/labels/{label_name}"
+    )
 
     return {}
 

@@ -3,8 +3,9 @@ from os.path import basename, dirname, exists, join
 
 import pandas as pd
 
-from ..records.PlateRecord import PlateRecord
 from scmultiplex.logging import get_faim_hcs_logger
+
+from ..records.PlateRecord import PlateRecord
 
 
 class Experiment:

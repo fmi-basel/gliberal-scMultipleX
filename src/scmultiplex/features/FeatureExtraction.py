@@ -10,19 +10,16 @@
 
 import copy
 from os.path import join
-from typing import List, Tuple
+from typing import Tuple
 
 import numpy as np
 import pandas as pd
+
 from scmultiplex.faim_hcs.records.OrganoidRecord import OrganoidRecord
 from scmultiplex.faim_hcs.records.WellRecord import WellRecord
-
 from scmultiplex.features.FeatureFunctions import flag_touching
-
 from scmultiplex.features.FeatureProps import measure_features
-
 from scmultiplex.linking.matching import matching
-
 from scmultiplex.utils.load_utils import load_ovr
 
 
@@ -59,44 +56,44 @@ def extract_organoid_features(
 
         calc_morphology = (channel == organoid_seg_channel) and measure_morphology
 
-        extra_values_common = {'hcs_experiment': organoid.well.plate.experiment.name,
-                               'root_dir': organoid.well.plate.experiment.root_dir,
-                               'plate_id': organoid.well.plate.plate_id,
-                               'well_id': organoid.well.well_id,
-                               'channel_id': channel,
-                               'org_id': int(organoid.organoid_id.rpartition("_")[2]),
-                               'intensity_img': organoid.raw_files[channel],
-                               }
+        extra_values_common = {
+            "hcs_experiment": organoid.well.plate.experiment.name,
+            "root_dir": organoid.well.plate.experiment.root_dir,
+            "plate_id": organoid.well.plate.plate_id,
+            "well_id": organoid.well.well_id,
+            "channel_id": channel,
+            "org_id": int(organoid.organoid_id.rpartition("_")[2]),
+            "intensity_img": organoid.raw_files[channel],
+        }
         extra_values_org = {
-            'segmentation_org': organoid.segmentations[mask_ending],
-            'object_type': 'organoid',
-            'abs_min': abs_min_intensity,
+            "segmentation_org": organoid.segmentations[mask_ending],
+            "object_type": "organoid",
+            "abs_min": abs_min_intensity,
         }
 
-
         measure_features(
-            object_type = 'org',
-            record = organoid,
-            channel = channel,
-            label_img = org_seg,
-            img = raw_mip,
-            spacing = spacing,
-            is_2D = True,
-            measure_morphology = calc_morphology,
-            min_area_fraction = 0.005,
-            channel_prefix = None,
-            extra_values_common = extra_values_common,
-            extra_values_object = extra_values_org,
-            touching_labels = None,
-            )
+            object_type="org",
+            record=organoid,
+            channel=channel,
+            label_img=org_seg,
+            img=raw_mip,
+            spacing=spacing,
+            is_2D=True,
+            measure_morphology=calc_morphology,
+            min_area_fraction=0.005,
+            channel_prefix=None,
+            extra_values_common=extra_values_common,
+            extra_values_object=extra_values_org,
+            touching_labels=None,
+        )
 
         # NUCLEAR feature extraction
         if nuc_seg is not None:
             calc_morphology = (channel == nuclear_seg_channel) and measure_morphology
 
             extra_values_nuc = {
-                'segmentation_nuc': organoid.segmentations[nuc_ending],
-                'object_type': 'nucleus'
+                "segmentation_nuc": organoid.segmentations[nuc_ending],
+                "object_type": "nucleus",
             }
 
             # make binary organoid mask and crop nuclear labels to this mask to limit nuclei from neighboring orgs
@@ -105,7 +102,7 @@ def extract_organoid_features(
             nuc_seg = nuc_seg * org_seg_binary
 
             measure_features(
-                object_type='nuc',
+                object_type="nuc",
                 record=organoid,
                 channel=channel,
                 label_img=nuc_seg,
@@ -125,8 +122,8 @@ def extract_organoid_features(
             calc_morphology = (channel == membrane_seg_channel) and measure_morphology
 
             extra_values_mem = {
-                'segmentation_mem': organoid.segmentations[mem_ending],
-                'object_type': 'membrane'
+                "segmentation_mem": organoid.segmentations[mem_ending],
+                "object_type": "membrane",
             }
 
             org_seg_binary = copy.deepcopy(org_seg)
@@ -134,7 +131,7 @@ def extract_organoid_features(
             mem_seg = mem_seg * org_seg_binary
 
             measure_features(
-                object_type='mem',
+                object_type="mem",
                 record=organoid,
                 channel=channel,
                 label_img=mem_seg,
@@ -163,17 +160,18 @@ def extract_well_features(
     # if ovr_seg_img is None and ovr_seg_tiles is None:
     #     logger.warning(f"ovr_seg does not exists. Skipping {well.well_id}.")
 
-    extra_values_common = {'hcs_experiment': well.plate.experiment.name,
-                           'plate_id': well.plate.plate_id,
-                           'well_id': well.well_id,
-                           }
+    extra_values_common = {
+        "hcs_experiment": well.plate.experiment.name,
+        "plate_id": well.plate.plate_id,
+        "well_id": well.well_id,
+    }
 
     extra_values_ovr = {
         "segmentation_ovr": well.segmentations[ovr_channel],
     }
 
     measure_features(
-        object_type='ovr',
+        object_type="ovr",
         record=well,
         channel=ovr_channel,
         label_img=ovr_seg_img,

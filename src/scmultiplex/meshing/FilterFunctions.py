@@ -7,9 +7,7 @@
 ##############################################################################
 import numpy as np
 import pandas as pd
-import math
-
-from fractal_tasks_core.roi import load_region, convert_indices_to_regions
+from fractal_tasks_core.roi import convert_indices_to_regions, load_region
 from fractal_tasks_core.upscale_array import upscale_array
 from skimage.measure import regionprops_table
 
@@ -55,11 +53,11 @@ def calculate_mean_volume(seg):
     """
     Calculate mean volume across labels in input numpy array segmentation image
     """
-    props = regionprops_table(label_image=seg, properties=('label', 'area'))
+    props = regionprops_table(label_image=seg, properties=("label", "area"))
 
     # output column order must be: ["label", "volume"]
     # units are in pixels
-    props = (pd.DataFrame(props, columns=['label', 'area'])).to_numpy()
+    props = (pd.DataFrame(props, columns=["label", "area"])).to_numpy()
 
     # calculate mean of nuclear volumes
     size_mean = np.mean(props[:, -1])
@@ -67,7 +65,9 @@ def calculate_mean_volume(seg):
     return size_mean
 
 
-def mask_by_parent_object(seg, parent_dask, parent_idlist_parentmeta, row_int, parent_label_id):
+def mask_by_parent_object(
+    seg, parent_dask, parent_idlist_parentmeta, row_int, parent_label_id
+):
     """
     Mask input numpy array (seg) by parent numpy array (region loaded from dask_parent)
     Assumes seg array already loaded into memory, and here load matching organoid array to perform multiplication
@@ -110,11 +110,15 @@ def mask_by_parent_object(seg, parent_dask, parent_idlist_parentmeta, row_int, p
     # if object segmentation was run at a different level than nuclear segmentation,
     # need to upscale arrays to match shape
     if parent.shape != seg.shape:
-        parent = upscale_array(array=parent, target_shape=seg.shape, pad_with_zeros=False)
+        parent = upscale_array(
+            array=parent, target_shape=seg.shape, pad_with_zeros=False
+        )
 
     # mask nuclei by parent object
     parent_mask = np.zeros_like(parent)
-    parent_mask[parent == int(parent_label_id)] = 1  # select only current object and binarize object mask
+    parent_mask[
+        parent == int(parent_label_id)
+    ] = 1  # select only current object and binarize object mask
     seg_masked = seg * parent_mask
 
     return seg_masked

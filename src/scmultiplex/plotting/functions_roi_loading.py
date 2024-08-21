@@ -1,9 +1,10 @@
-import anndata as ad
 from pathlib import Path
-import numpy as np
 from typing import Iterable, List
-import zarr
+
+import anndata as ad
 import dask.array as da
+import numpy as np
+import zarr
 
 ### Functions: ROI loading (from Joel's plugin; TODO directly import)
 
@@ -20,7 +21,7 @@ def read_table(zarr_url: Path, roi_table):
 def get_metadata(zarr_url):
     with zarr.open(zarr_url) as metadata:
         return metadata
-    
+
 
 def convert_ROI_table_to_indices(
     ROI: ad.AnnData,
@@ -86,7 +87,7 @@ def convert_ROI_table_to_indices(
         indices_dict[FOV] = indices[:]
 
     return indices_dict
-    
+
 
 def load_intensity_roi(
     zarr_url,
