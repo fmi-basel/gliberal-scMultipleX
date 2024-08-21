@@ -615,6 +615,167 @@
       "docs_info": "## _init_group_by_well_for_multiplexing\nFinds images for all acquisitions per well.\n\nReturns the parallelization_list to run `find_registration_consensus`.\n## surface_mesh_multiscale\nCalculate 3D surface mesh of parent object (e.g. tissue, organoid)\nfrom 3D cell-level segmentation of children (e.g. nuclei)\n\nRecommended to run on child objects that have been filtered to remove debris and disconnected components\n(e.g. following cleanup_3d_segmentation task)\n\nThis task consists of 4 parts:\n\n1. Load the sub-object (e.g. nuc) segmentation images for each object of a given reference round; skip other rounds.\n    Select sub-objects (e.g. nuc) that belong to parent object region by masking by parent.\n2. Perform label fusion and edge detection to generate surface label image.\n3. Calculate surface mesh of label image using vtkDiscreteFlyingEdges3D algorithm. Smoothing is applied with\n    vtkWindowedSincPolyDataFilter and tuned with 4 task parameters: passband, smoothing_iterations, feature_angle,\n    polynomial_degree (minimal effect).\n    The number of triangles in the mesh is optionally reduced with vtkQuadricDecimation filter to form a good\n    approximation to the original geometry and is tuned with task parameter target_reduction.\n4. Output: save the (1) meshes (.stl) per object id in meshes folder and (2) well label map as a new label in zarr.\n    Note that label map output may be clipped for objects that are dense and have overlapping pixels.\n    In this case, the 'winning' object in the overlap region is the one with higher label id.\n"
     },
     {
+      "name": "scMultiplex Segment by Intensity Threshold",
+      "executable_non_parallel": "fractal/init_select_multiplexing_round.py",
+      "executable_parallel": "fractal/segment_by_intensity_threshold.py",
+      "meta_non_parallel": {
+        "cpus_per_task": 1,
+        "mem": 1000
+      },
+      "meta_parallel": {
+        "cpus_per_task": 4,
+        "mem": 16000
+      },
+      "args_schema_non_parallel": {
+        "additionalProperties": false,
+        "properties": {
+          "zarr_urls": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Zarr Urls",
+            "type": "array",
+            "description": "List of paths or urls to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "zarr_dir": {
+            "title": "Zarr Dir",
+            "type": "string",
+            "description": "path of the directory where the new OME-Zarrs will be created. Not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "selected_acquisition": {
+            "default": 0,
+            "title": "Selected Acquisition",
+            "type": "integer",
+            "description": "Which multiplexing round to select for processing. Uses the OME-NGFF HCS well metadata acquisition keys to find the round."
+          }
+        },
+        "required": [
+          "zarr_urls",
+          "zarr_dir"
+        ],
+        "type": "object",
+        "title": "InitSelectMultiplexingRound"
+      },
+      "args_schema_parallel": {
+        "$defs": {
+          "ChannelInputModel": {
+            "description": "A channel which is specified by either `wavelength_id` or `label`.",
+            "properties": {
+              "wavelength_id": {
+                "title": "Wavelength Id",
+                "type": "string",
+                "description": "Unique ID for the channel wavelength, e.g. `A01_C01`. Can only be specified if label is not set."
+              },
+              "label": {
+                "title": "Label",
+                "type": "string",
+                "description": "Name of the channel. Can only be specified if wavelength_id is not set."
+              }
+            },
+            "title": "ChannelInputModel",
+            "type": "object"
+          },
+          "InitArgsRegistrationConsensus": {
+            "description": "Registration consensus init args.",
+            "properties": {
+              "zarr_url_list": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Zarr Url List",
+                "type": "array"
+              }
+            },
+            "required": [
+              "zarr_url_list"
+            ],
+            "title": "InitArgsRegistrationConsensus",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "zarr_url": {
+            "title": "Zarr Url",
+            "type": "string",
+            "description": "Path or url to the individual OME-Zarr image to be processed. Refers to the zarr_url of the reference acquisition. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "init_args": {
+            "$ref": "#/$defs/InitArgsRegistrationConsensus",
+            "title": "Init Args",
+            "description": "Intialization arguments provided by `init_group_by_well_for_multiplexing`. It contains the zarr_url_list listing all the zarr_urls in the same well as the zarr_url of the reference acquisition that are being processed. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "label_name": {
+            "default": "nuc",
+            "title": "Label Name",
+            "type": "string",
+            "description": "Label name of segmentation (usually based on 2D MIP) that identifies objects in image."
+          },
+          "roi_table": {
+            "default": "org_ROI_table_linked",
+            "title": "Roi Table",
+            "type": "string",
+            "description": "Name of the ROI table that corresponds to label_name. This table is used to iterate over objects and load object regions."
+          },
+          "output_label_name": {
+            "default": "org3d",
+            "title": "Output Label Name",
+            "type": "string",
+            "description": "Desired name for new output label. The corresponding ROI table will be saved as {output_label_name}_ROI_table."
+          },
+          "channel_1": {
+            "$ref": "#/$defs/ChannelInputModel",
+            "title": "Channel 1",
+            "description": "Channel of raw image used for thresholding. Requires either `wavelength_id` (e.g. `A01_C01`) or `label` (e.g. `DAPI`)."
+          },
+          "channel_2": {
+            "$ref": "#/$defs/ChannelInputModel",
+            "title": "Channel 2",
+            "description": "Channel of second raw image to be combined with channel 1 image. Requires either `wavelength_id` (e.g. `A02_C02`) or `label` (e.g. `BCAT`)."
+          },
+          "intensity_threshold": {
+            "default": 1500,
+            "title": "Intensity Threshold",
+            "type": "integer",
+            "description": "Integer that specifies threshold intensity value to binarize image. Intensities below this value will be set to 0, intensities above are set to 1. The specified value should correspond to intensity range of raw image (e.g. for 16-bit images, 0-65535). Recommended threshold value is above image background level and below dimmest regions of image, particularly at deeper z-depth."
+          },
+          "gaus_sigma_raw_img": {
+            "default": 3,
+            "title": "Gaus Sigma Raw Img",
+            "type": "number",
+            "description": "Float that specifies sigma (standard deviation, in pixels) for 3D Gaussian kernel used for blurring of raw intensity image prior to thresholding and edge detection. Higher values correspond to more blurring that reduce holes in thresholded image. Recommended range 2-4."
+          },
+          "gaus_sigma_thresh_img": {
+            "default": 20,
+            "title": "Gaus Sigma Thresh Img",
+            "type": "number",
+            "description": "Float that specifies sigma (standard deviation, in pixels) for 2D Gaussian kernel used for blurring each z-slice of thresholded binary image prior to edge detection. Higher values correspond to more blurring and smoother surface edges. Recommended range 10-30."
+          },
+          "small_objects_diameter": {
+            "default": 20,
+            "title": "Small Objects Diameter",
+            "type": "number",
+            "description": "Float that specifies the approximate diameter, in pixels and at level=0, of debris in the image. This value is used to filter out small objects using skimage.morphology.remove_small_objects."
+          },
+          "canny_threshold": {
+            "default": 0.2,
+            "title": "Canny Threshold",
+            "type": "number",
+            "description": "Float in range [0,1]. Image values below this threshold are set to 0 after Gaussian blur using gaus_sigma_thresh_img. Higher threshold values result in tighter fit of edge mask to intensity image."
+          }
+        },
+        "required": [
+          "zarr_url",
+          "init_args",
+          "channel_1",
+          "channel_2"
+        ],
+        "type": "object",
+        "title": "SegmentByIntensityThreshold"
+      },
+      "docs_info": "## init_select_multiplexing_round\nFinds images for desired acquisition per well.\n\nReturns the parallelization_list.\n## segment_by_intensity_threshold\nCalculate full 3D object segmentation after 2D MIP-based segmentation using intensity thresholding of\nraw intensity image(s).\n\nThis task consists of 3 parts:\n\n1. Load the intensity images for selected channels using MIP-based segmentation ROIs.\n2. Generate 3D mask based on simple thresholding of the combined channel images. The thresholded image is\n    smoothened using gaussian blurring followed by Canny edge detection. The MIP-based segmentation is used to mask\n    the resulting label image to roughly exclude any neighboring organoids and debris. To further exclude\n    neighboring organoids and debris, the largest connected component is selected as the final label image.\n3. Output: save the (1) new label image and (2) new masking ROI table in the selected zarr url.\n"
+    },
+    {
       "name": "scMultiplex Spherical Harmonics from Label Image",
       "executable_non_parallel": "fractal/_init_group_by_well_for_multiplexing.py",
       "executable_parallel": "fractal/spherical_harmonics_from_labelimage.py",

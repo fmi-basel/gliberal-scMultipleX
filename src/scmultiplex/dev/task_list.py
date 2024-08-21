@@ -53,6 +53,13 @@ TASK_LIST = [
         meta={"cpus_per_task": 4, "mem": 16000},
     ),
     CompoundTask(
+        name="scMultiplex Segment by Intensity Threshold",
+        executable_init="fractal/init_select_multiplexing_round.py",
+        executable="fractal/segment_by_intensity_threshold.py",
+        meta_init={"cpus_per_task": 1, "mem": 1000},
+        meta={"cpus_per_task": 4, "mem": 16000},
+    ),
+    CompoundTask(
         name="scMultiplex Spherical Harmonics from Label Image",
         executable_init="fractal/_init_group_by_well_for_multiplexing.py",
         executable="fractal/spherical_harmonics_from_labelimage.py",
