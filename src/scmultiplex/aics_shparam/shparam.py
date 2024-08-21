@@ -1,10 +1,11 @@
 import warnings
-import pyshtools
+
 import numpy as np
+import pyshtools
+from scipy import interpolate as spinterp
+from skimage import transform as sktrans
 from vtk import vtkPolyData
 from vtkmodules.util import numpy_support
-from skimage import transform as sktrans
-from scipy import interpolate as spinterp
 
 from . import shtools
 
@@ -114,7 +115,7 @@ def get_shcoeffs(
 
     if len(image.shape) != 3:
         raise ValueError(
-            "Incorrect dimensions: {}. Expected 3 dimensions.".format(image.shape)
+            f"Incorrect dimensions: {image.shape}. Expected 3 dimensions."
         )
 
     if image.sum() == 0:
@@ -133,9 +134,13 @@ def get_shcoeffs(
         image_ = image_.squeeze()
 
     # Converting the input image into a mesh using regular marching cubes
-    mesh, image_, centroid = shtools.get_mesh_from_image(image=image_, sigma=sigma, lcc=compute_lcc, spacing=spacing)
+    mesh, image_, centroid = shtools.get_mesh_from_image(
+        image=image_, sigma=sigma, lcc=compute_lcc, spacing=spacing
+    )
 
-    if not image_[tuple([int(u) for u in tuple(c / s for c, s in zip(centroid[::-1], spacing))])]:
+    if not image_[
+        tuple(int(u) for u in tuple(c / s for c, s in zip(centroid[::-1], spacing)))
+    ]:
         warnings.warn(
             "Mesh centroid seems to fall outside the object. This indicates\
         the mesh may not be a manifold suitable for spherical harmonics\
@@ -153,7 +158,9 @@ def get_shcoeffs(
     # Translate and update mesh normals
     mesh = shtools.update_mesh_points(mesh, x, y, z)
 
-    coeffs_dict, grid_rec, grid_down = calculate_spherical_harmonics(mesh=mesh, lmax=lmax)
+    coeffs_dict, grid_rec, grid_down = calculate_spherical_harmonics(
+        mesh=mesh, lmax=lmax
+    )
 
     return (coeffs_dict, grid_rec), (image_, mesh, grid_down, transform)
 

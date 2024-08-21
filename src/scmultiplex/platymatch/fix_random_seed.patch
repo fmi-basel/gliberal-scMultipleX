@@ -8,5 +8,5 @@
 +    registration_method.SetMetricSamplingPercentage(0.01, seed=1234)
      if fixed_image_mask:
          registration_method.SetMetricFixedMask(fixed_image_mask)
- 
+
 \ No newline at end of file

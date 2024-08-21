@@ -11,13 +11,11 @@
 ##############################################################################
 
 import argparse
-import configparser
 import os
-import prefect
 import sys
 from typing import List
 
-from scmultiplex.faim_hcs.hcs.Experiment import Experiment
+import prefect
 from prefect import Flow, Parameter, task, unmapped
 from prefect.executors import LocalDaskExecutor
 from prefect.run_configs import LocalRun
@@ -29,9 +27,10 @@ from scmultiplex.config import (
     get_round_names,
     get_workflow_params,
     parse_spacing,
-    summary_csv_path,
     spacing_anisotropy_scalar,
+    summary_csv_path,
 )
+from scmultiplex.faim_hcs.hcs.Experiment import Experiment
 from scmultiplex.linking.NucleiLinking import apply_transform, link_nuclei
 from scmultiplex.logging import setup_prefect_handlers
 from scmultiplex.utils import get_core_count
@@ -66,7 +65,9 @@ def get_organoids_task(exp: Experiment, exlude_plates: List[str]):
 
 
 @task()
-def link_nuclei_task(organoid, segname, rx_name, RX, z_anisotropy, org_seg_ch, nuc_seg_ch):
+def link_nuclei_task(
+    organoid, segname, rx_name, RX, z_anisotropy, org_seg_ch, nuc_seg_ch
+):
     transform_affine, organoid_R0, organoid_RX, RX_seg, RX_savepath = link_nuclei(
         organoid=organoid,
         segname=segname,
@@ -77,14 +78,17 @@ def link_nuclei_task(organoid, segname, rx_name, RX, z_anisotropy, org_seg_ch, n
         nuc_seg_ch=nuc_seg_ch,
     )
 
-    apply_transform(transform_affine, organoid_R0, organoid_RX, RX_seg, RX_savepath, nuc_seg_ch)
+    apply_transform(
+        transform_affine, organoid_R0, organoid_RX, RX_seg, RX_savepath, nuc_seg_ch
+    )
     return
-
 
 
 def run_flow(r_params, cpus):
     with Flow(
-        "Nuclei-Linking", executor=LocalDaskExecutor(scheduler="threads", num_workers=cpus), run_config=LocalRun()
+        "Nuclei-Linking",
+        executor=LocalDaskExecutor(scheduler="threads", num_workers=cpus),
+        run_config=LocalRun(),
     ) as flow:
         rx_name = Parameter("RX_name")
         r0_csv = Parameter("R0_path")
@@ -121,77 +125,79 @@ def run_flow(r_params, cpus):
 
 
 def get_config_params(config_file_path):
-    
+
     round_names = get_round_names(config_file_path)
     if len(round_names) < 2:
-        raise RuntimeError('At least two rounds are required to perform organoid linking')
+        raise RuntimeError(
+            "At least two rounds are required to perform organoid linking"
+        )
     rounds_tobelinked = round_names[1:]
-    
+
     compute_param = {
-        'excluded_plates': (
-            commasplit,[
-                ('01FeatureExtraction', 'excluded_plates')
-                ]
-            ),
-        'excluded_wells': (
-            commasplit,[
-                ('01FeatureExtraction', 'excluded_wells')
-                ]
-            ),
-        'spacing': (
-            parse_spacing,[
-                ('00BuildExperiment', 'spacing')
-                ]
-            ),
-        'R0_path': (
-                summary_csv_path,[
-                    ('00BuildExperiment', 'base_dir_save'),
-                    ('00BuildExperiment.round_%s' % round_names[0], 'name')
-                    ]
-                ),
-        }
+        "excluded_plates": (commasplit, [("01FeatureExtraction", "excluded_plates")]),
+        "excluded_wells": (commasplit, [("01FeatureExtraction", "excluded_wells")]),
+        "spacing": (parse_spacing, [("00BuildExperiment", "spacing")]),
+        "R0_path": (
+            summary_csv_path,
+            [
+                ("00BuildExperiment", "base_dir_save"),
+                ("00BuildExperiment.round_%s" % round_names[0], "name"),
+            ],
+        ),
+    }
     common_params = compute_workflow_params(config_file_path, compute_param)
 
     # use same z-anisotropy as used during feature extraction
-    parsed_spacing = common_params['spacing']
-    common_params['spacing'] = spacing_anisotropy_scalar(parsed_spacing)
-    
+    parsed_spacing = common_params["spacing"]
+    common_params["spacing"] = spacing_anisotropy_scalar(parsed_spacing)
+
     round_tobelinked_params = {}
     for ro in round_names:
         rp = common_params.copy()
-        rp['RX_name'] = ro
+        rp["RX_name"] = ro
         config_params = {
-            'nuc_ending':           ('00BuildExperiment.round_%s' % ro, 'nuc_ending'),
-            'nuc_seg_ch':           ('00BuildExperiment.round_%s' % ro, 'nuclear_seg_channel'),
-            'org_seg_ch':           ('00BuildExperiment.round_%s' % ro, 'organoid_seg_channel'),
-            }
+            "nuc_ending": ("00BuildExperiment.round_%s" % ro, "nuc_ending"),
+            "nuc_seg_ch": ("00BuildExperiment.round_%s" % ro, "nuclear_seg_channel"),
+            "org_seg_ch": ("00BuildExperiment.round_%s" % ro, "organoid_seg_channel"),
+        }
         rp.update(get_workflow_params(config_file_path, config_params))
         compute_param = {
-            'RX_path': (
-                summary_csv_path,[
-                    ('00BuildExperiment', 'base_dir_save'),
-                    ('00BuildExperiment.round_%s' % ro, 'name')
-                    ]
-                ),
+            "RX_path": (
+                summary_csv_path,
+                [
+                    ("00BuildExperiment", "base_dir_save"),
+                    ("00BuildExperiment.round_%s" % ro, "name"),
+                ],
+            ),
         }
         rp.update(compute_workflow_params(config_file_path, compute_param))
 
         if ro == round_names[0]:
-            R0_nuc_seg_ch = rp['nuc_seg_ch']
+            R0_nuc_seg_ch = rp["nuc_seg_ch"]
         else:
             round_tobelinked_params[ro] = rp
 
-    if len(set([R0_nuc_seg_ch] + [x['nuc_seg_ch'] for x in round_tobelinked_params.values()])) > 1:
-        raise NotImplementedError('Multiplexed nuclear linking between different channels is not supported.')
+    if (
+        len(
+            set(
+                [R0_nuc_seg_ch]
+                + [x["nuc_seg_ch"] for x in round_tobelinked_params.values()]
+            )
+        )
+        > 1
+    ):
+        raise NotImplementedError(
+            "Multiplexed nuclear linking between different channels is not supported."
+        )
 
     return round_tobelinked_params
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", required = True)
+    parser.add_argument("--config", required=True)
     parser.add_argument("--cpus", type=int, default=get_core_count())
-    parser.add_argument("--prefect-logfile", required = True)
+    parser.add_argument("--prefect-logfile", required=True)
 
     args = parser.parse_args()
     cpus = args.cpus
@@ -199,13 +205,13 @@ def main():
 
     setup_prefect_handlers(prefect.utilities.logging.get_logger(), prefect_logfile)
 
-    print('Running scMultipleX version %s' % version)
+    print("Running scMultipleX version %s" % version)
 
     r_params = get_config_params(args.config)
 
     ret = run_flow(r_params, cpus)
     if ret == 0:
-        print('%s completed successfully' % os.path.basename(sys.argv[0]))
+        print("%s completed successfully" % os.path.basename(sys.argv[0]))
     return ret
 
 

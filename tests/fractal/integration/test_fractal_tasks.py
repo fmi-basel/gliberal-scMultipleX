@@ -1,64 +1,105 @@
+import os
+from pathlib import Path
+
 import anndata as ad
 import numpy as np
-import os
 from fractal_tasks_core.channels import ChannelInputModel
 from numpy.testing import assert_almost_equal
-from pathlib import Path
-from scmultiplex.fractal._image_based_registration_hcs_allrounds_init import \
-    _image_based_registration_hcs_allrounds_init
-from scmultiplex.fractal._image_based_registration_hcs_init import _image_based_registration_hcs_init
-from scmultiplex.fractal._init_group_by_well_for_multiplexing import _init_group_by_well_for_multiplexing
+
+from scmultiplex.fractal._image_based_registration_hcs_allrounds_init import (
+    _image_based_registration_hcs_allrounds_init,
+)
+from scmultiplex.fractal._image_based_registration_hcs_init import (
+    _image_based_registration_hcs_init,
+)
+from scmultiplex.fractal._init_group_by_well_for_multiplexing import (
+    _init_group_by_well_for_multiplexing,
+)
 from scmultiplex.fractal.calculate_linking_consensus import calculate_linking_consensus
 from scmultiplex.fractal.calculate_object_linking import calculate_object_linking
-from scmultiplex.fractal.calculate_platymatch_registration import calculate_platymatch_registration
-from scmultiplex.fractal.relabel_by_linking_consensus import relabel_by_linking_consensus
-from scmultiplex.fractal.scmultiplex_mesh_measurements import scmultiplex_mesh_measurements
-from scmultiplex.fractal.spherical_harmonics_from_labelimage import spherical_harmonics_from_labelimage
+from scmultiplex.fractal.calculate_platymatch_registration import (
+    calculate_platymatch_registration,
+)
+from scmultiplex.fractal.relabel_by_linking_consensus import (
+    relabel_by_linking_consensus,
+)
+from scmultiplex.fractal.scmultiplex_mesh_measurements import (
+    scmultiplex_mesh_measurements,
+)
+from scmultiplex.fractal.spherical_harmonics_from_labelimage import (
+    spherical_harmonics_from_labelimage,
+)
 from scmultiplex.fractal.surface_mesh_multiscale import surface_mesh_multiscale
 
-name_3d = '220605_151046.zarr'
-name_mip = '220605_151046_mip.zarr'
+name_3d = "220605_151046.zarr"
+name_mip = "220605_151046_mip.zarr"
 
-test_calculate_object_linking_expected_output = np.array([[1., 1., 0.9305816],
-                                                          [2., 2., 0.78365386],
-                                                          [3., 3., 0.95049506]])
+test_calculate_object_linking_expected_output = np.array(
+    [[1.0, 1.0, 0.9305816], [2.0, 2.0, 0.78365386], [3.0, 3.0, 0.95049506]]
+)
 
-test_calculate_linking_consensus_expected_output = np.array([[1., 1., 0., 1.],
-                                                             [2., 2., 1., 2.],
-                                                             [3., 3., 2., 3.]])
+test_calculate_linking_consensus_expected_output = np.array(
+    [[1.0, 1.0, 0.0, 1.0], [2.0, 2.0, 1.0, 2.0], [3.0, 3.0, 2.0, 3.0]]
+)
 
-test_relabel_by_linking_consensus_output_dict = {'0': np.array([[13.,  20.8,   0.,  22.533333,  21.666666, 0.6],
-                                                                [13.,  90.13333,   0.,  20.8,  18.2, 0.6],
-                                                                [38.133335, 103.13333,   0., 25.133333, 29.466667, 0.6]]),
-                                                 '1': np.array([[49.4, 10.4, 0., 23.4, 22.533333, 0.6],
-                                                                [51.133335, 81.46667, 0., 19.933332, 16.466667, 0.6],
-                                                                [74.53333, 92.73333, 0., 24.266666, 29.466667, 0.6]])
-                                                 }
+test_relabel_by_linking_consensus_output_dict = {
+    "0": np.array(
+        [
+            [13.0, 20.8, 0.0, 22.533333, 21.666666, 0.6],
+            [13.0, 90.13333, 0.0, 20.8, 18.2, 0.6],
+            [38.133335, 103.13333, 0.0, 25.133333, 29.466667, 0.6],
+        ]
+    ),
+    "1": np.array(
+        [
+            [49.4, 10.4, 0.0, 23.4, 22.533333, 0.6],
+            [51.133335, 81.46667, 0.0, 19.933332, 16.466667, 0.6],
+            [74.53333, 92.73333, 0.0, 24.266666, 29.466667, 0.6],
+        ]
+    ),
+}
 test_calculate_platymatch_registration_output = np.array(
-[[ 1.,         1.],
- [ 3.,         2.],
- [ 2.,         3.],
- [ 4.,         4.],
- [ 5.,         5.],
- [ 6.,         6.],
- [ 7.,         7.],
- [ 8.,         8.],
- [ 9.,         9.],
- [10.,        10.],
- [11.,        11.],
- [12.,        12.],
- [13.,        13.],
- [14.,        14.],
- [15.,        15.],
- [16.,        16.]])
+    [
+        [1.0, 1.0],
+        [3.0, 2.0],
+        [2.0, 3.0],
+        [4.0, 4.0],
+        [5.0, 5.0],
+        [6.0, 6.0],
+        [7.0, 7.0],
+        [8.0, 8.0],
+        [9.0, 9.0],
+        [10.0, 10.0],
+        [11.0, 11.0],
+        [12.0, 12.0],
+        [13.0, 13.0],
+        [14.0, 14.0],
+        [15.0, 15.0],
+        [16.0, 16.0],
+    ]
+)
 
-test_sphr_harmonics_from_labelimg_expected_output = np.array([11.41795, 10.20555, 14.41203])
+test_sphr_harmonics_from_labelimg_expected_output = np.array(
+    [11.41795, 10.20555, 14.41203]
+)
 
-test_sphr_harmonics_from_mesh_expected_output = np.array([10.780165,  9.448335, 14.074149])
+test_sphr_harmonics_from_mesh_expected_output = np.array(
+    [10.780165, 9.448335, 14.074149]
+)
 
-test_scmultiplex_mesh_measurements_expected_output = np.array([5.1996997e+03, 1.4704432e+03, 1.0130836e+00,
-                                                               5.1079750e-01, 9.9380553e-01, 6.1944937e-03,
-                                                               1.4286873e-02, 1.1044443e+00, 1.0065205e+00])
+test_scmultiplex_mesh_measurements_expected_output = np.array(
+    [
+        5.1996997e03,
+        1.4704432e03,
+        1.0130836e00,
+        5.1079750e-01,
+        9.9380553e-01,
+        6.1944937e-03,
+        1.4286873e-02,
+        1.1044443e00,
+        1.0065205e00,
+    ]
+)
 
 
 def select_zarr_urls(name, linking_zenodo_zarrs):
@@ -77,14 +118,16 @@ def select_zarr_urls(name, linking_zenodo_zarrs):
 
 def test_calculate_object_linking(linking_zenodo_zarrs, name=name_mip):
     zarr_urls = select_zarr_urls(name, linking_zenodo_zarrs)
-    parallelization_list = _image_based_registration_hcs_init(zarr_urls=zarr_urls,
-                                                              zarr_dir='',
-                                                              reference_acquisition=0, )
+    parallelization_list = _image_based_registration_hcs_init(
+        zarr_urls=zarr_urls,
+        zarr_dir="",
+        reference_acquisition=0,
+    )
 
     for img in parallelization_list["parallelization_list"]:
-        zarr_url = img['zarr_url']
-        init_args = img['init_args']
-        label_name = 'org'
+        zarr_url = img["zarr_url"]
+        init_args = img["init_args"]
+        label_name = "org"
         roi_table = "well_ROI_table"
         level = 0
 
@@ -105,13 +148,15 @@ def test_calculate_object_linking(linking_zenodo_zarrs, name=name_mip):
 
 def test_calculate_linking_consensus(linking_zenodo_zarrs, name=name_mip):
     zarr_urls = select_zarr_urls(name, linking_zenodo_zarrs)
-    parallelization_list = _init_group_by_well_for_multiplexing(zarr_urls=zarr_urls,
-                                                                zarr_dir='',
-                                                                reference_acquisition=0, )
+    parallelization_list = _init_group_by_well_for_multiplexing(
+        zarr_urls=zarr_urls,
+        zarr_dir="",
+        reference_acquisition=0,
+    )
 
     for img in parallelization_list["parallelization_list"]:
-        zarr_url = img['zarr_url']
-        init_args = img['init_args']
+        zarr_url = img["zarr_url"]
+        init_args = img["init_args"]
         roi_table = "org_match_table"
 
         calculate_linking_consensus(
@@ -129,13 +174,15 @@ def test_calculate_linking_consensus(linking_zenodo_zarrs, name=name_mip):
 
 def test_relabel_by_linking_consensus(linking_zenodo_zarrs, name=name_mip):
     zarr_urls = select_zarr_urls(name, linking_zenodo_zarrs)
-    parallelization_list = _image_based_registration_hcs_allrounds_init(zarr_urls=zarr_urls,
-                                                                        zarr_dir='',
-                                                                        reference_acquisition=0, )
+    parallelization_list = _image_based_registration_hcs_allrounds_init(
+        zarr_urls=zarr_urls,
+        zarr_dir="",
+        reference_acquisition=0,
+    )
     for img in parallelization_list["parallelization_list"]:
-        zarr_url = img['zarr_url']
-        init_args = img['init_args']
-        label_name = 'org'
+        zarr_url = img["zarr_url"]
+        init_args = img["init_args"]
+        label_name = "org"
         consensus_table = "org_match_table_consensus"
         table_to_relabel = "org_ROI_table"
 
@@ -149,18 +196,24 @@ def test_relabel_by_linking_consensus(linking_zenodo_zarrs, name=name_mip):
 
         output_table_path = f"{zarr_url}/tables/{table_to_relabel}_linked"
         output = ad.read_zarr(output_table_path).to_df().to_numpy()
-        assert_almost_equal(output, test_relabel_by_linking_consensus_output_dict[Path(zarr_url).name], decimal=3)
+        assert_almost_equal(
+            output,
+            test_relabel_by_linking_consensus_output_dict[Path(zarr_url).name],
+            decimal=3,
+        )
 
 
 def test_calculate_platymatch_registration(linking_zenodo_zarrs, name=name_3d):
     zarr_urls = select_zarr_urls(name, linking_zenodo_zarrs)
-    parallelization_list = _image_based_registration_hcs_init(zarr_urls=zarr_urls,
-                                                              zarr_dir='',
-                                                              reference_acquisition=0, )
+    parallelization_list = _image_based_registration_hcs_init(
+        zarr_urls=zarr_urls,
+        zarr_dir="",
+        reference_acquisition=0,
+    )
 
     for img in parallelization_list["parallelization_list"]:
-        zarr_url = img['zarr_url']
-        init_args = img['init_args']
+        zarr_url = img["zarr_url"]
+        init_args = img["init_args"]
         label_name_to_register = "nuc"
         label_name_obj = "org"
         roi_table = "org_ROI_table"
@@ -181,23 +234,35 @@ def test_calculate_platymatch_registration(linking_zenodo_zarrs, name=name_3d):
             volume_filter_threshold=0.05,
         )
 
-        output_table_path_affine = f"{zarr_url}/tables/{label_name_to_register}_match_table_affine"
+        output_table_path_affine = (
+            f"{zarr_url}/tables/{label_name_to_register}_match_table_affine"
+        )
         output_affine = ad.read_zarr(output_table_path_affine).to_df().to_numpy()
-        output_table_path_ffd = f"{zarr_url}/tables/{label_name_to_register}_match_table_ffd"
+        output_table_path_ffd = (
+            f"{zarr_url}/tables/{label_name_to_register}_match_table_ffd"
+        )
         output_ffd = ad.read_zarr(output_table_path_ffd).to_df().to_numpy()
         # test that matches are correct; ignore confidence columns
-        assert_almost_equal(output_affine[:, 0:2], test_calculate_platymatch_registration_output, decimal=3)
-        assert_almost_equal(output_ffd[:, 0:2], test_calculate_platymatch_registration_output, decimal=3)
+        assert_almost_equal(
+            output_affine[:, 0:2],
+            test_calculate_platymatch_registration_output,
+            decimal=3,
+        )
+        assert_almost_equal(
+            output_ffd[:, 0:2], test_calculate_platymatch_registration_output, decimal=3
+        )
 
 
 def test_surface_mesh_multiscale(linking_zenodo_zarrs, name=name_3d):
     zarr_urls = select_zarr_urls(name, linking_zenodo_zarrs)
-    parallelization_list = _init_group_by_well_for_multiplexing(zarr_urls=zarr_urls,
-                                                                zarr_dir='',
-                                                                reference_acquisition=0, )
+    parallelization_list = _init_group_by_well_for_multiplexing(
+        zarr_urls=zarr_urls,
+        zarr_dir="",
+        reference_acquisition=0,
+    )
     for img in parallelization_list["parallelization_list"]:
-        zarr_url = img['zarr_url']
-        init_args = img['init_args']
+        zarr_url = img["zarr_url"]
+        init_args = img["init_args"]
         group_by = "org"
         label_name = "nuc"
         roi_table = "org_ROI_table"
@@ -227,12 +292,14 @@ def test_surface_mesh_multiscale(linking_zenodo_zarrs, name=name_3d):
 
 def test_surface_mesh_grouped(linking_zenodo_zarrs, name=name_3d):
     zarr_urls = select_zarr_urls(name, linking_zenodo_zarrs)
-    parallelization_list = _init_group_by_well_for_multiplexing(zarr_urls=zarr_urls,
-                                                                zarr_dir='',
-                                                                reference_acquisition=0, )
+    parallelization_list = _init_group_by_well_for_multiplexing(
+        zarr_urls=zarr_urls,
+        zarr_dir="",
+        reference_acquisition=0,
+    )
     for img in parallelization_list["parallelization_list"]:
-        zarr_url = img['zarr_url']
-        init_args = img['init_args']
+        zarr_url = img["zarr_url"]
+        init_args = img["init_args"]
         label_name = "nuc"
         group_by = "org"
         roi_table = "org_ROI_table"
@@ -262,12 +329,14 @@ def test_surface_mesh_grouped(linking_zenodo_zarrs, name=name_3d):
 
 def test_surface_mesh_per_object(linking_zenodo_zarrs, name=name_3d):
     zarr_urls = select_zarr_urls(name, linking_zenodo_zarrs)
-    parallelization_list = _init_group_by_well_for_multiplexing(zarr_urls=zarr_urls,
-                                                                zarr_dir='',
-                                                                reference_acquisition=0, )
+    parallelization_list = _init_group_by_well_for_multiplexing(
+        zarr_urls=zarr_urls,
+        zarr_dir="",
+        reference_acquisition=0,
+    )
     for img in parallelization_list["parallelization_list"]:
-        zarr_url = img['zarr_url']
-        init_args = img['init_args']
+        zarr_url = img["zarr_url"]
+        init_args = img["init_args"]
         label_name = "org"
         roi_table = "org_ROI_table"
 
@@ -296,18 +365,20 @@ def test_surface_mesh_per_object(linking_zenodo_zarrs, name=name_3d):
 
 def test_sphr_harmonics_from_labelimage(linking_zenodo_zarrs, name=name_3d):
     zarr_urls = select_zarr_urls(name, linking_zenodo_zarrs)
-    parallelization_list = _init_group_by_well_for_multiplexing(zarr_urls=zarr_urls,
-                                                                zarr_dir='',
-                                                                reference_acquisition=0, )
+    parallelization_list = _init_group_by_well_for_multiplexing(
+        zarr_urls=zarr_urls,
+        zarr_dir="",
+        reference_acquisition=0,
+    )
     for img in parallelization_list["parallelization_list"]:
-        zarr_url = img['zarr_url']
-        init_args = img['init_args']
+        zarr_url = img["zarr_url"]
+        init_args = img["init_args"]
         label_name = "org_from_nuc"
         roi_table = "org_ROI_table_from_nuc"
 
         spherical_harmonics_from_labelimage(
-            zarr_url=img['zarr_url'],
-            init_args=img['init_args'],
+            zarr_url=img["zarr_url"],
+            init_args=img["init_args"],
             label_name=label_name,
             roi_table=roi_table,
             lmax=2,
@@ -317,31 +388,37 @@ def test_sphr_harmonics_from_labelimage(linking_zenodo_zarrs, name=name_3d):
 
         # check that 3 mesh files were written
         output_mesh_path = f"{zarr_url}/meshes/{roi_table}_shaics"
-        output_mesh_path_reconstructed = f"{zarr_url}/meshes/{roi_table}_shaics_reconstructed"
+        output_mesh_path_reconstructed = (
+            f"{zarr_url}/meshes/{roi_table}_shaics_reconstructed"
+        )
         assert len(os.listdir(output_mesh_path)) == 3
         assert len(os.listdir(output_mesh_path_reconstructed)) == 3
 
         # check that first calculated spherical harmonic is correct
         output_table_path = f"{zarr_url}/tables/{label_name}_harmonics"
         output = ad.read_zarr(output_table_path).to_df().to_numpy()
-        assert_almost_equal(output[:, 0], test_sphr_harmonics_from_labelimg_expected_output, decimal=5)
+        assert_almost_equal(
+            output[:, 0], test_sphr_harmonics_from_labelimg_expected_output, decimal=5
+        )
 
 
 def test_scmultiplex_mesh_measurements(linking_zenodo_zarrs, name=name_3d):
     zarr_urls = select_zarr_urls(name, linking_zenodo_zarrs)
-    parallelization_list = _init_group_by_well_for_multiplexing(zarr_urls=zarr_urls,
-                                                                zarr_dir='',
-                                                                reference_acquisition=0, )
+    parallelization_list = _init_group_by_well_for_multiplexing(
+        zarr_urls=zarr_urls,
+        zarr_dir="",
+        reference_acquisition=0,
+    )
     for img in parallelization_list["parallelization_list"]:
-        zarr_url = img['zarr_url']
-        init_args = img['init_args']
+        zarr_url = img["zarr_url"]
+        init_args = img["init_args"]
         mesh_name = "org_from_nuc"
         roi_table = "org_ROI_table_from_nuc"
         output_table_name = "mesh_features"
 
         scmultiplex_mesh_measurements(
-            zarr_url=img['zarr_url'],
-            init_args=img['init_args'],
+            zarr_url=img["zarr_url"],
+            init_args=img["init_args"],
             mesh_name=mesh_name,
             roi_table=roi_table,
             output_table_name=output_table_name,
@@ -360,7 +437,9 @@ def test_scmultiplex_mesh_measurements(linking_zenodo_zarrs, name=name_3d):
         # check that all extracted features are correct for first organoid
         output_table_path = f"{zarr_url}/tables/{output_table_name}"
         output = ad.read_zarr(output_table_path).to_df().to_numpy()
-        assert_almost_equal(output[0, :], test_scmultiplex_mesh_measurements_expected_output, decimal=4)
+        assert_almost_equal(
+            output[0, :], test_scmultiplex_mesh_measurements_expected_output, decimal=4
+        )
 
         # check that 3 mesh files were written for reconstructed harmonics
         output_mesh_path_reconstructed = f"{zarr_url}/meshes/{mesh_name}_reconstructed"
@@ -369,4 +448,6 @@ def test_scmultiplex_mesh_measurements(linking_zenodo_zarrs, name=name_3d):
         # check that first calculated spherical harmonic is correct
         output_table_path = f"{zarr_url}/tables/{output_table_name}_harmonics"
         output = ad.read_zarr(output_table_path).to_df().to_numpy()
-        assert_almost_equal(output[:, 0], test_sphr_harmonics_from_mesh_expected_output, decimal=4)
+        assert_almost_equal(
+            output[:, 0], test_sphr_harmonics_from_mesh_expected_output, decimal=4
+        )

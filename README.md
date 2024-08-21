@@ -25,6 +25,3 @@ Unless otherwise stated in each individual module, all scMultipleX components ar
 scMultipleX was conceived in the Prisca Liberali Lab at the Friedrich Miescher Institute for Biomedical Research, Switzerland. The project lead and development is with [@nrepina](https://github.com/nrepina), and refactor and development support is with [@enricotagliavini](https://github.com/enricotagliavini) and [@tibuch](https://github.com/tibuch).
 
 The nuclear multiplexed linking algorithm is built on [PlatyMatch](https://github.com/juglab/PlatyMatch) ([DOI](https://doi.org/10.1007/978-3-030-66415-2_30)) by Manan Lalit in the Florian Jug lab at the Human Technopole, Italy.
-
-
-

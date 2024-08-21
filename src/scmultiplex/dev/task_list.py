@@ -11,9 +11,7 @@
 """
 Fractal task list.
 """
-from fractal_tasks_core.dev.task_models import CompoundTask
-from fractal_tasks_core.dev.task_models import NonParallelTask
-from fractal_tasks_core.dev.task_models import ParallelTask
+from fractal_tasks_core.dev.task_models import CompoundTask, ParallelTask
 
 # executable relative to base folder to src/scmultiplex folder
 # TODO: check CPU and GPU usage for each task and allocate more accurate values
@@ -51,6 +49,13 @@ TASK_LIST = [
         name="scMultiplex Surface Mesh Multiscale",
         executable_init="fractal/_init_group_by_well_for_multiplexing.py",
         executable="fractal/surface_mesh_multiscale.py",
+        meta_init={"cpus_per_task": 1, "mem": 1000},
+        meta={"cpus_per_task": 4, "mem": 16000},
+    ),
+    CompoundTask(
+        name="scMultiplex Segment by Intensity Threshold",
+        executable_init="fractal/init_select_multiplexing_round.py",
+        executable="fractal/segment_by_intensity_threshold.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
         meta={"cpus_per_task": 4, "mem": 16000},
     ),

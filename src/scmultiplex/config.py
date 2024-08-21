@@ -1,16 +1,18 @@
 import configparser
 import os
-
 from collections import OrderedDict
 
 config = None
 spacing = None
 
+
 def init_config(config_file_path):
     global config
     if config is None:
-        config = configparser.ConfigParser(interpolation = configparser.ExtendedInterpolation() )
-        with open(config_file_path, 'r') as config_file_fd:
+        config = configparser.ConfigParser(
+            interpolation=configparser.ExtendedInterpolation()
+        )
+        with open(config_file_path) as config_file_fd:
             config.read_file(config_file_fd)
     return config
 
@@ -18,10 +20,10 @@ def init_config(config_file_path):
 def get_round_names(config_file_path):
     config = init_config(config_file_path)
     config_params = {
-        'round_names':      ('00BuildExperiment', 'round_names'),
-        }
+        "round_names": ("00BuildExperiment", "round_names"),
+    }
     params = get_workflow_params(config_file_path, config_params)
-    round_names = params['round_names'].split(',')
+    round_names = params["round_names"].split(",")
     return round_names
 
 
@@ -47,15 +49,15 @@ def compute_workflow_params(config_file_path, compute_param):
 
 
 def summary_csv_path(save_path, round_folder):
-    return os.path.join(save_path, round_folder, 'summary.csv')
+    return os.path.join(save_path, round_folder, "summary.csv")
 
 
 def commasplit(cstring):
-    return cstring.split(',')
+    return cstring.split(",")
 
 
 def str2bool(bstring):
-    return bstring.lower() in ('true',)
+    return bstring.lower() in ("true",)
 
 
 def parse_spacing(spacing):
@@ -63,18 +65,18 @@ def parse_spacing(spacing):
 
 
 def spacing_anisotropy_tuple(spacing):
-    """Return the tuple of pixel spacings normalized to x-pixel spacing
-    """
+    """Return the tuple of pixel spacings normalized to x-pixel spacing"""
     return tuple(i / spacing[-1] for i in spacing)
 
 
 def spacing_anisotropy_scalar(spacing):
-    """Return the z-anisotropy scalar (z norm to x-pixel spacing)
-    """
+    """Return the z-anisotropy scalar (z norm to x-pixel spacing)"""
     if len(spacing) == 3:
         return list(spacing_anisotropy_tuple(spacing))[0]
     else:
-        raise ValueError('expect 3-dimensional pixel spacing for z-anisotropy calculation')
+        raise ValueError(
+            "expect 3-dimensional pixel spacing for z-anisotropy calculation"
+        )
 
 
 def spacing_to2d(spacing):

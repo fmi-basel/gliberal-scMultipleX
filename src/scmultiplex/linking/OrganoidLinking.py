@@ -14,11 +14,15 @@ from os.path import basename, join
 from typing import List
 
 import numpy as np
-from scmultiplex.faim_hcs.hcs.Experiment import Experiment
-from scmultiplex.faim_hcs.records.WellRecord import WellRecord
 from skimage.io import imsave
 
-from scmultiplex.linking.OrganoidLinkingFunctions import calculate_shift, apply_shift, calculate_matching
+from scmultiplex.faim_hcs.hcs.Experiment import Experiment
+from scmultiplex.faim_hcs.records.WellRecord import WellRecord
+from scmultiplex.linking.OrganoidLinkingFunctions import (
+    apply_shift,
+    calculate_matching,
+    calculate_shift,
+)
 from scmultiplex.utils.load_utils import load_ovr
 
 
@@ -56,8 +60,9 @@ def link_organoids(
 
     # load overviews
     R0_ovr = load_ovr(well=well, ovr_channel=ovr_channel)[0]
-    RX_ovr = load_ovr(well=RX.plates[plate_id].wells[well_id], ovr_channel=ovr_channel)[0]
-
+    RX_ovr = load_ovr(well=RX.plates[plate_id].wells[well_id], ovr_channel=ovr_channel)[
+        0
+    ]
 
     # calculate shifts
     shifts, R0_pad, RX_pad = calculate_shift(R0_ovr, RX_ovr, bin=4)

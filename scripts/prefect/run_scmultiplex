@@ -10,185 +10,206 @@
 ##############################################################################
 
 import argparse
-import io
 import os
 import pty
 import shlex
 import shutil
 import subprocess
 import sys
-
 from datetime import datetime
 from glob import glob
 from traceback import format_exc
 
-
+from scmultiplex import version
 from scmultiplex.config import get_workflow_params
 from scmultiplex.utils import get_core_count
-from scmultiplex import version
 
 try:
-	from os import waitstatus_to_exitcode
+    from os import waitstatus_to_exitcode
 except ImportError:
-	# older versions of python don't have the waitstatus_to_exitcode function
-	def waitstatus_to_exitcode(wstatus):
-		if os.WIFEXITED(wstatus):
-			return os.WEXITSTATUS(wstatus)
-		return 1
+    # older versions of python don't have the waitstatus_to_exitcode function
+    def waitstatus_to_exitcode(wstatus):
+        if os.WIFEXITED(wstatus):
+            return os.WEXITSTATUS(wstatus)
+        return 1
+
 
 task_mapping = {}
 log_time_format = r"%Y%m%d-%H_%M_%S"
 
+
 def setup_task_mapping():
-	global task_mapping
-	tasks_path = os.path.dirname(__file__)
-	for task in glob(os.path.join(tasks_path, '[0-9][0-9]_*')):
-		task_bs = os.path.basename(task)
-		task_mapping[task_bs[:2]] = task
-	return task_mapping
+    global task_mapping
+    tasks_path = os.path.dirname(__file__)
+    for task in glob(os.path.join(tasks_path, "[0-9][0-9]_*")):
+        task_bs = os.path.basename(task)
+        task_mapping[task_bs[:2]] = task
+    return task_mapping
+
 
 def parse_tasks(tasks):
-	task_list = []
-	for t in tasks:
-		if len(t) == 0 or len(t) > 2:
-			raise ValueError('Tasks list must be a list of 2 digits integers')
-		elif len(t) == 1:
-			t = '0%s' % t
-		if t not in task_mapping.keys():
-			raise ValueError('Tasks %s not found, available tasks: %s' % (t, ' '.join(task_mapping.keys())))
-		task_list.append(t)
-	task_list = sorted(task_list)
-	return [task_mapping[x] for x in task_list]
+    task_list = []
+    for t in tasks:
+        if len(t) == 0 or len(t) > 2:
+            raise ValueError("Tasks list must be a list of 2 digits integers")
+        elif len(t) == 1:
+            t = "0%s" % t
+        if t not in task_mapping.keys():
+            raise ValueError(
+                "Tasks %s not found, available tasks: %s"
+                % (t, " ".join(task_mapping.keys()))
+            )
+        task_list.append(t)
+    task_list = sorted(task_list)
+    return [task_mapping[x] for x in task_list]
+
 
 def get_config_params(config_file_path):
-	config_params = {
-		'save_dir':         ('00BuildExperiment', 'base_dir_save'),
-		}
-	common_params = get_workflow_params(config_file_path, config_params)
+    config_params = {
+        "save_dir": ("00BuildExperiment", "base_dir_save"),
+    }
+    common_params = get_workflow_params(config_file_path, config_params)
 
-	return common_params
+    return common_params
+
 
 def tee(stream, logfile):
-	try:
-		buf = stream.readline()
-		while len(buf) > 0:
-			sys.stdout.buffer.write(buf)
-			sys.stdout.buffer.flush()
-			logfile.write(buf)
-			buf = stream.readline()
-	except OSError as e:
-		# this means the child process terminated, the I/O is not possible any longer
-		if e.errno == 5:
-			pass
-		else:
-			raise e from None
-	return
+    try:
+        buf = stream.readline()
+        while len(buf) > 0:
+            sys.stdout.buffer.write(buf)
+            sys.stdout.buffer.flush()
+            logfile.write(buf)
+            buf = stream.readline()
+    except OSError as e:
+        # this means the child process terminated, the I/O is not possible any longer
+        if e.errno == 5:
+            pass
+        else:
+            raise e from None
+    return
+
 
 def run_task_fork_pty(task, config_file_path, logfile_path, prefect_logfile_path, cpus):
-	cmd = 'python3 "%s" --config "%s" --cpus %d --prefect-logfile %s' % (task, config_file_path, cpus, prefect_logfile_path)
-	cmd = shlex.split(cmd)
-	pid, controlt_fd = pty.fork()
-	if pid == 0:
-		# child
-		# reopen stdout and stderr, they are not always valid when inherited from the parent
-		# one example is SLURM, in that case the parent is not running in a pty and the two
-		# streams are mangled or anyway don't work
-		sys.stdout = os.fdopen(1, "w", buffering = 1)
-		sys.stderr = os.fdopen(2, "w", buffering = 1)
-		print('\n\nExecuting: %s' % ' '.join(cmd))
-		os.execvp(cmd[0], cmd)
-	else:
-		with open(logfile_path, 'ab') as logfile, os.fdopen(controlt_fd, "rb", buffering = 0) as controlt:
-			tee(controlt, logfile)
-			childpid, wstatus = os.waitpid(pid, 0)
-		ret = waitstatus_to_exitcode(wstatus)
-		if ret != 0:
-			raise subprocess.CalledProcessError(
-				ret,
-				' '.join(cmd),
-				output = None,
-				stderr = None
-			)
-	return
+    cmd = 'python3 "%s" --config "%s" --cpus %d --prefect-logfile %s' % (
+        task,
+        config_file_path,
+        cpus,
+        prefect_logfile_path,
+    )
+    cmd = shlex.split(cmd)
+    pid, controlt_fd = pty.fork()
+    if pid == 0:
+        # child
+        # reopen stdout and stderr, they are not always valid when inherited from the parent
+        # one example is SLURM, in that case the parent is not running in a pty and the two
+        # streams are mangled or anyway don't work
+        sys.stdout = os.fdopen(1, "w", buffering=1)
+        sys.stderr = os.fdopen(2, "w", buffering=1)
+        print("\n\nExecuting: %s" % " ".join(cmd))
+        os.execvp(cmd[0], cmd)
+    else:
+        with open(logfile_path, "ab") as logfile, os.fdopen(
+            controlt_fd, "rb", buffering=0
+        ) as controlt:
+            tee(controlt, logfile)
+            childpid, wstatus = os.waitpid(pid, 0)
+        ret = waitstatus_to_exitcode(wstatus)
+        if ret != 0:
+            raise subprocess.CalledProcessError(
+                ret, " ".join(cmd), output=None, stderr=None
+            )
+    return
 
-def run_task_shell_run(task, config_file_path, logfile_path, prefect_logfile_path, cpus):
-	cmd = 'python3 "%s" --config "%s" --cpus %d --prefect-logfile %s |& tee -a "%s"' % (task, config_file_path, cpus, logfile_path, prefect_logfile_path)
-	executing_msg = '\n\nExecuting: %s' % cmd
-	print(executing_msg)
-	with open(logfile_path, 'a') as logfile:
-		logfile.write(executing_msg + '\n')
-	subprocess.run(cmd, cwd = None, check = True, shell = True)
-	return
+
+def run_task_shell_run(
+    task, config_file_path, logfile_path, prefect_logfile_path, cpus
+):
+    cmd = 'python3 "%s" --config "%s" --cpus %d --prefect-logfile %s |& tee -a "%s"' % (
+        task,
+        config_file_path,
+        cpus,
+        logfile_path,
+        prefect_logfile_path,
+    )
+    executing_msg = "\n\nExecuting: %s" % cmd
+    print(executing_msg)
+    with open(logfile_path, "a") as logfile:
+        logfile.write(executing_msg + "\n")
+    subprocess.run(cmd, cwd=None, check=True, shell=True)
+    return
 
 
 # run_task = run_task_shell_run
 run_task = run_task_fork_pty
 
+
 def main(args):
-	config_path = args.config
-	tasks = args.tasks
-	cpus = args.cpus
-	setup_task_mapping()
-	task_list = parse_tasks(tasks)
-	
-	save_dir = get_config_params(config_path)['save_dir']
-	logfile_name = 'scmultiplex-%s.log' % datetime.now().strftime(log_time_format)
-	logfile_path = os.path.join(save_dir, logfile_name)
-	prefect_logfile_path = os.path.join(save_dir, 'prefect-%s' % logfile_name)
-	print('Using scMultipleX version %s' % version)
-	with open(logfile_path, 'a') as logfile:
-		logfile.write('Using scMultipleX version %s' % version)
-	
-	for task in task_list:
-		run_task(task, config_path, logfile_path, prefect_logfile_path, cpus)
+    config_path = args.config
+    tasks = args.tasks
+    cpus = args.cpus
+    setup_task_mapping()
+    task_list = parse_tasks(tasks)
 
-if __name__ == '__main__':
-	# workaround terminal width detection bug
-	columns, lines = shutil.get_terminal_size()
-	os.environ['COLUMNS'] = str(columns)
-	os.environ['LINES'] = str(lines)
-	progname = os.path.basename(sys.argv[0])
-	
-	parser = argparse.ArgumentParser(
-			prog = progname,
-			description = 'Run the scMultipleX workflow',
-	)
-	parser.add_argument(
-			'--config',
-			action = 'store',
-			type = str,
-			required = True,
-			help = 'path to the config file for the scMultipleX workflow'
-	)
+    save_dir = get_config_params(config_path)["save_dir"]
+    logfile_name = "scmultiplex-%s.log" % datetime.now().strftime(log_time_format)
+    logfile_path = os.path.join(save_dir, logfile_name)
+    prefect_logfile_path = os.path.join(save_dir, "prefect-%s" % logfile_name)
+    print("Using scMultipleX version %s" % version)
+    with open(logfile_path, "a") as logfile:
+        logfile.write("Using scMultipleX version %s" % version)
 
-	parser.add_argument(
-			'--cpus',
-			action = 'store',
-			type = int,
-			required = False,
-			default = get_core_count(), # get number of cores available for this process
-			help = 'specify the number of CPU cores used for parallelization'
-	)
+    for task in task_list:
+        run_task(task, config_path, logfile_path, prefect_logfile_path, cpus)
 
-	parser.add_argument(
-			'--tasks',
-			action = 'store',
-			required = True,
-			nargs = '+',
-			help = 'space separated list of tasks to run. For example \'0 1 2\''
-	)
 
-	args = parser.parse_args(sys.argv[1:])
-	returncode = 0
-	try:
-		main(args)
-	except KeyboardInterrupt:
-		returncode = 1
-	except subprocess.CalledProcessError as e:
-		print(e)
-		returncode = 2
-	except Exception as e:
-		print('Terminating with unexpected exception: %s' % str(e))
-		print(format_exc())
-		returncode = 1
-	sys.exit(returncode)
+if __name__ == "__main__":
+    # workaround terminal width detection bug
+    columns, lines = shutil.get_terminal_size()
+    os.environ["COLUMNS"] = str(columns)
+    os.environ["LINES"] = str(lines)
+    progname = os.path.basename(sys.argv[0])
+
+    parser = argparse.ArgumentParser(
+        prog=progname,
+        description="Run the scMultipleX workflow",
+    )
+    parser.add_argument(
+        "--config",
+        action="store",
+        type=str,
+        required=True,
+        help="path to the config file for the scMultipleX workflow",
+    )
+
+    parser.add_argument(
+        "--cpus",
+        action="store",
+        type=int,
+        required=False,
+        default=get_core_count(),  # get number of cores available for this process
+        help="specify the number of CPU cores used for parallelization",
+    )
+
+    parser.add_argument(
+        "--tasks",
+        action="store",
+        required=True,
+        nargs="+",
+        help="space separated list of tasks to run. For example '0 1 2'",
+    )
+
+    args = parser.parse_args(sys.argv[1:])
+    returncode = 0
+    try:
+        main(args)
+    except KeyboardInterrupt:
+        returncode = 1
+    except subprocess.CalledProcessError as e:
+        print(e)
+        returncode = 2
+    except Exception as e:
+        print("Terminating with unexpected exception: %s" % str(e))
+        print(format_exc())
+        returncode = 1
+    sys.exit(returncode)

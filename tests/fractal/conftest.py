@@ -282,4 +282,3 @@ def linking_zenodo_zarrs(testdata_path: Path) -> list[str]:
 def linking_zenodo_zarrs_base_path(linking_zenodo_zarrs) -> str:
     """Return the path to the tiny Zenodo Zarr test data base folder."""
     return str(Path(linking_zenodo_zarrs[0]).parent)
-
