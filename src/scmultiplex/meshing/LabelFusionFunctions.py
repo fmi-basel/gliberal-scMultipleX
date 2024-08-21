@@ -130,8 +130,12 @@ def find_edges(blurred, canny_threshold, iterations):
 
 
 def clean_binary_image(image_binary, sigma2d, small_objects_threshold):
-    # remove small objects below small_objects_threshold
-    # sigma2d is integer
+    """
+    Clean up an input binary image (0/1) by filling holes, removing small objects (below small_objects_threshold),
+    and performing gaussian blur (with sigma2d).
+    Performed in 2D on each zslice of image.
+    Return cleaned up binary (0-1) image, float 64, same shape as input array.
+    """
     cleaned = np.zeros_like(image_binary, dtype=np.float64)
 
     # Iterate over each zslice in image
@@ -146,6 +150,10 @@ def clean_binary_image(image_binary, sigma2d, small_objects_threshold):
 
 
 def select_largest_component(label_image):
+    """
+    Select largest connected component of label image. Discard all smaller components.
+    Return binary (0/1) image.
+    """
     rois = regionprops(label_image)
     roi_count = len(rois)
 
@@ -189,6 +197,10 @@ def run_thresholding(
     pixmeta_raw,
     seg,
 ):
+    """
+    Main function for running intensity-based thresholding.
+    Used in Segment by Intensity Threshold Fractal task to generate 3D label map from intensity image.
+    """
     # Apply 3D gaussian blur to raw intensity image prior to thresholding
     blurred, anisotropic_sigma = anisotropic_gaussian_blur(
         raw_image, gaus_sigma_raw_img, pixmeta_raw, convert_to_8bit=False
