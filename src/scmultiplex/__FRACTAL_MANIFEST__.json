@@ -745,17 +745,23 @@
             "type": "integer",
             "description": "Pixel intensity value of background to subtract from channel 2 raw image."
           },
+          "otsu_threshold": {
+            "default": true,
+            "title": "Otsu Threshold",
+            "type": "boolean",
+            "description": "if True, the threshold for each region is calculated with the Otsu method. This threshold method is more robust to intensity variation between objects compared to intensity_threshold."
+          },
           "intensity_threshold": {
-            "default": 1500,
+            "default": -1,
             "title": "Intensity Threshold",
             "type": "integer",
-            "description": "Integer that specifies threshold intensity value to binarize image. Intensities below this value will be set to 0, intensities above are set to 1. The specified value should correspond to intensity range of raw image (e.g. for 16-bit images, 0-65535). Recommended threshold value is above image background level and below dimmest regions of image, particularly at deeper z-depth."
+            "description": "Integer that specifies threshold intensity value to binarize image. Must be supplied if Otsu thresholding is not used. Intensities below this value will be set to 0, intensities above are set to 1. The specified value should correspond to intensity range of raw image (e.g. for 16-bit images, 0-65535). Recommended threshold value is above image background level and below dimmest regions of image, particularly at deeper z-depth."
           },
           "gaussian_sigma_raw_image": {
-            "default": 20,
+            "default": 30,
             "title": "Gaussian Sigma Raw Image",
             "type": "number",
-            "description": "Float that specifies sigma (standard deviation, in pixels) for 3D Gaussian kernel used for blurring of raw intensity image prior to thresholding and edge detection. Higher values correspond to more blurring that reduce holes in thresholded image. Recommended range 10-30."
+            "description": "Float that specifies sigma (standard deviation, in pixels) for 3D Gaussian kernel used for blurring of raw intensity image prior to thresholding and edge detection. Higher values correspond to more blurring that reduce holes in thresholded image. Recommended range 10-40."
           },
           "gaussian_sigma_threshold_image": {
             "default": 20,
@@ -770,7 +776,7 @@
             "description": "Float that specifies the approximate diameter, in pixels and at level=0, of debris in the image. This value is used to filter out small objects using skimage.morphology.remove_small_objects."
           },
           "canny_threshold": {
-            "default": 0.2,
+            "default": 0.4,
             "title": "Canny Threshold",
             "type": "number",
             "description": "Float in range [0,1]. Image values below this threshold are set to 0 after Gaussian blur using gaus_sigma_thresh_img. Higher threshold values result in tighter fit of edge mask to intensity image."
