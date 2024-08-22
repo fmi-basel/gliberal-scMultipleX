@@ -706,13 +706,13 @@
             "description": "Intialization arguments provided by `init_group_by_well_for_multiplexing`. It contains the zarr_url_list listing all the zarr_urls in the same well as the zarr_url of the reference acquisition that are being processed. (standard argument for Fractal tasks, managed by Fractal server)."
           },
           "label_name": {
-            "default": "nuc",
+            "default": "org",
             "title": "Label Name",
             "type": "string",
             "description": "Label name of segmentation (usually based on 2D MIP) that identifies objects in image."
           },
           "roi_table": {
-            "default": "org_ROI_table_linked",
+            "default": "org_ROI_table",
             "title": "Roi Table",
             "type": "string",
             "description": "Name of the ROI table that corresponds to label_name. This table is used to iterate over objects and load object regions."
@@ -728,10 +728,22 @@
             "title": "Channel 1",
             "description": "Channel of raw image used for thresholding. Requires either `wavelength_id` (e.g. `A01_C01`) or `label` (e.g. `DAPI`)."
           },
+          "background_channel_1": {
+            "default": 800,
+            "title": "Background Channel 1",
+            "type": "integer",
+            "description": "Pixel intensity value of background to subtract from channel 1 raw image."
+          },
           "channel_2": {
             "$ref": "#/$defs/ChannelInputModel",
             "title": "Channel 2",
             "description": "Channel of second raw image to be combined with channel 1 image. Requires either `wavelength_id` (e.g. `A02_C02`) or `label` (e.g. `BCAT`)."
+          },
+          "background_channel_2": {
+            "default": 400,
+            "title": "Background Channel 2",
+            "type": "integer",
+            "description": "Pixel intensity value of background to subtract from channel 2 raw image."
           },
           "intensity_threshold": {
             "default": 1500,
@@ -739,20 +751,20 @@
             "type": "integer",
             "description": "Integer that specifies threshold intensity value to binarize image. Intensities below this value will be set to 0, intensities above are set to 1. The specified value should correspond to intensity range of raw image (e.g. for 16-bit images, 0-65535). Recommended threshold value is above image background level and below dimmest regions of image, particularly at deeper z-depth."
           },
-          "gaus_sigma_raw_img": {
-            "default": 3,
-            "title": "Gaus Sigma Raw Img",
-            "type": "number",
-            "description": "Float that specifies sigma (standard deviation, in pixels) for 3D Gaussian kernel used for blurring of raw intensity image prior to thresholding and edge detection. Higher values correspond to more blurring that reduce holes in thresholded image. Recommended range 2-4."
-          },
-          "gaus_sigma_thresh_img": {
+          "gaussian_sigma_raw_image": {
             "default": 20,
-            "title": "Gaus Sigma Thresh Img",
+            "title": "Gaussian Sigma Raw Image",
+            "type": "number",
+            "description": "Float that specifies sigma (standard deviation, in pixels) for 3D Gaussian kernel used for blurring of raw intensity image prior to thresholding and edge detection. Higher values correspond to more blurring that reduce holes in thresholded image. Recommended range 10-30."
+          },
+          "gaussian_sigma_threshold_image": {
+            "default": 20,
+            "title": "Gaussian Sigma Threshold Image",
             "type": "number",
             "description": "Float that specifies sigma (standard deviation, in pixels) for 2D Gaussian kernel used for blurring each z-slice of thresholded binary image prior to edge detection. Higher values correspond to more blurring and smoother surface edges. Recommended range 10-30."
           },
           "small_objects_diameter": {
-            "default": 20,
+            "default": 30,
             "title": "Small Objects Diameter",
             "type": "number",
             "description": "Float that specifies the approximate diameter, in pixels and at level=0, of debris in the image. This value is used to filter out small objects using skimage.morphology.remove_small_objects."
@@ -762,6 +774,24 @@
             "title": "Canny Threshold",
             "type": "number",
             "description": "Float in range [0,1]. Image values below this threshold are set to 0 after Gaussian blur using gaus_sigma_thresh_img. Higher threshold values result in tighter fit of edge mask to intensity image."
+          },
+          "linear_z_illumination_correction": {
+            "default": false,
+            "title": "Linear Z Illumination Correction",
+            "type": "boolean",
+            "description": "Set to True if linear z illumination correction is desired. Iterate over z-slices to apply correction."
+          },
+          "start_z_slice": {
+            "default": 40,
+            "title": "Start Z Slice",
+            "type": "integer",
+            "description": "Z-slice number at which to begin to apply linear correction, e.g. slice 40 if image stack has 100 slices."
+          },
+          "m_slope": {
+            "default": 0.015,
+            "title": "M Slope",
+            "type": "number",
+            "description": "Slope factor of illumination correction. Higher values have more extreme correction. This value sets the multiplier for a given z-slice by formula m_slope * (i - start_z_slice) + 1, where i is the current z-slice in iterator."
           }
         },
         "required": [
@@ -773,7 +803,7 @@
         "type": "object",
         "title": "SegmentByIntensityThreshold"
       },
-      "docs_info": "## init_select_multiplexing_round\nFinds images for desired acquisition per well.\n\nReturns the parallelization_list.\n## segment_by_intensity_threshold\nCalculate full 3D object segmentation after 2D MIP-based segmentation using intensity thresholding of\nraw intensity image(s).\n\nThis task consists of 3 parts:\n\n1. Load the intensity images for selected channels using MIP-based segmentation ROIs.\n2. Generate 3D mask based on simple thresholding of the combined channel images. The thresholded image is\n    smoothened using gaussian blurring followed by Canny edge detection. The MIP-based segmentation is used to mask\n    the resulting label image to roughly exclude any neighboring organoids and debris. To further exclude\n    neighboring organoids and debris, the largest connected component is selected as the final label image.\n3. Output: save the (1) new label image and (2) new masking ROI table in the selected zarr url.\n"
+      "docs_info": "## init_select_multiplexing_round\nFinds images for desired acquisition per well.\n\nReturns the parallelization_list.\n## segment_by_intensity_threshold\nCalculate full 3D object segmentation after 2D MIP-based segmentation using intensity thresholding of\nraw intensity image(s).\n\nThis task consists of 3 parts:\n\n1. Load the intensity images for selected channels using MIP-based segmentation ROIs.\n2. Generate 3D mask based on simple thresholding of the combined channel images. The thresholded image is\n    smoothened using gaussian blurring followed by Canny edge detection. Optional z-illumination correctopn\n    is applied on the fly. The MIP-based segmentation is used to mask\n    the resulting label image to roughly exclude any neighboring organoids and debris. To further exclude\n    neighboring organoids and debris, the largest connected component is selected as the final label image.\n3. Output: save the (1) new label image and (2) new masking ROI table in the selected zarr url.\n"
     },
     {
       "name": "scMultiplex Spherical Harmonics from Label Image",
