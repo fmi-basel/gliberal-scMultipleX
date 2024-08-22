@@ -64,11 +64,12 @@ def segment_by_intensity_threshold(
     background_channel_1: int = 800,
     channel_2: ChannelInputModel,
     background_channel_2: int = 400,
-    intensity_threshold: int = 1500,
-    gaussian_sigma_raw_image: float = 20,
+    otsu_threshold: bool = True,
+    intensity_threshold: int = -1,
+    gaussian_sigma_raw_image: float = 30,
     gaussian_sigma_threshold_image: float = 20,
     small_objects_diameter: float = 30,
-    canny_threshold: float = 0.2,
+    canny_threshold: float = 0.4,
     linear_z_illumination_correction: bool = False,
     start_z_slice: int = 40,
     m_slope: float = 0.015,
@@ -107,13 +108,16 @@ def segment_by_intensity_threshold(
         channel_2: Channel of second raw image to be combined with channel 1 image. Requires either
             `wavelength_id` (e.g. `A02_C02`) or `label` (e.g. `BCAT`).
         background_channel_2: Pixel intensity value of background to subtract from channel 2 raw image.
-        intensity_threshold: Integer that specifies threshold intensity value to binarize image. Intensities below this
+        otsu_threshold: if True, the threshold for each region is calculated with the Otsu method. This threshold
+            method is more robust to intensity variation between objects compared to intensity_threshold.
+        intensity_threshold: Integer that specifies threshold intensity value to binarize image.
+            Must be supplied if Otsu thresholding is not used. Intensities below this
             value will be set to 0, intensities above are set to 1. The specified value should correspond to intensity
             range of raw image (e.g. for 16-bit images, 0-65535). Recommended threshold value is above image background
             level and below dimmest regions of image, particularly at deeper z-depth.
         gaussian_sigma_raw_image: Float that specifies sigma (standard deviation, in pixels)
             for 3D Gaussian kernel used for blurring of raw intensity image prior to thresholding and edge detection.
-            Higher values correspond to more blurring that reduce holes in thresholded image. Recommended range 10-30.
+            Higher values correspond to more blurring that reduce holes in thresholded image. Recommended range 10-40.
         gaussian_sigma_threshold_image: Float that specifies sigma (standard deviation, in pixels)
             for 2D Gaussian kernel used for blurring each z-slice of thresholded binary image prior to edge detection.
             Higher values correspond to more blurring and smoother surface edges. Recommended range 10-30.
@@ -139,6 +143,20 @@ def segment_by_intensity_threshold(
 
     # Always use highest resolution label
     level = 0
+
+    if otsu_threshold:
+        threshold_type = "otsu"
+        logger.info("Running thresholding with Otsu threshold")
+    elif intensity_threshold > 0:
+        threshold_type = "user-defined"
+        logger.info(
+            f"Running thresholding with user-defined threshold of {intensity_threshold}"
+        )
+    else:
+        raise ValueError(
+            "If Otsu threshold is not desired, user must provide non-negative "
+            "intensity threshold value."
+        )
 
     ##############
     # Load segmentation image  ###
@@ -325,18 +343,21 @@ def segment_by_intensity_threshold(
         if linear_z_illumination_correction:
             combo = linear_z_correction(combo, start_z_slice, m_slope)
 
+        combo[combo > 65535] = 65535
         # TODO: consider using https://github.com/seung-lab/fill_voids to fill luman holes
         # TODO: account for z-decay of intensity
         # TODO: update Zenodo test dataset so that org seg matches raw image level
-        seg3d, padded_zslice_count, roi_count = run_thresholding(
+
+        seg3d, padded_zslice_count, roi_count, threshold = run_thresholding(
             combo,
-            intensity_threshold,
+            threshold_type,
             gaussian_sigma_raw_image,
             gaussian_sigma_threshold_image,
             small_objects_diameter,
             canny_threshold,
             pixmeta_raw,
             seg,
+            intensity_threshold,
         )
 
         # Check whether is binary
@@ -345,7 +366,8 @@ def segment_by_intensity_threshold(
 
         if roi_count > 0:
             logger.info(
-                f"Successfully calculated 3D label map for object label {label_str}."
+                f"Successfully calculated 3D label map for object label {label_str} using "
+                f"threshold {np.round(threshold,1)}."
             )
             object_count += 1
             if roi_count > 1:

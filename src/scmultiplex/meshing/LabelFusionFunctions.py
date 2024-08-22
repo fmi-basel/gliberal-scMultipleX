@@ -9,7 +9,7 @@
 import numpy as np
 from scipy.ndimage import binary_erosion, binary_fill_holes
 from skimage.feature import canny
-from skimage.filters import gaussian
+from skimage.filters import gaussian, threshold_otsu
 from skimage.measure import label, regionprops
 from skimage.morphology import disk, remove_small_objects
 from skimage.segmentation import expand_labels
@@ -161,6 +161,13 @@ def clean_binary_image(image_binary, sigma2d, small_objects_threshold):
     return cleaned
 
 
+def threshold_image(image, intensity_threshold):
+    # Generate binary mask
+    # Simple intensity threshold; values above threshold set to 1, values below set to 0
+    image_thresholded = np.where(image > intensity_threshold, 1, 0)
+    return image_thresholded
+
+
 def select_largest_component(label_image):
     """
     Select largest connected component of label image. Discard all smaller components.
@@ -201,13 +208,14 @@ def run_label_fusion(seg, expandby_factor, sigma, pixmeta, canny_threshold):
 
 def run_thresholding(
     raw_image,
-    intensity_threshold,
+    threshold_type,
     gaus_sigma_raw_img,
     gaus_sigma_thresh_img,
     small_objects_diameter,
     canny_threshold,
     pixmeta_raw,
     seg,
+    intensity_threshold,
 ):
     """
     Main function for running intensity-based thresholding.
@@ -217,9 +225,15 @@ def run_thresholding(
     blurred, anisotropic_sigma = anisotropic_gaussian_blur(
         raw_image, gaus_sigma_raw_img, pixmeta_raw, convert_to_8bit=False
     )
-    # Generate binary mask
-    # Simple intensity threshold; values above threshold set to 1, values below set to 0
-    combo_binary = np.where(blurred > intensity_threshold, 1, 0)
+
+    if threshold_type == "otsu":
+        threshold = threshold_otsu(image=blurred)
+    elif threshold_type == "user-defined":
+        threshold = intensity_threshold
+    else:
+        raise ValueError("Thresholding type not defined.")
+
+    combo_binary = threshold_image(blurred, threshold)
 
     # Clean up binary mask by filling holes, removing small objects, and gaussian blur by z-slice
     small_objects_2dthreshold = np.pi * (small_objects_diameter / 2) ** 2
@@ -241,4 +255,4 @@ def run_thresholding(
     # Discard small disconnected components
     contour, roi_count = select_largest_component(contour)
 
-    return contour, padded_zslice_count, roi_count
+    return contour, padded_zslice_count, roi_count, threshold
