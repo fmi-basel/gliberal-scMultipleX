@@ -129,6 +129,18 @@ def find_edges(blurred, canny_threshold, iterations):
     return edges_canny, padded_zslice_count
 
 
+def linear_z_correction(raw_image, start_thresh, m):
+    corrected_image = np.zeros_like(raw_image)
+    for i, zslice in enumerate(raw_image):
+        if i > start_thresh:
+            factor = m * (i - start_thresh) + 1
+        else:
+            factor = 1
+        zslice = zslice * factor
+        corrected_image[i] = zslice
+    return corrected_image
+
+
 def clean_binary_image(image_binary, sigma2d, small_objects_threshold):
     """
     Clean up an input binary image (0/1) by filling holes, removing small objects (below small_objects_threshold),
