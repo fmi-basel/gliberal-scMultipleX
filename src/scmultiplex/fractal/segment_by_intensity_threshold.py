@@ -42,7 +42,10 @@ from scmultiplex.fractal.fractal_helper_functions import (
     initialize_new_label,
     save_new_label_with_overlap,
 )
-from scmultiplex.meshing.LabelFusionFunctions import run_thresholding
+from scmultiplex.meshing.LabelFusionFunctions import (
+    linear_z_correction,
+    run_thresholding,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -54,16 +57,21 @@ def segment_by_intensity_threshold(
     zarr_url: str,
     init_args: InitArgsRegistrationConsensus,
     # Task-specific arguments
-    label_name: str = "nuc",
-    roi_table: str = "org_ROI_table_linked",
+    label_name: str = "org",
+    roi_table: str = "org_ROI_table",
     output_label_name: str = "org3d",
     channel_1: ChannelInputModel,
+    background_channel_1: int = 800,
     channel_2: ChannelInputModel,
+    background_channel_2: int = 400,
     intensity_threshold: int = 1500,
-    gaus_sigma_raw_img: float = 3,
-    gaus_sigma_thresh_img: float = 20,
-    small_objects_diameter: float = 20,
+    gaussian_sigma_raw_image: float = 20,
+    gaussian_sigma_threshold_image: float = 20,
+    small_objects_diameter: float = 30,
     canny_threshold: float = 0.2,
+    linear_z_illumination_correction: bool = False,
+    start_z_slice: int = 40,
+    m_slope: float = 0.015,
 ) -> dict[str, Any]:
     """
     Calculate full 3D object segmentation after 2D MIP-based segmentation using intensity thresholding of
@@ -73,7 +81,8 @@ def segment_by_intensity_threshold(
 
     1. Load the intensity images for selected channels using MIP-based segmentation ROIs.
     2. Generate 3D mask based on simple thresholding of the combined channel images. The thresholded image is
-        smoothened using gaussian blurring followed by Canny edge detection. The MIP-based segmentation is used to mask
+        smoothened using gaussian blurring followed by Canny edge detection. Optional z-illumination correctopn
+        is applied on the fly. The MIP-based segmentation is used to mask
         the resulting label image to roughly exclude any neighboring organoids and debris. To further exclude
         neighboring organoids and debris, the largest connected component is selected as the final label image.
     3. Output: save the (1) new label image and (2) new masking ROI table in the selected zarr url.
@@ -94,16 +103,18 @@ def segment_by_intensity_threshold(
             table will be saved as {output_label_name}_ROI_table.
         channel_1: Channel of raw image used for thresholding. Requires either
             `wavelength_id` (e.g. `A01_C01`) or `label` (e.g. `DAPI`).
+        background_channel_1: Pixel intensity value of background to subtract from channel 1 raw image.
         channel_2: Channel of second raw image to be combined with channel 1 image. Requires either
             `wavelength_id` (e.g. `A02_C02`) or `label` (e.g. `BCAT`).
+        background_channel_2: Pixel intensity value of background to subtract from channel 2 raw image.
         intensity_threshold: Integer that specifies threshold intensity value to binarize image. Intensities below this
             value will be set to 0, intensities above are set to 1. The specified value should correspond to intensity
             range of raw image (e.g. for 16-bit images, 0-65535). Recommended threshold value is above image background
             level and below dimmest regions of image, particularly at deeper z-depth.
-        gaus_sigma_raw_img: Float that specifies sigma (standard deviation, in pixels)
+        gaussian_sigma_raw_image: Float that specifies sigma (standard deviation, in pixels)
             for 3D Gaussian kernel used for blurring of raw intensity image prior to thresholding and edge detection.
-            Higher values correspond to more blurring that reduce holes in thresholded image. Recommended range 2-4.
-        gaus_sigma_thresh_img: Float that specifies sigma (standard deviation, in pixels)
+            Higher values correspond to more blurring that reduce holes in thresholded image. Recommended range 10-30.
+        gaussian_sigma_threshold_image: Float that specifies sigma (standard deviation, in pixels)
             for 2D Gaussian kernel used for blurring each z-slice of thresholded binary image prior to edge detection.
             Higher values correspond to more blurring and smoother surface edges. Recommended range 10-30.
         small_objects_diameter: Float that specifies the approximate diameter, in pixels and at level=0, of debris in
@@ -111,6 +122,13 @@ def segment_by_intensity_threshold(
         canny_threshold: Float in range [0,1]. Image values below this threshold are set to 0 after
             Gaussian blur using gaus_sigma_thresh_img. Higher threshold values result in tighter fit of edge mask
             to intensity image.
+        linear_z_illumination_correction: Set to True if linear z illumination correction is desired. Iterate over
+            z-slices to apply correction.
+        start_z_slice: Z-slice number at which to begin to apply linear correction, e.g. slice 40 if
+            image stack has 100 slices.
+        m_slope: Slope factor of illumination correction. Higher values have more extreme correction. This value sets
+            the multiplier for a given z-slice by formula m_slope * (i - start_z_slice) + 1, where i is the current
+            z-slice in iterator.
     """
 
     logger.info(
@@ -286,6 +304,16 @@ def segment_by_intensity_threshold(
         # Binarize object segmentation image
         seg[seg > 0] = 1
 
+        ch1_raw[ch1_raw <= background_channel_1] = 0
+        ch1_raw[
+            ch1_raw > 0
+        ] -= background_channel_1  # will never have negative values this way
+
+        ch2_raw[ch2_raw <= background_channel_2] = 0
+        ch2_raw[
+            ch2_raw > 0
+        ] -= background_channel_2  # will never have negative values this way
+
         # Combine raw images
         # TODO: make second channel optional, can also use only 1 image
         # TODO: weighed sum of channel images (multiply each channel image by scalar)
@@ -293,14 +321,18 @@ def segment_by_intensity_threshold(
         combo = 0.5 * ch1_raw + 0.5 * ch2_raw  # temporary: take average
         # TODO: correct check here that values above 65535 are not clipped; generalize to different input types
         combo[combo > 65535] = 65535
+
+        if linear_z_illumination_correction:
+            combo = linear_z_correction(combo, start_z_slice, m_slope)
+
         # TODO: consider using https://github.com/seung-lab/fill_voids to fill luman holes
         # TODO: account for z-decay of intensity
         # TODO: update Zenodo test dataset so that org seg matches raw image level
         seg3d, padded_zslice_count, roi_count = run_thresholding(
             combo,
             intensity_threshold,
-            gaus_sigma_raw_img,
-            gaus_sigma_thresh_img,
+            gaussian_sigma_raw_image,
+            gaussian_sigma_threshold_image,
             small_objects_diameter,
             canny_threshold,
             pixmeta_raw,
