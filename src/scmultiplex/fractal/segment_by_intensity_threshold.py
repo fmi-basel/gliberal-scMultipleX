@@ -62,8 +62,10 @@ def segment_by_intensity_threshold(
     output_label_name: str = "org3d",
     channel_1: ChannelInputModel,
     background_channel_1: int = 800,
+    weight_channel_1: float = 0.5,
     channel_2: ChannelInputModel,
     background_channel_2: int = 400,
+    weight_channel_2: float = 0.5,
     otsu_threshold: bool = True,
     intensity_threshold: int = -1,
     gaussian_sigma_raw_image: float = 30,
@@ -105,9 +107,14 @@ def segment_by_intensity_threshold(
         channel_1: Channel of raw image used for thresholding. Requires either
             `wavelength_id` (e.g. `A01_C01`) or `label` (e.g. `DAPI`).
         background_channel_1: Pixel intensity value of background to subtract from channel 1 raw image.
+        weight_channel_1: Float specifying weight of channel 1 image. Channels are combined as
+            (weight_channel_1 * ch1_raw) + (weight_channel_2 * ch2_raw). When both weights are 0.5, channels
+            are averaged.
         channel_2: Channel of second raw image to be combined with channel 1 image. Requires either
             `wavelength_id` (e.g. `A02_C02`) or `label` (e.g. `BCAT`).
         background_channel_2: Pixel intensity value of background to subtract from channel 2 raw image.
+        weight_channel_2: Float specifying weight of channel 2 image. Channels are combined as
+            (weight_channel_1 * ch1_raw) + (weight_channel_2 * ch2_raw)
         otsu_threshold: if True, the threshold for each region is calculated with the Otsu method. This threshold
             method is more robust to intensity variation between objects compared to intensity_threshold.
         intensity_threshold: Integer that specifies threshold intensity value to binarize image.
@@ -334,9 +341,10 @@ def segment_by_intensity_threshold(
 
         # Combine raw images
         # TODO: make second channel optional, can also use only 1 image
-        # TODO: weighed sum of channel images (multiply each channel image by scalar)
 
-        combo = 0.5 * ch1_raw + 0.5 * ch2_raw  # temporary: take average
+        combo = (weight_channel_1 * ch1_raw) + (
+            weight_channel_2 * ch2_raw
+        )  # temporary: take average
         # TODO: correct check here that values above 65535 are not clipped; generalize to different input types
         combo[combo > 65535] = 65535
 

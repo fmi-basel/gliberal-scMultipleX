@@ -734,6 +734,12 @@
             "type": "integer",
             "description": "Pixel intensity value of background to subtract from channel 1 raw image."
           },
+          "weight_channel_1": {
+            "default": 0.5,
+            "title": "Weight Channel 1",
+            "type": "number",
+            "description": "Float specifying weight of channel 1 image. Channels are combined as (weight_channel_1 * ch1_raw) + (weight_channel_2 * ch2_raw). When both weights are 0.5, channels are averaged."
+          },
           "channel_2": {
             "$ref": "#/$defs/ChannelInputModel",
             "title": "Channel 2",
@@ -744,6 +750,12 @@
             "title": "Background Channel 2",
             "type": "integer",
             "description": "Pixel intensity value of background to subtract from channel 2 raw image."
+          },
+          "weight_channel_2": {
+            "default": 0.5,
+            "title": "Weight Channel 2",
+            "type": "number",
+            "description": "Float specifying weight of channel 2 image. Channels are combined as (weight_channel_1 * ch1_raw) + (weight_channel_2 * ch2_raw)"
           },
           "otsu_threshold": {
             "default": true,
