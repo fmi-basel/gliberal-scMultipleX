@@ -18,10 +18,12 @@ from skimage.segmentation import expand_labels
 from scmultiplex.features.FeatureFunctions import mesh_equivalent_diameter
 from scmultiplex.linking.NucleiLinkingFunctions import remove_labels
 from scmultiplex.meshing.FilterFunctions import (
+    add_xy_pad,
     calculate_mean_volume,
     filter_small_sizes_per_round,
     load_border_values,
     remove_border,
+    remove_xy_pad,
 )
 
 
@@ -38,8 +40,6 @@ def fuse_labels(seg, expandby_factor):
     expandby_pix = int(round(expandby_factor * mesh_equivalent_diameter(size_mean)))
 
     # Determine the number of iterations for binary erosions to reverse the expansion
-    # The number of iterations is roughly half of the expansion, since erosion is
-    # performed with a disk size of diameter 2
     iterations = int(round(expandby_pix / 2))
 
     # Iterate over each zslice in image
@@ -256,13 +256,20 @@ def run_label_fusion(
     sigma,
     pixmeta,
     canny_threshold,
+    xy_padwidth,
     mask_by_parent=False,
 ):
     """
     Main function for running label fusion. Used in Surface Mesh Multiscale task to generate organoid label from
     single-cell segmentation.
+    Note that padding is not removed unless mask_by_parent=True. This way meshes can be generated from nicely
+    smoothened images. Pad must be removed after meshing is complete.
     """
     seg_binary, expandby_pix, iterations = fuse_labels(seg, expandby_factor)
+
+    # Add padding equal to sigma in xy dimensions so that blur can spread beyond image edge.
+    seg_binary = add_xy_pad(seg_binary, xy_padwidth)
+
     blurred, anisotropic_sigma = anisotropic_gaussian_blur(seg_binary, sigma, pixmeta)
     edges_canny, padded_zslice_count = find_edges(blurred, canny_threshold, iterations)
 
@@ -270,6 +277,8 @@ def run_label_fusion(
     # This removes debris that is far from organoid (only in xy)
     # and at least partially removes touching neighboring organoids
     if mask_by_parent:
+        # First remove padding so that image size matches parent mask
+        edges_canny = remove_xy_pad(edges_canny, xy_padwidth)
         edges_canny = edges_canny * parent_seg
 
     # Discard small disconnected components

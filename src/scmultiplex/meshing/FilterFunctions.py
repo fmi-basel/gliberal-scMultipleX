@@ -145,3 +145,25 @@ def remove_border(nparray, pad_width=1):
     if len(nparray.shape) != 2:
         raise ValueError("Expecting 2-dimensional image (z-slice) as input")
     return nparray[pad_width:-pad_width, pad_width:-pad_width]
+
+
+def add_xy_pad(nparray, pad_width):
+    """
+    Add padding only in x,y to a 3D numpy array with given pad_width (int)
+    """
+    if len(nparray.shape) != 3:
+        raise ValueError("Expecting 3-dimensional image as input")
+
+    pad_tuple = ((0, 0), (pad_width, pad_width), (pad_width, pad_width))
+
+    return np.pad(nparray, pad_width=pad_tuple)
+
+
+def remove_xy_pad(nparray, pad_width):
+    """
+    Remove padding that was added by add_xy_pad
+    """
+    if len(nparray.shape) != 3:
+        raise ValueError("Expecting 3-dimensional image as input")
+
+    return nparray[:, pad_width:-pad_width, pad_width:-pad_width]

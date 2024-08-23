@@ -38,7 +38,7 @@ from scmultiplex.fractal.fractal_helper_functions import (
     initialize_new_label,
     save_new_label_with_overlap,
 )
-from scmultiplex.meshing.FilterFunctions import mask_by_parent_object
+from scmultiplex.meshing.FilterFunctions import mask_by_parent_object, remove_xy_pad
 from scmultiplex.meshing.LabelFusionFunctions import filter_by_volume, run_label_fusion
 from scmultiplex.meshing.MeshFunctions import get_mass_properties
 
@@ -309,7 +309,7 @@ def surface_mesh_multiscale(
         ##############
 
         if multiscale:
-
+            xy_padwidth = int(sigma_factor)
             if volume_filter:
                 (
                     seg,
@@ -343,6 +343,7 @@ def surface_mesh_multiscale(
                 sigma_factor,
                 label_pixmeta,
                 canny_threshold,
+                xy_padwidth,
                 mask_by_parent=mask_contour_by_parent,
             )
 
@@ -459,6 +460,9 @@ def surface_mesh_multiscale(
             # Note that pixels of overlap in the case where two meshes are touching are overwritten by the last
             # written object
             # Thus meshes are the most accurate representation of surface, labels may be cropped
+            if not mask_contour_by_parent:
+                # Remove pad
+                edges_canny = remove_xy_pad(edges_canny, pad_width=xy_padwidth)
 
             bbox_df = save_new_label_with_overlap(
                 edges_canny,
