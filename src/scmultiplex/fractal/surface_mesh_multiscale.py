@@ -332,7 +332,6 @@ def surface_mesh_multiscale(
             (
                 edges_canny,
                 expandby_pix,
-                iterations,
                 anisotropic_sigma,
                 padded_zslice_count,
                 roi_count,
@@ -361,9 +360,8 @@ def surface_mesh_multiscale(
 
             if roi_count > 0:
                 logger.info(
-                    f"Successfully calculated 3D label map for object label {label_str} using parameters:"
-                    f"\n\texpanded by {expandby_pix} pix, \n\teroded by {iterations*2} pix, "
-                    f"\n\tgaussian blurred with sigma = {np.round(anisotropic_sigma,1)}"
+                    f"Successfully calculated 3D label map for object label {label_str}. Label expanded and eroded "
+                    f"by {expandby_pix} pixels."
                 )
 
                 object_count += 1

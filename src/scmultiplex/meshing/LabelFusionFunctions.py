@@ -39,9 +39,6 @@ def fuse_labels(seg, expandby_factor):
     size_mean = calculate_mean_volume(seg)
     expandby_pix = int(round(expandby_factor * mesh_equivalent_diameter(size_mean)))
 
-    # Determine the number of iterations for binary erosions to reverse the expansion
-    iterations = int(round(expandby_pix / 2))
-
     # Iterate over each zslice in image
     for i, zslice in enumerate(seg):
         zslice = np.pad(zslice, pad_width=expandby_pix)
@@ -52,12 +49,12 @@ def fuse_labels(seg, expandby_factor):
         # Revert the expansion (i.e. erode down to original size)
         # Erode by half of the expanded pixels since disk(1) has a radius of 1, i.e. diameter of 2
         eroded = binary_erosion(
-            zslice, disk(1), iterations=iterations
+            zslice, disk(1), iterations=expandby_pix
         )  # returns binary image, max val 1
         # remove padding
         seg_binary[i, :, :] = remove_border(eroded, pad_width=expandby_pix)
 
-    return seg_binary, expandby_pix, iterations
+    return seg_binary, expandby_pix
 
 
 def anisotropic_gaussian_blur(seg_binary, sigma, pixmeta, convert_to_8bit=True):
@@ -265,13 +262,15 @@ def run_label_fusion(
     Note that padding is not removed unless mask_by_parent=True. This way meshes can be generated from nicely
     smoothened images. Pad must be removed after meshing is complete.
     """
-    seg_binary, expandby_pix, iterations = fuse_labels(seg, expandby_factor)
+    seg_binary, expandby_pix = fuse_labels(seg, expandby_factor)
 
     # Add padding equal to sigma in xy dimensions so that blur can spread beyond image edge.
     seg_binary = add_xy_pad(seg_binary, xy_padwidth)
 
     blurred, anisotropic_sigma = anisotropic_gaussian_blur(seg_binary, sigma, pixmeta)
-    edges_canny, padded_zslice_count = find_edges(blurred, canny_threshold, iterations)
+    edges_canny, padded_zslice_count = find_edges(
+        blurred, canny_threshold, expandby_pix
+    )
 
     # Filter by organoid label image from 2D segmentation (converted to 3D)
     # This removes debris that is far from organoid (only in xy)
@@ -287,7 +286,6 @@ def run_label_fusion(
     return (
         contour,
         expandby_pix,
-        iterations,
         anisotropic_sigma,
         padded_zslice_count,
         roi_count,
