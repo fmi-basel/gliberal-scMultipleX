@@ -342,6 +342,7 @@ def surface_mesh_multiscale(
                     "Equivalent diameter is 0 or negative, thus labels not expanded. "
                     "Check segmentation quality"
                 )
+                continue
 
             # Check whether is binary
             if np.amax(edges_canny) not in [0, 1]:

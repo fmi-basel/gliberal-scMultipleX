@@ -136,11 +136,12 @@ def load_border_values(nparray):
     return edge_values
 
 
-def remove_border(nparray):
+def remove_border(nparray, pad_width=1):
     """
     Remove edge (border) values from a 2-dim numpy array, e.g. to reverse padding
+    When n defines width of pad to remove (integer)
     Return: 2-d numpy array with edge values removed
     """
     if len(nparray.shape) != 2:
         raise ValueError("Expecting 2-dimensional image (z-slice) as input")
-    return nparray[1:-1, 1:-1]
+    return nparray[pad_width:-pad_width, pad_width:-pad_width]

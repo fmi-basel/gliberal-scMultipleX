@@ -44,15 +44,18 @@ def fuse_labels(seg, expandby_factor):
 
     # Iterate over each zslice in image
     for i, zslice in enumerate(seg):
+        zslice = np.pad(zslice, pad_width=expandby_pix)
         # Expand labels in x,y
         zslice = expand_labels(zslice, expandby_pix)
         # Fill holes and binarize area (return boolean)
         zslice = binary_fill_holes(zslice)
         # Revert the expansion (i.e. erode down to original size)
         # Erode by half of the expanded pixels since disk(1) has a radius of 1, i.e. diameter of 2
-        seg_binary[i, :, :] = binary_erosion(
+        eroded = binary_erosion(
             zslice, disk(1), iterations=iterations
         )  # returns binary image, max val 1
+        # remove padding
+        seg_binary[i, :, :] = remove_border(eroded, pad_width=expandby_pix)
 
     return seg_binary, expandby_pix, iterations
 
