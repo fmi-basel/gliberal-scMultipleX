@@ -11,15 +11,12 @@ and disconnected component analysis
 """
 import logging
 import os
-from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 import anndata as ad
 import dask.array as da
 import numpy as np
 import pandas as pd
-import zarr
-from fractal_tasks_core.labels import prepare_label_group
 from fractal_tasks_core.ngff import load_NgffImageMeta
 from fractal_tasks_core.pyramids import build_pyramid
 from fractal_tasks_core.roi import (
@@ -28,10 +25,11 @@ from fractal_tasks_core.roi import (
     convert_ROI_table_to_indices,
     load_region,
 )
+from fractal_tasks_core.tasks.io_models import InitArgsRegistrationConsensus
 from pydantic import validate_call
 from skimage.measure import regionprops_table
 
-from scmultiplex.fractal.fractal_helper_functions import get_zattrs
+from scmultiplex.fractal.fractal_helper_functions import initialize_new_label
 from scmultiplex.linking.NucleiLinkingFunctions import remove_labels
 from scmultiplex.meshing.FilterFunctions import (
     filter_small_sizes_per_round,
@@ -45,10 +43,8 @@ logger = logging.getLogger(__name__)
 def cleanup_3d_cell_segmentation(
     *,
     # Fractal arguments
-    input_paths: Sequence[str],
-    output_path: str,
-    component: str,
-    metadata: dict[str, Any],
+    zarr_url: str,
+    init_args: InitArgsRegistrationConsensus,
     # Task-specific arguments
     label_name_toclean: str = "nuc",
     roi_table_toclean: str = "nuc_ROI_table",
@@ -61,8 +57,8 @@ def cleanup_3d_cell_segmentation(
     disconnected_component_filter: bool = True,
 ) -> dict[str, Any]:
     """
-    Calculate 3D surface mesh of parent object (e.g. tissue, organoid)
-    from 3D cell-level segmentation of children (e.g. nuclei)
+    Clean up 3D cell-level segmentation (e.g. nuclei, cells) by size filtering
+    and disconnected component analysis
 
     This task consists of 4 parts:
 
@@ -72,8 +68,6 @@ def cleanup_3d_cell_segmentation(
     2. Calculate median value of distribution of cell volumes for a given parent object. Filter volumes less than
         specified cutoff value
     3. disconnected_component_filter
-
-    Parallelization level: image
 
     Args:
         input_paths: List of input paths where the image data is stored as
@@ -109,48 +103,34 @@ def cleanup_3d_cell_segmentation(
 
     """
     logger.info(
-        f"Running for {input_paths=}, {component=}. \n"
-        f"Cleaning up {roi_table_toclean=} and "
-        f"{label_name_toclean=}."
+        f"Running for {zarr_url=}. \n"
+        f"Clean up 3D cell segmentation for {label_name_toclean=}."
     )
-    # TODO: remove level variable from all tasks
 
-    # Set OME-Zarr paths
-    input_zarr_path = Path(input_paths[0]) / component
+    # always use highest resolution label
+    level = 0
 
-    # Run for all multiplexing rounds that have a matching segmentation and roi table
-    current_cycle = input_zarr_path.name
-
-    seg_label_path = f"{input_zarr_path}/labels/{label_name_toclean}/{level}"
-    seg_roi_path = f"{input_zarr_path}/tables/{roi_table_toclean}"
-    parent_label_path = f"{input_zarr_path}/labels/{label_name_parent}/{level}"
-    parent_roi_path = f"{input_zarr_path}/tables/{roi_table_parent}"
+    seg_label_path = f"{zarr_url}/labels/{label_name_toclean}/{level}"
+    seg_roi_path = f"{zarr_url}/tables/{roi_table_toclean}"
+    parent_label_path = f"{zarr_url}/labels/{label_name_parent}/{level}"
+    parent_roi_path = f"{zarr_url}/tables/{roi_table_parent}"
 
     if not os.path.exists(seg_label_path):
         logger.warning(
-            f"Segmentation with label name {label_name_toclean} does not exist in round {current_cycle} "
-            f"of zarr {input_zarr_path} \n"
-            f"Skipping round {current_cycle}"
-        )
-        return {}
-
-    if os.path.exists(seg_label_path) and not os.path.exists(seg_roi_path):
-        logger.warning(
-            f"Roi table with name {roi_table_toclean} does not exist in round {current_cycle} for "
-            f"segmentation with label name {label_name_toclean} of zarr {input_zarr_path} \n"
-            f"Skipping round {current_cycle}"
+            f"Segmentation with label name {label_name_toclean} does not exist in "
+            f"{zarr_url=} \n"
+            f"Skipping zarr."
         )
         return {}
 
     # Lazily load well image to clean as dask array e.g. for nuclear segmentation, and read ROIs
-    logger.info(f"Clean cell segmentation is running for cycle {current_cycle}")
     seg_dask = da.from_zarr(seg_label_path)
     # FIXME: Can this be removed? It's not used
     # seg_adata = ad.read_zarr(seg_roi_path)
     parent_adata = ad.read_zarr(parent_roi_path)
 
-    # Read Zarr metadata
-    seg_ngffmeta = load_NgffImageMeta(f"{input_zarr_path}/labels/{label_name_toclean}")
+    # Read  Cleanup Label metadata
+    seg_ngffmeta = load_NgffImageMeta(f"{zarr_url}/labels/{label_name_toclean}")
     seg_xycoars = seg_ngffmeta.coarsening_xy  # need to know when building new pyramids
     seg_pixmeta = seg_ngffmeta.get_pixel_sizes_zyx(level=level)
 
@@ -169,45 +149,6 @@ def cleanup_3d_cell_segmentation(
         logger.warning("Well contains no objects")
 
     ##############
-    # Initialize new zarr for filtered label image ###
-    ##############
-
-    # save as same dimensions as label_name_toclean from which they are calculated
-    shape = seg_dask.shape
-    chunks = seg_dask.chunksize
-    label_dtype = np.uint32
-    output_label_name = label_name_toclean + "_clean"
-    # FIXME: Can this be removed? It's not used
-    # output_roi_table_name = roi_table_toclean + "_clean"
-    store = zarr.storage.FSStore(f"{input_zarr_path}/labels/{output_label_name}/0")
-
-    if len(shape) != 3 or len(chunks) != 3 or shape[0] == 1:
-        raise ValueError("Expecting 3D image")
-
-    # Add metadata to labels group
-    # Get the label_attrs correctly
-    # Note that the new label metadata matches the input label_name_toclean metadata
-    label_attrs = get_zattrs(zarr_url=f"{input_zarr_path}/labels/{label_name_toclean}")
-    _ = prepare_label_group(
-        image_group=zarr.group(input_zarr_path),
-        label_name=output_label_name,
-        overwrite=True,
-        label_attrs=label_attrs,
-        logger=logger,
-    )
-
-    new_label3d_array = zarr.create(
-        shape=shape,
-        chunks=chunks,
-        dtype=label_dtype,
-        store=store,
-        overwrite=True,
-        dimension_separator="/",
-    )
-
-    logger.info(f"Mask will have shape {shape} and chunks {chunks}")
-
-    ##############
     # Load parent mask ###
     ##############
 
@@ -215,9 +156,7 @@ def cleanup_3d_cell_segmentation(
     parent_dask = da.from_zarr(parent_label_path)
 
     # Read Zarr metadata
-    parent_ngffmeta = load_NgffImageMeta(
-        f"{input_zarr_path}/labels/{label_name_parent}"
-    )
+    parent_ngffmeta = load_NgffImageMeta(f"{zarr_url}/labels/{label_name_parent}")
     parent_xycoars = parent_ngffmeta.coarsening_xy
     parent_pixmeta = parent_ngffmeta.get_pixel_sizes_zyx(level=level)
 
@@ -230,14 +169,41 @@ def cleanup_3d_cell_segmentation(
 
     check_valid_ROI_indices(parent_idlist_parentmeta, roi_table_parent)
 
-    # initialize variables
-    parent_labels = parent_adata.obs_vector("label")
-    compute = True  # convert to numpy array from dask
-    segids_toremove_perwell = []  # list of nuclei ids to remove in the well
+    ##############
+    # Initialize new zarr for filtered label image ###
+    ##############
+
+    # Initialize parameters to save the newly calculated label map
+    # Save with same dimensions as child labels from which they are calculated
+    shape = seg_dask.shape
+    chunks = seg_dask.chunksize
+
+    output_label_name = label_name_toclean + "_3dclean"
+    # FIXME: Can this be removed? It's not used
+    # output_roi_table_name = roi_table_toclean + "_3dclean"
+
+    new_label3d_array = initialize_new_label(
+        zarr_url,
+        shape,
+        chunks,
+        np.uint32,
+        label_name_toclean,
+        output_label_name,
+        logger,
+    )
+
+    logger.info(f"Mask will have shape {shape} and chunks {chunks}")
+
+    # initialize new ROI table
+    bbox_dataframe_list = []
 
     ##############
     # Perform cleanup per object ###
     ##############
+    # initialize variables
+    parent_labels = parent_adata.obs_vector("label")
+    compute = True  # convert to numpy array from dask
+    segids_toremove_perwell = []  # list of nuclei ids to remove in the well
 
     # for each parent object (e.g. organoid) in round...
     for row in parent_adata.obs_names:
@@ -330,7 +296,7 @@ def cleanup_3d_cell_segmentation(
 
         # load dask from disk, will contain rois of the previously processed objects within for loop
         new_label3d_dask = da.from_zarr(
-            f"{input_zarr_path}/labels/{output_label_name}/0"
+            f"{zarr_url}/labels/{output_label_name}/{level}"
         )
         # load region of current object from disk, will include any previously processed neighboring objects
         seg_ondisk = load_region(
@@ -359,7 +325,7 @@ def cleanup_3d_cell_segmentation(
     # pyramid of coarser levels
 
     build_pyramid(
-        zarrurl=f"{input_zarr_path}/labels/{output_label_name}",
+        zarrurl=f"{zarr_url}/labels/{output_label_name}",
         overwrite=True,
         num_levels=seg_ngffmeta.num_levels,
         coarsening_xy=seg_ngffmeta.coarsening_xy,
@@ -368,13 +334,13 @@ def cleanup_3d_cell_segmentation(
     )
 
     logger.info(
-        f"Built a pyramid for the {input_zarr_path}/labels/{output_label_name} label image"
+        f"Built a pyramid for the {zarr_url}/labels/{output_label_name} label image"
     )
 
     # Filter ROI table
     # print('fullwell', segids_toremove_perwell)
     logger.info(
-        f"End clean cell segmentation task for {input_zarr_path}/labels/{output_label_name}"
+        f"End clean cell segmentation task for {zarr_url}/labels/{output_label_name}"
     )
 
     return {}
