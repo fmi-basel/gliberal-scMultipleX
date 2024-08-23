@@ -60,6 +60,7 @@ def surface_mesh_multiscale(
     expandby_factor: float = 0.6,
     sigma_factor: float = 5,
     canny_threshold: float = 0.3,
+    mask_contour_by_parent: bool = False,
     volume_filter: bool = False,
     volume_filter_threshold: float = 0.05,
     polynomial_degree: int = 30,
@@ -128,6 +129,9 @@ def surface_mesh_multiscale(
             Higher values correspond to more blurring. Recommended range 5-15.
         canny_threshold: only used if Multiscale = True. Image values below this threshold are set to 0 after
             Gaussian blur. float in range [0,1]. Higher values result in tighter fit of mesh to nuclear surface.
+        mask_contour_by_parent: if True, the final multiscale edges are masking by 2D parent object mask. Can be used
+            to define cleaner edge borders between touching organoids, but may crop surface mask if higher
+            blurring is desired.
         volume_filter: if True, performing volume filtering of nuclei to remove objects smaller
             than specified volume_filter_threshold.
         volume_filter_threshold: Multiplier that specifies cutoff for volumes below which nuclei are filtered out,
@@ -287,7 +291,7 @@ def surface_mesh_multiscale(
 
         if group_by is not None:
             # Mask objects by parent group_by object
-            seg = mask_by_parent_object(
+            seg, parent_mask = mask_by_parent_object(
                 seg, groupby_dask, groupby_idlist, row_int, label_str
             )
         else:
@@ -333,7 +337,13 @@ def surface_mesh_multiscale(
                 padded_zslice_count,
                 roi_count,
             ) = run_label_fusion(
-                seg, expandby_factor, sigma_factor, label_pixmeta, canny_threshold
+                seg,
+                parent_mask,
+                expandby_factor,
+                sigma_factor,
+                label_pixmeta,
+                canny_threshold,
+                mask_by_parent=mask_contour_by_parent,
             )
 
             # Perform checks

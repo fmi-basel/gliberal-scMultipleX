@@ -249,7 +249,15 @@ def select_largest_component(label_image):
     return label_image, roi_count
 
 
-def run_label_fusion(seg, expandby_factor, sigma, pixmeta, canny_threshold):
+def run_label_fusion(
+    seg,
+    parent_seg,
+    expandby_factor,
+    sigma,
+    pixmeta,
+    canny_threshold,
+    mask_by_parent=False,
+):
     """
     Main function for running label fusion. Used in Surface Mesh Multiscale task to generate organoid label from
     single-cell segmentation.
@@ -257,6 +265,12 @@ def run_label_fusion(seg, expandby_factor, sigma, pixmeta, canny_threshold):
     seg_binary, expandby_pix, iterations = fuse_labels(seg, expandby_factor)
     blurred, anisotropic_sigma = anisotropic_gaussian_blur(seg_binary, sigma, pixmeta)
     edges_canny, padded_zslice_count = find_edges(blurred, canny_threshold, iterations)
+
+    # Filter by organoid label image from 2D segmentation (converted to 3D)
+    # This removes debris that is far from organoid (only in xy)
+    # and at least partially removes touching neighboring organoids
+    if mask_by_parent:
+        edges_canny = edges_canny * parent_seg
 
     # Discard small disconnected components
     contour, roi_count = select_largest_component(edges_canny)

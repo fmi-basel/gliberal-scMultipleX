@@ -121,7 +121,7 @@ def mask_by_parent_object(
     ] = 1  # select only current object and binarize object mask
     seg_masked = seg * parent_mask
 
-    return seg_masked
+    return seg_masked, parent_mask
 
 
 def load_border_values(nparray):
