@@ -39,7 +39,7 @@ from scmultiplex.fractal.fractal_helper_functions import (
     save_new_label_with_overlap,
 )
 from scmultiplex.meshing.FilterFunctions import mask_by_parent_object
-from scmultiplex.meshing.LabelFusionFunctions import run_label_fusion
+from scmultiplex.meshing.LabelFusionFunctions import filter_by_volume, run_label_fusion
 from scmultiplex.meshing.MeshFunctions import get_mass_properties
 
 logger = logging.getLogger(__name__)
@@ -60,6 +60,8 @@ def surface_mesh_multiscale(
     expandby_factor: float = 0.6,
     sigma_factor: float = 5,
     canny_threshold: float = 0.3,
+    volume_filter: bool = False,
+    volume_filter_threshold: float = 0.05,
     polynomial_degree: int = 30,
     passband: float = 0.01,
     feature_angle: int = 160,
@@ -126,6 +128,11 @@ def surface_mesh_multiscale(
             Higher values correspond to more blurring. Recommended range 5-15.
         canny_threshold: only used if Multiscale = True. Image values below this threshold are set to 0 after
             Gaussian blur. float in range [0,1]. Higher values result in tighter fit of mesh to nuclear surface.
+        volume_filter: if True, performing volume filtering of nuclei to remove objects smaller
+            than specified volume_filter_threshold.
+        volume_filter_threshold: Multiplier that specifies cutoff for volumes below which nuclei are filtered out,
+            float in range [0,1], e.g. 0.05 means that 5% of median of nuclear volume distribution is used as cutoff.
+            Specify this value if volume filtering is desired. Default 0.05.
         polynomial_degree: Mesh smoothing parameter. The number of polynomial degrees during surface mesh smoothing with
             vtkWindowedSincPolyDataFilter determines the maximum number of smoothing passes.
             This number corresponds to the degree of the polynomial that is used to approximate the windowed sinc
@@ -298,6 +305,24 @@ def surface_mesh_multiscale(
         ##############
 
         if multiscale:
+
+            if volume_filter:
+                (
+                    seg,
+                    segids_toremove,
+                    removed_size_mean,
+                    size_mean,
+                    volume_cutoff,
+                ) = filter_by_volume(seg, volume_filter_threshold)
+
+                if len(segids_toremove) > 0:
+                    logger.info(
+                        f"Volume filtering removed {len(segids_toremove)} cell(s) from object {label_str} "
+                        f"that have a volume below the calculated {np.round(volume_cutoff,1)} pixel threshold"
+                        f"\n Removed labels have a mean volume of {np.round(removed_size_mean,1)} and are the "
+                        f"label id(s): "
+                        f"\n {segids_toremove}"
+                    )
 
             # Generate new 3D label image
             (

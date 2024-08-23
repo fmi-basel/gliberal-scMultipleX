@@ -7,16 +7,19 @@
 ##############################################################################
 
 import numpy as np
+import pandas as pd
 from scipy.ndimage import binary_erosion, binary_fill_holes
 from skimage.feature import canny
 from skimage.filters import gaussian, threshold_otsu
-from skimage.measure import label, regionprops
+from skimage.measure import label, regionprops, regionprops_table
 from skimage.morphology import disk, remove_small_objects
 from skimage.segmentation import expand_labels
 
 from scmultiplex.features.FeatureFunctions import mesh_equivalent_diameter
+from scmultiplex.linking.NucleiLinkingFunctions import remove_labels
 from scmultiplex.meshing.FilterFunctions import (
     calculate_mean_volume,
+    filter_small_sizes_per_round,
     load_border_values,
     remove_border,
 )
@@ -127,6 +130,45 @@ def find_edges(blurred, canny_threshold, iterations):
     edges_canny = label(remove_small_objects(edges_canny, iterations))
 
     return edges_canny, padded_zslice_count
+
+
+def filter_by_volume(seg, volume_filter_threshold):
+    """
+    Remove segmentations from label image that have a volume less than specified volume threshold,
+    which is a fraction of the median object size in image
+    """
+    # Run regionprops to extract centroids and volume of each label
+    seg_props = regionprops_table(
+        label_image=seg, properties=("label", "centroid", "area")
+    )  # zyx
+
+    # Convert to pandas, then numpy
+    # Output column order must be: ["label", "x_centroid", "y_centroid", "z_centroid", "volume"]
+    seg_props = (
+        pd.DataFrame(
+            seg_props,
+            columns=["label", "centroid-2", "centroid-1", "centroid-0", "area"],
+        )
+    ).to_numpy()
+
+    # Discard segmentations that have a volume less than fraction volume threshold
+    (
+        seg_props,
+        segids_toremove,
+        removed_size_mean,
+        size_mean,
+        volume_cutoff,
+    ) = filter_small_sizes_per_round(
+        seg_props, column=-1, threshold=volume_filter_threshold
+    )
+
+    segids_toremove = list(segids_toremove)  # list of float64
+
+    # Relabel input image to remove identified IDs
+    datatype = seg.dtype
+    seg_filtered = remove_labels(seg, segids_toremove, datatype)
+
+    return seg_filtered, segids_toremove, removed_size_mean, size_mean, volume_cutoff
 
 
 def linear_z_correction(raw_image, start_thresh, m):
