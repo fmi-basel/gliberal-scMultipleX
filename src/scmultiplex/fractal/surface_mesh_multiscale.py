@@ -306,6 +306,7 @@ def surface_mesh_multiscale(
                 iterations,
                 anisotropic_sigma,
                 padded_zslice_count,
+                roi_count,
             ) = run_label_fusion(
                 seg, expandby_factor, sigma_factor, label_pixmeta, canny_threshold
             )
@@ -316,30 +317,36 @@ def surface_mesh_multiscale(
                     "Equivalent diameter is 0 or negative, thus labels not expanded. "
                     "Check segmentation quality"
                 )
-            # Check whether new label map has a single value, otherwise result is discarded and object skipped
-            maxvalue = np.amax(edges_canny)
-            if maxvalue != 1:
-                if maxvalue == 0:
-                    logger.warning(
-                        f"No 3D label and mesh saved for object {label_str}. "
-                        f"Result of canny edge detection is empty"
+
+            # Check whether is binary
+            if np.amax(edges_canny) not in [0, 1]:
+                raise ValueError("Edge detection results not binary.")
+
+            if roi_count > 0:
+                logger.info(
+                    f"Successfully calculated 3D label map for object label {label_str} using parameters:"
+                    f"\n\texpanded by {expandby_pix} pix, \n\teroded by {iterations*2} pix, "
+                    f"\n\tgaussian blurred with sigma = {np.round(anisotropic_sigma,1)}"
+                )
+
+                object_count += 1
+
+                if roi_count > 1:
+                    logger.info(
+                        f"Object {label_str} contains more than 1 component. "
+                        f"Largest component selected as label mask."
                     )
-                    continue
-                else:  # for max values greater than 1 or less than 0
-                    logger.warning(
-                        f"No 3D label and mesh saved for object {label_str}. Detected {maxvalue} labels. "
-                        f"Is the shape composed of {maxvalue} distinct objects?"
-                    )
-                    continue
-            logger.info(
-                f"Successfully calculated 3D label map for object label {label_str} using parameters:"
-                f"\n\texpanded by {expandby_pix} pix, \n\teroded by {iterations*2} pix, "
-                f"\n\tgaussian blurred with sigma = {np.round(anisotropic_sigma,1)}"
-            )
+            else:
+                logger.warning(
+                    f"Empty result for object label  {label_str}. No label calculated. "
+                    f"Is input region image empty?"
+                )
+                continue
+
             if padded_zslice_count > 0:
                 logger.info(
                     f"Object {label_str} has non-zero pixels touching image border. Image processing "
-                    f"completed successfully, however consider reducing sigma_factor "
+                    f"completed successfully, however consider reducing sigma "
                     f"or increasing the canny_threshold to reduce risk of cropping shape edges."
                 )
 
@@ -393,8 +400,6 @@ def surface_mesh_multiscale(
             object_name,
             save_as_stl,
         )
-
-        object_count += 1
 
         logger.info(f"Successfully generated surface mesh for object label {label_str}")
 

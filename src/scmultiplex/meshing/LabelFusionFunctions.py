@@ -213,7 +213,17 @@ def run_label_fusion(seg, expandby_factor, sigma, pixmeta, canny_threshold):
     blurred, anisotropic_sigma = anisotropic_gaussian_blur(seg_binary, sigma, pixmeta)
     edges_canny, padded_zslice_count = find_edges(blurred, canny_threshold, iterations)
 
-    return edges_canny, expandby_pix, iterations, anisotropic_sigma, padded_zslice_count
+    # Discard small disconnected components
+    contour, roi_count = select_largest_component(edges_canny)
+
+    return (
+        contour,
+        expandby_pix,
+        iterations,
+        anisotropic_sigma,
+        padded_zslice_count,
+        roi_count,
+    )
 
 
 def run_thresholding(
