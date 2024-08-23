@@ -36,6 +36,7 @@ from fractal_tasks_core.roi import (
 from fractal_tasks_core.tables import write_table
 from fractal_tasks_core.tasks.io_models import InitArgsRegistrationConsensus
 from pydantic import validate_call
+from skimage.exposure import rescale_intensity
 
 from scmultiplex.fractal.fractal_helper_functions import (
     format_roi_table,
@@ -62,15 +63,19 @@ def segment_by_intensity_threshold(
     output_label_name: str = "org3d",
     channel_1: ChannelInputModel,
     background_channel_1: int = 800,
+    maximum_channel_1: int,
     weight_channel_1: float = 0.5,
     channel_2: ChannelInputModel,
     background_channel_2: int = 400,
+    maximum_channel_2: int,
     weight_channel_2: float = 0.5,
     otsu_threshold: bool = True,
+    otsu_weight: float = 1.0,
     intensity_threshold: int = -1,
     gaussian_sigma_raw_image: float = 30,
     gaussian_sigma_threshold_image: float = 20,
     small_objects_diameter: float = 30,
+    expand_by_pixels: int = 20,
     canny_threshold: float = 0.4,
     linear_z_illumination_correction: bool = False,
     start_z_slice: int = 40,
@@ -107,16 +112,20 @@ def segment_by_intensity_threshold(
         channel_1: Channel of raw image used for thresholding. Requires either
             `wavelength_id` (e.g. `A01_C01`) or `label` (e.g. `DAPI`).
         background_channel_1: Pixel intensity value of background to subtract from channel 1 raw image.
+        maximum_channel_1: Maximum pixel intensity value that channel 1 image is rescaled to.
         weight_channel_1: Float specifying weight of channel 1 image. Channels are combined as
             (weight_channel_1 * ch1_raw) + (weight_channel_2 * ch2_raw). When both weights are 0.5, channels
             are averaged.
         channel_2: Channel of second raw image to be combined with channel 1 image. Requires either
             `wavelength_id` (e.g. `A02_C02`) or `label` (e.g. `BCAT`).
         background_channel_2: Pixel intensity value of background to subtract from channel 2 raw image.
+        maximum_channel_2: Maximum pixel intensity value that channel 1 image is rescaled to.
         weight_channel_2: Float specifying weight of channel 2 image. Channels are combined as
             (weight_channel_1 * ch1_raw) + (weight_channel_2 * ch2_raw)
         otsu_threshold: if True, the threshold for each region is calculated with the Otsu method. This threshold
             method is more robust to intensity variation between objects compared to intensity_threshold.
+        otsu_weight: Scale calculated Otsu threhsold by this value. Values lower than 1 (e.g. 0.9) reduce Otsu
+            threshold (e.g. by 10 %) to include lower-intensity pixels in thresholding.
         intensity_threshold: Integer that specifies threshold intensity value to binarize image.
             Must be supplied if Otsu thresholding is not used. Intensities below this
             value will be set to 0, intensities above are set to 1. The specified value should correspond to intensity
@@ -130,6 +139,9 @@ def segment_by_intensity_threshold(
             Higher values correspond to more blurring and smoother surface edges. Recommended range 10-30.
         small_objects_diameter: Float that specifies the approximate diameter, in pixels and at level=0, of debris in
             the image. This value is used to filter out small objects using skimage.morphology.remove_small_objects.
+        expand_by_pixels: Expand initial threshold mask by this number of pixels and fill holes. Mask is subsequently
+            dilated and returned to original size. This step serves to fill holes in dim regions. Higher values lead
+            to more holes filled, but neighboring objects or debris may become fused.
         canny_threshold: Float in range [0,1]. Image values below this threshold are set to 0 after
             Gaussian blur using gaus_sigma_thresh_img. Higher threshold values result in tighter fit of edge mask
             to intensity image.
@@ -164,6 +176,12 @@ def segment_by_intensity_threshold(
             "If Otsu threshold is not desired, user must provide non-negative "
             "intensity threshold value."
         )
+
+    if (
+        maximum_channel_1 < background_channel_1
+        or maximum_channel_2 < background_channel_2
+    ):
+        raise ValueError("Maximum value of image must be higher than image background.")
 
     ##############
     # Load segmentation image  ###
@@ -334,11 +352,18 @@ def segment_by_intensity_threshold(
             ch1_raw > 0
         ] -= background_channel_1  # will never have negative values this way
 
+        ch1_raw = rescale_intensity(
+            ch1_raw, in_range=(0, maximum_channel_1 - background_channel_1)
+        )
+
         ch2_raw[ch2_raw <= background_channel_2] = 0
         ch2_raw[
             ch2_raw > 0
         ] -= background_channel_2  # will never have negative values this way
 
+        ch2_raw = rescale_intensity(
+            ch2_raw, in_range=(0, maximum_channel_2 - background_channel_2)
+        )
         # Combine raw images
         # TODO: make second channel optional, can also use only 1 image
 
@@ -353,7 +378,6 @@ def segment_by_intensity_threshold(
 
         combo[combo > 65535] = 65535
         # TODO: consider using https://github.com/seung-lab/fill_voids to fill luman holes
-        # TODO: account for z-decay of intensity
         # TODO: update Zenodo test dataset so that org seg matches raw image level
 
         seg3d, padded_zslice_count, roi_count, threshold = run_thresholding(
@@ -362,6 +386,7 @@ def segment_by_intensity_threshold(
             gaussian_sigma_raw_image,
             gaussian_sigma_threshold_image,
             small_objects_diameter,
+            expand_by_pixels,
             canny_threshold,
             pixmeta_raw,
             seg,

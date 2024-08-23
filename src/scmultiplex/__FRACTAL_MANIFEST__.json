@@ -734,6 +734,11 @@
             "type": "integer",
             "description": "Pixel intensity value of background to subtract from channel 1 raw image."
           },
+          "maximum_channel_1": {
+            "title": "Maximum Channel 1",
+            "type": "integer",
+            "description": "Maximum pixel intensity value that channel 1 image is rescaled to."
+          },
           "weight_channel_1": {
             "default": 0.5,
             "title": "Weight Channel 1",
@@ -751,6 +756,11 @@
             "type": "integer",
             "description": "Pixel intensity value of background to subtract from channel 2 raw image."
           },
+          "maximum_channel_2": {
+            "title": "Maximum Channel 2",
+            "type": "integer",
+            "description": "Maximum pixel intensity value that channel 1 image is rescaled to."
+          },
           "weight_channel_2": {
             "default": 0.5,
             "title": "Weight Channel 2",
@@ -762,6 +772,12 @@
             "title": "Otsu Threshold",
             "type": "boolean",
             "description": "if True, the threshold for each region is calculated with the Otsu method. This threshold method is more robust to intensity variation between objects compared to intensity_threshold."
+          },
+          "otsu_weight": {
+            "default": 1.0,
+            "title": "Otsu Weight",
+            "type": "number",
+            "description": "Scale calculated Otsu threhsold by this value. Values lower than 1 (e.g. 0.9) reduce Otsu threshold (e.g. by 10 %) to include lower-intensity pixels in thresholding."
           },
           "intensity_threshold": {
             "default": -1,
@@ -786,6 +802,12 @@
             "title": "Small Objects Diameter",
             "type": "number",
             "description": "Float that specifies the approximate diameter, in pixels and at level=0, of debris in the image. This value is used to filter out small objects using skimage.morphology.remove_small_objects."
+          },
+          "expand_by_pixels": {
+            "default": 20,
+            "title": "Expand By Pixels",
+            "type": "integer",
+            "description": "Expand initial threshold mask by this number of pixels and fill holes. Mask is subsequently dilated and returned to original size. This step serves to fill holes in dim regions. Higher values lead to more holes filled, but neighboring objects or debris may become fused."
           },
           "canny_threshold": {
             "default": 0.4,
@@ -816,7 +838,9 @@
           "zarr_url",
           "init_args",
           "channel_1",
-          "channel_2"
+          "maximum_channel_1",
+          "channel_2",
+          "maximum_channel_2"
         ],
         "type": "object",
         "title": "SegmentByIntensityThreshold"

@@ -141,18 +141,28 @@ def linear_z_correction(raw_image, start_thresh, m):
     return corrected_image
 
 
-def clean_binary_image(image_binary, sigma2d, small_objects_threshold):
+def clean_binary_image(image_binary, sigma2d, small_objects_threshold, expandby_pix):
     """
-    Clean up an input binary image (0/1) by filling holes, removing small objects (below small_objects_threshold),
+    Clean up an input binary image (0/1) by filling holes, expanding labels and filling holes,
+    subsequent dilation, removing small objects (below small_objects_threshold),
     and performing gaussian blur (with sigma2d).
     Performed in 2D on each zslice of image.
     Return cleaned up binary (0-1) image, float 64, same shape as input array.
     """
     cleaned = np.zeros_like(image_binary, dtype=np.float64)
 
+    iterations = int(round(expandby_pix / 2))
+
     # Iterate over each zslice in image
     for i, zslice in enumerate(image_binary):
         zslice = binary_fill_holes(zslice)
+        zslice = expand_labels(
+            zslice, expandby_pix
+        )  # expand mask to fuse labels and hill holes
+        zslice = binary_fill_holes(zslice)
+        zslice = binary_erosion(
+            zslice, disk(1), iterations=iterations
+        )  # dilate mask to original size
         zslice = remove_small_objects(zslice, small_objects_threshold)
         zslice = (zslice * 255).astype(np.uint8)  # convert 0-255
         zslice = gaussian(zslice, sigma=sigma2d, preserve_range=False)  # output is 0-1
@@ -212,6 +222,7 @@ def run_thresholding(
     gaus_sigma_raw_img,
     gaus_sigma_thresh_img,
     small_objects_diameter,
+    expand_by_pixel,
     canny_threshold,
     pixmeta_raw,
     seg,
@@ -238,7 +249,7 @@ def run_thresholding(
     # Clean up binary mask by filling holes, removing small objects, and gaussian blur by z-slice
     small_objects_2dthreshold = np.pi * (small_objects_diameter / 2) ** 2
     cleaned = clean_binary_image(
-        combo_binary, gaus_sigma_thresh_img, small_objects_2dthreshold
+        combo_binary, gaus_sigma_thresh_img, small_objects_2dthreshold, expand_by_pixel
     )
 
     # Smoothen edges of mask via Canny edge detection
