@@ -80,24 +80,24 @@ test_calculate_platymatch_registration_output = np.array(
 )
 
 test_sphr_harmonics_from_labelimg_expected_output = np.array(
-    [11.41795, 10.20555, 14.41203]
+    [10.87666, 9.29089, 13.33493]
 )
 
 test_sphr_harmonics_from_mesh_expected_output = np.array(
-    [10.780165, 9.448335, 14.074149]
+    [10.116642, 8.294999, 12.791296]
 )
 
 test_scmultiplex_mesh_measurements_expected_output = np.array(
     [
-        5.1996997e03,
-        1.4704432e03,
-        1.0130836e00,
-        5.1079750e-01,
-        9.9380553e-01,
-        6.1944937e-03,
-        1.4286873e-02,
-        1.1044443e00,
-        1.0065205e00,
+        4.31434180e03,
+        1.30477405e03,
+        1.01806331e00,
+        4.67207789e-01,
+        9.94542837e-01,
+        5.45713631e-03,
+        1.40581485e-02,
+        1.12836015e00,
+        1.00899124e00,
     ]
 )
 
@@ -278,6 +278,9 @@ def test_surface_mesh_multiscale(linking_zenodo_zarrs, name=name_3d):
             expandby_factor=0.6,
             sigma_factor=10,
             canny_threshold=0.3,
+            mask_contour_by_parent=False,
+            volume_filter=True,
+            volume_filter_threshold=0.05,
             polynomial_degree=30,
             passband=0.01,
             feature_angle=160,
@@ -351,6 +354,9 @@ def test_surface_mesh_per_object(linking_zenodo_zarrs, name=name_3d):
             expandby_factor=1.0,
             sigma_factor=6,
             canny_threshold=0.2,
+            mask_contour_by_parent=False,
+            volume_filter=False,
+            volume_filter_threshold=0.05,
             polynomial_degree=30,
             passband=0.01,
             feature_angle=160,
@@ -378,7 +384,7 @@ def test_sphr_harmonics_from_labelimage(linking_zenodo_zarrs, name=name_3d):
 
         spherical_harmonics_from_labelimage(
             zarr_url=img["zarr_url"],
-            init_args=img["init_args"],
+            init_args=init_args,
             label_name=label_name,
             roi_table=roi_table,
             lmax=2,
@@ -418,7 +424,7 @@ def test_scmultiplex_mesh_measurements(linking_zenodo_zarrs, name=name_3d):
 
         scmultiplex_mesh_measurements(
             zarr_url=img["zarr_url"],
-            init_args=img["init_args"],
+            init_args=init_args,
             mesh_name=mesh_name,
             roi_table=roi_table,
             output_table_name=output_table_name,
