@@ -574,6 +574,24 @@
             "type": "number",
             "description": "only used if Multiscale = True. Image values below this threshold are set to 0 after Gaussian blur. float in range [0,1]. Higher values result in tighter fit of mesh to nuclear surface."
           },
+          "mask_contour_by_parent": {
+            "default": false,
+            "title": "Mask Contour By Parent",
+            "type": "boolean",
+            "description": "if True, the final multiscale edges are masking by 2D parent object mask. Can be used to define cleaner edge borders between touching organoids, but may crop surface mask if higher blurring is desired."
+          },
+          "volume_filter": {
+            "default": false,
+            "title": "Volume Filter",
+            "type": "boolean",
+            "description": "if True, performing volume filtering of nuclei to remove objects smaller than specified volume_filter_threshold."
+          },
+          "volume_filter_threshold": {
+            "default": 0.05,
+            "title": "Volume Filter Threshold",
+            "type": "number",
+            "description": "Multiplier that specifies cutoff for volumes below which nuclei are filtered out, float in range [0,1], e.g. 0.05 means that 5% of median of nuclear volume distribution is used as cutoff. Specify this value if volume filtering is desired. Default 0.05."
+          },
           "polynomial_degree": {
             "default": 30,
             "title": "Polynomial Degree",
