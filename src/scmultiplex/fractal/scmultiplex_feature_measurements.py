@@ -40,6 +40,7 @@ from scmultiplex.features.feature_wrapper import get_regionprops_measurements
 
 __OME_NGFF_VERSION__ = fractal_tasks_core.__OME_NGFF_VERSION__
 
+from scmultiplex.meshing.FilterFunctions import mask_by_parent_object
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,7 @@ def scmultiplex_feature_measurements(  # noqa: C901
     output_table_name: str,
     input_channels: Union[Dict[str, ChannelInputModel], None] = None,
     input_ROI_table: str = "well_ROI_table",
+    masking_label_name: Union[str, None] = None,
     level: int = 0,
     label_level: int = 0,
     measure_morphology: bool = True,
@@ -82,6 +84,7 @@ def scmultiplex_feature_measurements(  # noqa: C901
             "A01_C01"}. To only measure morphology, provide an empty dict
         input_ROI_table: Name of the ROI table to loop over. Needs to exists
             as a ROI table in the OME-Zarr file
+        masking_label_name: Name of label by which to mask label_image.
         level: Resolution of the intensity image to load for measurements.
             Only tested for level 0
         label_level: Resolution of the label image to load for measurements.
@@ -196,6 +199,17 @@ def scmultiplex_feature_measurements(  # noqa: C901
             f"the label image {label_image}"
         )
 
+    # If relevant, load parent object segmentation to mask child objects
+    # TODO: improve handling of case where shape of parent segmentation does not match child segmentation; attempt at
+    #  upscaling is implemented in mask_by_parent_object function, but may not cover search-first edge cases
+    if use_ROI_masks and masking_label_name is not None:
+        # Load well image as dask array for parent objects
+        # Metadata for this label image is set by input_ROI_table
+        # TODO: load label image directly from input_ROI_table zattrs to remove redundant task input
+        mask_dask = da.from_zarr(
+            f"{zarr_url}/labels/{masking_label_name}/{label_level}"
+        )
+
     # Loop over ROIs to make measurements
     df_well = pd.DataFrame()
     df_info_well = pd.DataFrame()
@@ -207,6 +221,7 @@ def scmultiplex_feature_measurements(  # noqa: C901
 
         # Define some constant values to be added as a separate column to
         # the obs table
+        # TODO: consider chanding "ROI_name" to "ROI_index"
         extra_values = {
             "ROI_table_name": input_ROI_table,
             "ROI_name": ROI_table.obs.index[i_ROI],
@@ -219,9 +234,31 @@ def scmultiplex_feature_measurements(  # noqa: C901
         label_img = input_label_image[region].compute()
         if use_ROI_masks:
             current_label = int(float(ROI_table.obs.iloc[i_ROI]["label"]))
-            background = label_img != current_label
-            label_img[background] = 0
             extra_values["ROI_label"] = current_label
+            # For feature extraction of child objects (e.g. nuclei) masked by parent (e.g. organoid),
+            # mask by parent image
+            if masking_label_name is not None:
+                # Mask child objects by parent object
+                label_img, parent_mask = mask_by_parent_object(
+                    label_img, mask_dask, list_indices, i_ROI, current_label
+                )
+                # Only proceed if labelmap is not empty
+                if np.amax(label_img) == 0:
+                    logger.warning(
+                        f"Skipping region label {current_label}. Label image contains no labeled objects."
+                    )
+                    # Skip this object
+                    continue
+                else:
+                    logger.info(
+                        f"Calculating features for {label_image} object(s) masked by "
+                        f"region label {current_label}"
+                    )
+            else:
+                # This works only in case where masking object is of same parent/child class
+                # as feature extracted object, e.g. organoid mask on organoid features
+                background = label_img != current_label
+                label_img[background] = 0
 
         if label_img.shape[0] == 1:
             logger.debug("Label image is 2D only, processing with 2D options")
@@ -349,6 +386,10 @@ def scmultiplex_feature_measurements(  # noqa: C901
             instance_key="label",
         ),
     )
+
+    logger.info(f"End feature_measurement task for {zarr_url}/labels/{label_image}")
+
+    return {}
 
 
 if __name__ == "__main__":
