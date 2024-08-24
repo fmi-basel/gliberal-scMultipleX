@@ -49,6 +49,7 @@ def expand_labels(
     expand_by_pixels: Union[int, None] = None,
     calculate_image_based_expansion_distance: bool = False,
     expand_by_factor: Union[float, None] = None,
+    mask_expansion_by_parent: bool = False,
 ) -> dict[str, Any]:
     """
     Expand labels in 2D or 3D image without overlap.
@@ -72,6 +73,8 @@ def expand_labels(
             be supplied.
         expand_by_factor: Multiplier that specifies pixels by which to expand each label. Float in range
             [0, 1 or higher], e.g. 0.2 means that 20% of mean equivalent diameter of labels in region is used.
+        mask_expansion_by_parent: If True, final expanded labels are masked by group_by object. Recommended to set
+            to True for child/parent masking.
     """
 
     logger.info(
@@ -243,6 +246,10 @@ def expand_labels(
             expandby,
             expansion_distance_image_based=calculate_image_based_expansion_distance,
         )
+
+        if mask_expansion_by_parent and group_by is not None:
+            seg_expanded = seg_expanded * parent_mask
+
         logger.info(f"Expanded label(s) in region {label_str} by {distance} pixels.")
 
         ##############
