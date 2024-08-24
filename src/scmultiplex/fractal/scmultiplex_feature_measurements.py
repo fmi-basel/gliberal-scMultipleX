@@ -331,7 +331,7 @@ def scmultiplex_feature_measurements(  # noqa: C901
         df_well = df_well.astype(measurement_dtype)
         df_well.index = df_well.index.map(str)
         # Convert to anndata
-        measurement_table = ad.AnnData(df_well, dtype=measurement_dtype)
+        measurement_table = ad.AnnData(df_well)
         measurement_table.obs = df_info_well
     else:
         # Create empty anndata table
