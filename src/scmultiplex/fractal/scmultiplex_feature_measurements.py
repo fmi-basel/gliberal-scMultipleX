@@ -205,7 +205,7 @@ def scmultiplex_feature_measurements(  # noqa: C901
 
         logger.debug(f"ROI {i_ROI+1}/{num_ROIs}: {region=}")
 
-        # Define some constant values to be added as a separat column to
+        # Define some constant values to be added as a separate column to
         # the obs table
         extra_values = {
             "ROI_table_name": input_ROI_table,
@@ -218,7 +218,7 @@ def scmultiplex_feature_measurements(  # noqa: C901
 
         label_img = input_label_image[region].compute()
         if use_ROI_masks:
-            current_label = int(ROI_table.obs.iloc[i_ROI]["label"])
+            current_label = int(float(ROI_table.obs.iloc[i_ROI]["label"]))
             background = label_img != current_label
             label_img[background] = 0
             extra_values["ROI_label"] = current_label
@@ -239,7 +239,6 @@ def scmultiplex_feature_measurements(  # noqa: C901
                 f"Loaded an image of shape {label_img.shape}. "
                 "Processing is only supported for 2D & 3D images"
             )
-
         # Set inputs
         df_roi = pd.DataFrame()
         df_info_roi = pd.DataFrame()
@@ -273,7 +272,6 @@ def scmultiplex_feature_measurements(  # noqa: C901
                     channel_prefix=input_name,
                     extra_values=extra_values,
                 )
-
                 # Only measure morphology for the first intensity channel provided
                 # => just once per label image
                 first_channel = False
