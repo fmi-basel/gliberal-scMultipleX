@@ -1215,6 +1215,63 @@
         "title": "ScmultiplexFeatureMeasurements"
       },
       "docs_info": "## scmultiplex_feature_measurements\nMeasurements of intensities and morphologies\n\nWrapper task for scmultiplex measurements for Fractal to generate\nmeasurements of intensities and morphologies\n"
+    },
+    {
+      "name": "scMultiplex Expand Labels",
+      "executable_parallel": "fractal/expand_labels.py",
+      "meta_parallel": {
+        "cpus_per_task": 4,
+        "mem": 16000
+      },
+      "args_schema_parallel": {
+        "additionalProperties": false,
+        "properties": {
+          "zarr_url": {
+            "title": "Zarr Url",
+            "type": "string",
+            "description": "Path or url to the individual OME-Zarr image to be processed. Refers to the zarr_url of the reference acquisition. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "label_name_to_expand": {
+            "default": "nuc",
+            "title": "Label Name To Expand",
+            "type": "string",
+            "description": "Label name of segmentation to be expanded."
+          },
+          "group_by": {
+            "title": "Group By",
+            "type": "string",
+            "description": "Label name of segmentated objects that are parents of label_name. If None (default), no grouping is applied and expansion is calculated for the input object (label_name_to_expand). Instead, if a group_by label is specified, the label_name_to_expand objects will be masked and grouped by this object. For example, when group_by = 'org', the nuclear segmentation is masked by the organoid parent and all nuclei belonging to the parent are loaded as a label image."
+          },
+          "roi_table": {
+            "default": "org_ROI_table_linked",
+            "title": "Roi Table",
+            "type": "string",
+            "description": "Name of the ROI table used to iterate over objects and load object regions. If group_by is passed, this is the ROI table for the group_by objects, e.g. org_ROI_table."
+          },
+          "expand_by_pixels": {
+            "title": "Expand By Pixels",
+            "type": "integer",
+            "description": "Integer value for pixel distance to expand by."
+          },
+          "calculate_image_based_expansion_distance": {
+            "default": false,
+            "title": "Calculate Image Based Expansion Distance",
+            "type": "boolean",
+            "description": "If true, overrides any set expand_by_pixels value, and expansion distance is calculated based on the average label size in loaded region. In this case, expandby_factor must be supplied."
+          },
+          "expand_by_factor": {
+            "title": "Expand By Factor",
+            "type": "number",
+            "description": "Multiplier that specifies pixels by which to expand each label. Float in range [0, 1 or higher], e.g. 0.2 means that 20% of mean equivalent diameter of labels in region is used."
+          }
+        },
+        "required": [
+          "zarr_url"
+        ],
+        "type": "object",
+        "title": "ExpandLabels"
+      },
+      "docs_info": "## expand_labels\nExpand labels in 2D or 3D image without overlap.\n"
     }
   ],
   "has_args_schemas": true,

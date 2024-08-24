@@ -27,6 +27,43 @@ from scmultiplex.meshing.FilterFunctions import (
 )
 
 
+def get_expandby_pixels(seg, expandby_factor):
+    """
+    Determine the expansion amount (in pixels) based on the mean diameter of 3D nuclei or cells in object
+    Returns integer
+    """
+    size_mean = calculate_mean_volume(seg)
+    try:
+        expandby_pix = int(round(expandby_factor * mesh_equivalent_diameter(size_mean)))
+    # Catch error in case no objects in volume
+    except ValueError:
+        expandby_pix = 0
+    return expandby_pix
+
+
+def expand_2d_labels(seg, expandby_pix):
+    """
+    Expand 2D numpy array by expandby_pix pixels without overlapping
+    expandby_pix is integer, specifies number of pixels to expand by
+    Shape of expanded object is equal to input
+    """
+
+    # Initialize empty array
+    if len(seg.shape) == 2:
+        seg_expanded = expand_labels(seg, expandby_pix)
+
+    elif len(seg.shape) == 3:
+        seg_expanded = np.zeros_like(seg)
+
+        # Iterate over each zslice in image and expand
+        for i, zslice in enumerate(seg):
+            seg_expanded[i, :, :] = expand_labels(zslice, expandby_pix)
+    else:
+        raise ValueError("Input segmentation must be 2d or 3d array.")
+
+    return seg_expanded
+
+
 def fuse_labels(seg, expandby_factor):
     """
     Expand labels in 3D image by 2D z-slice based on the mean volume, fuse and fill holes,
@@ -36,11 +73,11 @@ def fuse_labels(seg, expandby_factor):
     seg_binary = np.zeros_like(seg)
 
     # Determine the expansion amount (in pixels) based on the mean diameter of 3D nuclei or cells in object
-    size_mean = calculate_mean_volume(seg)
-    expandby_pix = int(round(expandby_factor * mesh_equivalent_diameter(size_mean)))
+    expandby_pix = get_expandby_pixels(seg, expandby_factor)
 
     # Iterate over each zslice in image
     for i, zslice in enumerate(seg):
+        # Pad image
         zslice = np.pad(zslice, pad_width=expandby_pix)
         # Expand labels in x,y
         zslice = expand_labels(zslice, expandby_pix)
@@ -290,6 +327,19 @@ def run_label_fusion(
         padded_zslice_count,
         roi_count,
     )
+
+
+def run_expansion(seg, expandby, expansion_distance_image_based=False):
+    """
+    Main function for running label expansion, used in Expand Labels task.
+    """
+    if expansion_distance_image_based:
+        expandby_pix = get_expandby_pixels(seg, expandby_factor=expandby)
+    else:
+        expandby_pix = expandby
+
+    seg_expanded = expand_2d_labels(seg, expandby_pix)
+    return seg_expanded, expandby_pix
 
 
 def run_thresholding(

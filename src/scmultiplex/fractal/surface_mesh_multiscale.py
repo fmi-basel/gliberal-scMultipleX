@@ -36,7 +36,7 @@ from scmultiplex.fractal.fractal_helper_functions import (
     compute_and_save_mesh,
     format_roi_table,
     initialize_new_label,
-    save_new_label_with_overlap,
+    save_new_label_and_bbox_df,
 )
 from scmultiplex.meshing.FilterFunctions import mask_by_parent_object, remove_xy_pad
 from scmultiplex.meshing.LabelFusionFunctions import filter_by_volume, run_label_fusion
@@ -462,9 +462,11 @@ def surface_mesh_multiscale(
                 # Remove pad
                 edges_canny = remove_xy_pad(edges_canny, pad_width=xy_padwidth)
 
-            bbox_df = save_new_label_with_overlap(
+            # Convert edge detection label image value to match object label id
+            edges_canny = edges_canny * int(label_str)
+
+            bbox_df = save_new_label_and_bbox_df(
                 edges_canny,
-                label_str,
                 new_label3d_array,
                 zarr_url,
                 output_label_name,

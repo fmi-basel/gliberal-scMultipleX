@@ -41,7 +41,7 @@ from skimage.exposure import rescale_intensity
 from scmultiplex.fractal.fractal_helper_functions import (
     format_roi_table,
     initialize_new_label,
-    save_new_label_with_overlap,
+    save_new_label_and_bbox_df,
 )
 from scmultiplex.meshing.LabelFusionFunctions import (
     linear_z_correction,
@@ -430,10 +430,12 @@ def segment_by_intensity_threshold(
         # written object. However, this should not change existing image borders from 2D MIP segmentation since the
         # new 3D label map is masked by the 2D MIP label.
 
+        # Convert edge detection label image value to match object label id
+        seg3d = seg3d * int(label_str)
+
         # Value of binary label image is set to value of current object here
-        bbox_df = save_new_label_with_overlap(
+        bbox_df = save_new_label_and_bbox_df(
             seg3d,
-            label_str,
             new_label3d_array,
             zarr_url,
             output_label_name,

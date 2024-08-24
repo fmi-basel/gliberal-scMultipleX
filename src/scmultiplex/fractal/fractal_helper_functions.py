@@ -199,15 +199,11 @@ def initialize_new_label(
 
 def save_new_label_with_overlap(
     new_npimg,
-    label_str,
     new_label3d_array,
     zarr_url,
     output_label_name,
     region,
-    label_pixmeta,
     compute,
-    roi_idlist,
-    row_int,
 ):
     # Load dask from disk, will contain rois of the previously processed objects within for loop
     new_label3d_dask = da.from_zarr(f"{zarr_url}/labels/{output_label_name}/0")
@@ -224,10 +220,8 @@ def save_new_label_with_overlap(
             "Computed label image must match image dimensions of bounding box during saving"
         )
 
-    # Convert edge detection label image value to match object label id
-    new_npimg_label = new_npimg * int(label_str)
     # Use fmax so that if one of the elements being compared is a NaN, then the non-nan element is returned
-    new_npimg_label_tosave = np.fmax(new_npimg_label, seg_ondisk)
+    new_npimg_label_tosave = np.fmax(new_npimg, seg_ondisk)
 
     # Compute and store 0-th level of new 3d label map to disk
     da.array(new_npimg_label_tosave).to_zarr(
@@ -235,12 +229,29 @@ def save_new_label_with_overlap(
         region=region,
         compute=True,
     )
+    return
+
+
+def save_new_label_and_bbox_df(
+    new_npimg,
+    new_label3d_array,
+    zarr_url,
+    output_label_name,
+    region,
+    label_pixmeta,
+    compute,
+    roi_idlist,
+    row_int,
+):
+    save_new_label_with_overlap(
+        new_npimg, new_label3d_array, zarr_url, output_label_name, region, compute
+    )
 
     # make new ROI table
     origin_zyx = convert_indices_to_origin_zyx(roi_idlist[row_int])
 
     bbox_df = array_to_bounding_box_table(
-        new_npimg_label,
+        new_npimg,
         label_pixmeta,
         origin_zyx=origin_zyx,
     )

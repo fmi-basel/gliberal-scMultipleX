@@ -78,4 +78,9 @@ TASK_LIST = [
         executable="fractal/scmultiplex_feature_measurements.py",
         meta={"cpus_per_task": 4, "mem": 16000},
     ),
+    ParallelTask(
+        name="scMultiplex Expand Labels",
+        executable="fractal/expand_labels.py",
+        meta={"cpus_per_task": 4, "mem": 16000},
+    ),
 ]
