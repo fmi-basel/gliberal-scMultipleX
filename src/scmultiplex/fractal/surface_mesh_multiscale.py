@@ -294,6 +294,13 @@ def surface_mesh_multiscale(
             seg, parent_mask = mask_by_parent_object(
                 seg, groupby_dask, groupby_idlist, row_int, label_str
             )
+            # Only proceed if labelmap is not empty
+            if np.amax(seg) == 0:
+                logger.warning(
+                    f"Skipping object ID {label_str}. Label image contains no labeled objects."
+                )
+                # Skip this object
+                continue
         else:
             # Check that label exists in object
             if float(label_str) not in seg:
