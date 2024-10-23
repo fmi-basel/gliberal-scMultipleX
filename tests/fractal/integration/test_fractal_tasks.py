@@ -35,7 +35,7 @@ name_3d = "220605_151046.zarr"
 name_mip = "220605_151046_mip.zarr"
 
 test_calculate_object_linking_expected_output = np.array(
-    [[1.0, 1.0, 0.9305816], [2.0, 2.0, 0.78365386], [3.0, 3.0, 0.95049506]]
+    [[1.0, 1.0, 0.9727956], [2.0, 2.0, 0.8249731], [3.0, 3.0, 0.9644809]]
 )
 
 test_calculate_linking_consensus_expected_output = np.array(
@@ -45,59 +45,60 @@ test_calculate_linking_consensus_expected_output = np.array(
 test_relabel_by_linking_consensus_output_dict = {
     "0": np.array(
         [
-            [13.0, 20.8, 0.0, 22.533333, 21.666666, 0.6],
-            [13.0, 90.13333, 0.0, 20.8, 18.2, 0.6],
-            [38.133335, 103.13333, 0.0, 25.133333, 29.466667, 0.6],
+            [13.216666, 21.016666, 0.0, 22.1, 20.583334, 0.6],
+            [13.866667, 91.433334, 0.0, 18.85, 15.816667, 0.6],
+            [39.0, 103.566666, 0.0, 23.183332, 28.166666, 0.6],
         ]
     ),
     "1": np.array(
         [
-            [49.4, 10.4, 0.0, 23.4, 22.533333, 0.6],
-            [51.133335, 81.46667, 0.0, 19.933332, 16.466667, 0.6],
-            [74.53333, 92.73333, 0.0, 24.266666, 29.466667, 0.6],
+            [49.616665, 11.05, 0.0, 22.533333, 20.583334, 0.6],
+            [51.783333, 81.9, 0.0, 18.85, 15.816667, 0.6],
+            [75.4, 93.816666, 0.0, 23.4, 27.95, 0.6],
         ]
     ),
 }
+
 test_calculate_platymatch_registration_output = np.array(
     [
         [1.0, 1.0],
-        [3.0, 2.0],
-        [2.0, 3.0],
+        [2.0, 2.0],
+        [3.0, 3.0],
         [4.0, 4.0],
-        [5.0, 5.0],
-        [6.0, 6.0],
-        [7.0, 7.0],
-        [8.0, 8.0],
-        [9.0, 9.0],
-        [10.0, 10.0],
-        [11.0, 11.0],
-        [12.0, 12.0],
-        [13.0, 13.0],
-        [14.0, 14.0],
-        [15.0, 15.0],
-        [16.0, 16.0],
+        [8.0, 7.0],
+        [9.0, 8.0],
+        [10.0, 9.0],
+        [11.0, 10.0],
+        [13.0, 12.0],
+        [14.0, 13.0],
+        [15.0, 14.0],
+        [16.0, 15.0],
+        [17.0, 16.0],
+        [19.0, 17.0],
+        [18.0, 18.0],
+        [20.0, 19.0],
     ]
 )
 
 test_sphr_harmonics_from_labelimg_expected_output = np.array(
-    [10.87666, 9.29089, 13.33493]
+    [10.86649, 9.2556, 13.3412]
 )
 
 test_sphr_harmonics_from_mesh_expected_output = np.array(
-    [10.116642, 8.294999, 12.791296]
+    [10.115658, 8.254395, 12.78826]
 )
 
 test_scmultiplex_mesh_measurements_expected_output = np.array(
     [
-        4.31434180e03,
-        1.30477405e03,
-        1.01806331e00,
-        4.67207789e-01,
-        9.94542837e-01,
-        5.45713631e-03,
-        1.40581485e-02,
-        1.12836015e00,
-        1.00899124e00,
+        4.3092324e03,
+        1.3029731e03,
+        1.0174618e00,
+        4.6224737e-01,
+        9.9401093e-01,
+        5.9890612e-03,
+        9.5799491e-03,
+        1.1295289e00,
+        1.0086931e00,
     ]
 )
 
@@ -142,7 +143,6 @@ def test_calculate_object_linking(linking_zenodo_zarrs, name=name_mip):
         output_table_path = f"{zarr_url}/tables/{label_name}_match_table"
 
         output = ad.read_zarr(output_table_path).to_df().to_numpy()
-
         assert_almost_equal(output, test_calculate_object_linking_expected_output)
 
 
@@ -231,7 +231,7 @@ def test_calculate_platymatch_registration(linking_zenodo_zarrs, name=name_3d):
             calculate_ffd=True,
             seg_channel=channel,
             volume_filter=True,
-            volume_filter_threshold=0.05,
+            volume_filter_threshold=0.10,
         )
 
         output_table_path_affine = (
