@@ -240,7 +240,7 @@ def linking_zenodo_zarrs(testdata_path: Path) -> list[str]:
     """
 
     # 1 Download Zarrs from Zenodo
-    DOI = "10.5281/zenodo.10683086"
+    DOI = "10.5281/zenodo.13982701"
     DOI_slug = DOI.replace("/", "_").replace(".", "_")
     platenames = [
         "220605_151046.zarr",
