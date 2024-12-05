@@ -23,6 +23,9 @@ TASK_LIST = [
         executable="fractal/calculate_object_linking.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
         meta={"cpus_per_task": 4, "mem": 16000},
+        category="Registration",
+        modality="HCS",
+        tags=["multiplexing"],
     ),
     CompoundTask(
         name="scMultiplex Calculate Linking Consensus",
@@ -30,6 +33,9 @@ TASK_LIST = [
         executable="fractal/calculate_linking_consensus.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
         meta={"cpus_per_task": 4, "mem": 16000},
+        category="Registration",
+        modality="HCS",
+        tags=["multiplexing"],
     ),
     CompoundTask(
         name="scMultiplex Relabel by Linking Consensus",
@@ -37,6 +43,9 @@ TASK_LIST = [
         executable="fractal/relabel_by_linking_consensus.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
         meta={"cpus_per_task": 4, "mem": 64000},
+        category="Registration",
+        modality="HCS",
+        tags=["multiplexing"],
     ),
     CompoundTask(
         name="scMultiplex Calculate Platymatch Registration",
@@ -44,6 +53,9 @@ TASK_LIST = [
         executable="fractal/calculate_platymatch_registration.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
         meta={"cpus_per_task": 4, "mem": 16000},
+        category="Registration",
+        modality="HCS",
+        tags=["multiplexing"],
     ),
     CompoundTask(
         name="scMultiplex Surface Mesh Multiscale",
@@ -51,6 +63,7 @@ TASK_LIST = [
         executable="fractal/surface_mesh_multiscale.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
         meta={"cpus_per_task": 4, "mem": 16000},
+        modality="HCS",
     ),
     CompoundTask(
         name="scMultiplex Segment by Intensity Threshold",
@@ -58,6 +71,8 @@ TASK_LIST = [
         executable="fractal/segment_by_intensity_threshold.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
         meta={"cpus_per_task": 4, "mem": 16000},
+        category="Segmentation",
+        modality="HCS",
     ),
     CompoundTask(
         name="scMultiplex Spherical Harmonics from Label Image",
@@ -65,6 +80,8 @@ TASK_LIST = [
         executable="fractal/spherical_harmonics_from_labelimage.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
         meta={"cpus_per_task": 4, "mem": 16000},
+        category="Measurement",
+        modality="HCS",
     ),
     CompoundTask(
         name="scMultiplex Mesh Measurements",
@@ -72,11 +89,15 @@ TASK_LIST = [
         executable="fractal/scmultiplex_mesh_measurements.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
         meta={"cpus_per_task": 4, "mem": 16000},
+        category="Measurement",
+        modality="HCS",
     ),
     ParallelTask(
         name="scMultiplex Feature Measurements",
         executable="fractal/scmultiplex_feature_measurements.py",
         meta={"cpus_per_task": 4, "mem": 16000},
+        category="Measurement",
+        tags=["regionprops", "morphology", "intensity"],
     ),
     ParallelTask(
         name="scMultiplex Expand Labels",
