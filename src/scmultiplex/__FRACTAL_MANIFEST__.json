@@ -1175,11 +1175,6 @@
             "type": "string",
             "description": "Name of the ROI table to loop over. Needs to exists as a ROI table in the OME-Zarr file"
           },
-          "masking_label_name": {
-            "title": "Masking Label Name",
-            "type": "string",
-            "description": "Name of label by which to mask label_image."
-          },
           "level": {
             "default": 0,
             "title": "Level",

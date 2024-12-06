@@ -287,6 +287,45 @@ def test_masked_measurements(
     assert_frame_equal(df, df_expected)
 
 
+@pytest.mark.filterwarnings("ignore:Transforming to str index.")
+def test_masked_measurements_with_orgs_and_nuc(
+    linking_zenodo_zarrs,
+):
+    """
+    The purpose is to test masked measurements where the mask is a different
+    label image than the labels to be measured. See
+    https://github.com/fmi-basel/gliberal-scMultipleX/pull/122 for details.
+    """
+    allow_duplicate_labels = False
+    zarr_url = f"{linking_zenodo_zarrs[0]}/C/02/0"
+    input_ROI_table = "org_ROI_table"
+    measure_morphology = True
+    output_table_name = "measurements_nuc_masked"
+    input_channels = {"C01": ChannelInputModel(wavelength_id="A04_C01")}
+
+    # Prepare fractal task
+    label_image = "nuc"
+
+    scmultiplex_feature_measurements(
+        zarr_url=zarr_url,
+        input_ROI_table=input_ROI_table,
+        input_channels=input_channels,
+        label_image=label_image,
+        label_level=label_level,
+        level=level,
+        output_table_name=output_table_name,
+        measure_morphology=measure_morphology,
+        allow_duplicate_labels=allow_duplicate_labels,
+    )
+
+    # Check that there are measurement for all 20 nuclei (before #122,
+    # there was only 1 measurements)
+    # Check & verify the output_table
+    ad_path = Path(zarr_url) / "tables" / output_table_name
+    df = load_features_for_well(ad_path)
+    assert len(df) == 20
+
+
 inputs_empty = [
     ({}, True),
     ({}, False),
