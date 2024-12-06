@@ -202,6 +202,7 @@ def scmultiplex_feature_measurements(  # noqa: C901
     # If relevant, load parent object segmentation to mask child objects
     # TODO: improve handling of case where shape of parent segmentation does not match child segmentation; attempt at
     #  upscaling is implemented in mask_by_parent_object function, but may not cover search-first edge cases
+    # FIXME: Drop masking_label_name
     if use_ROI_masks and masking_label_name is not None:
         # Load well image as dask array for parent objects
         # Metadata for this label image is set by input_ROI_table
@@ -254,6 +255,7 @@ def scmultiplex_feature_measurements(  # noqa: C901
                         f"Calculating features for {label_image} object(s) masked by "
                         f"region label {current_label}"
                     )
+            # FIXME: Drop this else branch, we should never hit it
             else:
                 # This works only in case where masking object is of same parent/child class
                 # as feature extracted object, e.g. organoid mask on organoid features
