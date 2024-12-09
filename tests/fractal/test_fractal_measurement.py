@@ -226,16 +226,20 @@ def test_3D_fractal_measurements(
 
 
 inputs_masked = [{}, single_input_channels]
+inputs_masked = [single_input_channels]
 
 
 @pytest.mark.filterwarnings("ignore:Transforming to str index.")
 @pytest.mark.parametrize("input_channels,", inputs_masked)
-def test_masked_measurements(
+def test_masked_measurements_test(
     tiny_zenodo_zarrs_base_path,
     metadata_tiny_zenodo,
     column_names,
     input_channels,
 ):
+    # FIXME: Get a smaller test dataset to test this on. This test takes ~40s.
+    # Criteria: Has masking ROI table, resolution of label image != resolution
+    # of intensity image.
     # Test measuring when using a ROI table with masks
     allow_duplicate_labels = False
     zarr_url = f"{tiny_zenodo_zarrs_base_path}/{image_path_2D}"

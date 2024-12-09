@@ -210,6 +210,14 @@ def scmultiplex_feature_measurements(  # noqa: C901
         # Load well image as dask array for parent objects
         mask_dask = da.from_zarr(masking_label_url)
 
+        # Upscale masking image to target resolution
+        mask_dask = upscale_array(
+            array=mask_dask,
+            target_shape=target_shape,
+            axis=axis,
+            pad_with_zeros=True,
+        )
+
     # Loop over ROIs to make measurements
     df_well = pd.DataFrame()
     df_info_well = pd.DataFrame()
