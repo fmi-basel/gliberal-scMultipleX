@@ -1263,6 +1263,12 @@
             "title": "Expand By Factor",
             "type": "number",
             "description": "Multiplier that specifies pixels by which to expand each label. Float in range [0, 1 or higher], e.g. 0.2 means that 20% of mean equivalent diameter of labels in region is used."
+          },
+          "mask_expansion_by_parent": {
+            "default": false,
+            "title": "Mask Expansion By Parent",
+            "type": "boolean",
+            "description": "If True, final expanded labels are masked by group_by object. Recommended to set to True for child/parent masking."
           }
         },
         "required": [
