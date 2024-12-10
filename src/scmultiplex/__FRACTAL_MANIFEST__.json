@@ -6,7 +6,8 @@
       "category": "Registration",
       "modality": "HCS",
       "tags": [
-        "multiplexing"
+        "multiplexing",
+        "2D"
       ],
       "executable_non_parallel": "fractal/_image_based_registration_hcs_init.py",
       "executable_parallel": "fractal/calculate_object_linking.py",
@@ -116,7 +117,9 @@
       "category": "Registration",
       "modality": "HCS",
       "tags": [
-        "multiplexing"
+        "multiplexing",
+        "2D",
+        "3D"
       ],
       "executable_non_parallel": "fractal/_init_group_by_well_for_multiplexing.py",
       "executable_parallel": "fractal/calculate_linking_consensus.py",
@@ -211,7 +214,9 @@
       "category": "Registration",
       "modality": "HCS",
       "tags": [
-        "multiplexing"
+        "multiplexing",
+        "2D",
+        "3D"
       ],
       "executable_non_parallel": "fractal/_image_based_registration_hcs_allrounds_init.py",
       "executable_parallel": "fractal/relabel_by_linking_consensus.py",
@@ -315,7 +320,8 @@
       "category": "Registration",
       "modality": "HCS",
       "tags": [
-        "multiplexing"
+        "multiplexing",
+        "3D"
       ],
       "executable_non_parallel": "fractal/_image_based_registration_hcs_init.py",
       "executable_parallel": "fractal/calculate_platymatch_registration.py",
@@ -475,7 +481,12 @@
     },
     {
       "name": "scMultiplex Surface Mesh Multiscale",
+      "category": "Image Processing",
       "modality": "HCS",
+      "tags": [
+        "3D",
+        "mesh"
+      ],
       "executable_non_parallel": "fractal/_init_group_by_well_for_multiplexing.py",
       "executable_parallel": "fractal/surface_mesh_multiscale.py",
       "meta_non_parallel": {
@@ -657,6 +668,10 @@
       "name": "scMultiplex Segment by Intensity Threshold",
       "category": "Segmentation",
       "modality": "HCS",
+      "tags": [
+        "Classical segmentation",
+        "3D"
+      ],
       "executable_non_parallel": "fractal/init_select_multiplexing_round.py",
       "executable_parallel": "fractal/segment_by_intensity_threshold.py",
       "meta_non_parallel": {
@@ -892,6 +907,9 @@
       "name": "scMultiplex Spherical Harmonics from Label Image",
       "category": "Measurement",
       "modality": "HCS",
+      "tags": [
+        "3D"
+      ],
       "executable_non_parallel": "fractal/_init_group_by_well_for_multiplexing.py",
       "executable_parallel": "fractal/spherical_harmonics_from_labelimage.py",
       "meta_non_parallel": {
@@ -1008,6 +1026,11 @@
       "name": "scMultiplex Mesh Measurements",
       "category": "Measurement",
       "modality": "HCS",
+      "tags": [
+        "3D",
+        "mesh",
+        "morphology"
+      ],
       "executable_non_parallel": "fractal/_init_group_by_well_for_multiplexing.py",
       "executable_parallel": "fractal/scmultiplex_mesh_measurements.py",
       "meta_non_parallel": {
@@ -1251,6 +1274,10 @@
     },
     {
       "name": "scMultiplex Expand Labels",
+      "tags": [
+        "2D",
+        "3D"
+      ],
       "executable_parallel": "fractal/expand_labels.py",
       "meta_parallel": {
         "cpus_per_task": 4,
