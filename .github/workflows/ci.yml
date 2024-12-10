@@ -47,3 +47,41 @@ jobs:
 
       - name: Coverage
         uses: codecov/codecov-action@v3
+
+  deploy:
+    name: Deploy
+    needs: test
+    if: success() && startsWith(github.ref, 'refs/tags/') && github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+
+    permissions:
+      # IMPORTANT: this permission is mandatory for trusted publishing on PyPi
+      # see https://docs.pypi.org/trusted-publishers/
+      id-token: write
+      # This permission allows writing releases
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: 👷 Build
+        run: |
+          python -m pip install build
+          python -m build
+
+      - name: 🚢 Publish to PyPI
+        # TODO remove the "if: false" line when the package is ready for pypi release
+        if: false
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: './dist/*'

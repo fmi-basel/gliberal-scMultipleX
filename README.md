@@ -18,6 +18,14 @@ The workflow consists of the following tasks:
 
 See scMultipleX GitHub [Wiki](https://github.com/fmi-basel/gliberal-scMultipleX/wiki).
 
+# Making releases
+
+To make new releases, tag a specific commit in main (e.g. with v0.7.10) and push that tag to Github. The CI will take care of making a Github release and pushing it to PyPI.
+```
+git tag v0.7.10
+git push origin v0.7.10
+```
+
 # Contributors and License
 
 Unless otherwise stated in each individual module, all scMultipleX components are released according to a BSD 3-Clause License, and Copyright is with Friedrich Miescher Institute for Biomedical Research.

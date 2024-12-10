@@ -4,4 +4,5 @@ from fractal_tasks_core.dev.create_manifest import create_manifest
 
 if __name__ == "__main__":
     PACKAGE = "scmultiplex"
-    create_manifest(package=PACKAGE)
+    AUTHORS = "Nicole Repina, Enrico Tagliavini, Tim-Oliver Buchholz, Joel Luethi"
+    create_manifest(package=PACKAGE, authors=AUTHORS)

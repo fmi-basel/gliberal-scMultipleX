@@ -3,6 +3,12 @@
   "task_list": [
     {
       "name": "scMultiplex Calculate Object Linking",
+      "category": "Registration",
+      "modality": "HCS",
+      "tags": [
+        "multiplexing",
+        "2D"
+      ],
       "executable_non_parallel": "fractal/_image_based_registration_hcs_init.py",
       "executable_parallel": "fractal/calculate_object_linking.py",
       "meta_non_parallel": {
@@ -108,6 +114,13 @@
     },
     {
       "name": "scMultiplex Calculate Linking Consensus",
+      "category": "Registration",
+      "modality": "HCS",
+      "tags": [
+        "multiplexing",
+        "2D",
+        "3D"
+      ],
       "executable_non_parallel": "fractal/_init_group_by_well_for_multiplexing.py",
       "executable_parallel": "fractal/calculate_linking_consensus.py",
       "meta_non_parallel": {
@@ -198,6 +211,13 @@
     },
     {
       "name": "scMultiplex Relabel by Linking Consensus",
+      "category": "Registration",
+      "modality": "HCS",
+      "tags": [
+        "multiplexing",
+        "2D",
+        "3D"
+      ],
       "executable_non_parallel": "fractal/_image_based_registration_hcs_allrounds_init.py",
       "executable_parallel": "fractal/relabel_by_linking_consensus.py",
       "meta_non_parallel": {
@@ -297,6 +317,12 @@
     },
     {
       "name": "scMultiplex Calculate Platymatch Registration",
+      "category": "Registration",
+      "modality": "HCS",
+      "tags": [
+        "multiplexing",
+        "3D"
+      ],
       "executable_non_parallel": "fractal/_image_based_registration_hcs_init.py",
       "executable_parallel": "fractal/calculate_platymatch_registration.py",
       "meta_non_parallel": {
@@ -455,6 +481,12 @@
     },
     {
       "name": "scMultiplex Surface Mesh Multiscale",
+      "category": "Image Processing",
+      "modality": "HCS",
+      "tags": [
+        "3D",
+        "mesh"
+      ],
       "executable_non_parallel": "fractal/_init_group_by_well_for_multiplexing.py",
       "executable_parallel": "fractal/surface_mesh_multiscale.py",
       "meta_non_parallel": {
@@ -634,6 +666,12 @@
     },
     {
       "name": "scMultiplex Segment by Intensity Threshold",
+      "category": "Segmentation",
+      "modality": "HCS",
+      "tags": [
+        "Classical segmentation",
+        "3D"
+      ],
       "executable_non_parallel": "fractal/init_select_multiplexing_round.py",
       "executable_parallel": "fractal/segment_by_intensity_threshold.py",
       "meta_non_parallel": {
@@ -867,6 +905,11 @@
     },
     {
       "name": "scMultiplex Spherical Harmonics from Label Image",
+      "category": "Measurement",
+      "modality": "HCS",
+      "tags": [
+        "3D"
+      ],
       "executable_non_parallel": "fractal/_init_group_by_well_for_multiplexing.py",
       "executable_parallel": "fractal/spherical_harmonics_from_labelimage.py",
       "meta_non_parallel": {
@@ -981,6 +1024,13 @@
     },
     {
       "name": "scMultiplex Mesh Measurements",
+      "category": "Measurement",
+      "modality": "HCS",
+      "tags": [
+        "3D",
+        "mesh",
+        "morphology"
+      ],
       "executable_non_parallel": "fractal/_init_group_by_well_for_multiplexing.py",
       "executable_parallel": "fractal/scmultiplex_mesh_measurements.py",
       "meta_non_parallel": {
@@ -1119,6 +1169,12 @@
     },
     {
       "name": "scMultiplex Feature Measurements",
+      "category": "Measurement",
+      "tags": [
+        "regionprops",
+        "morphology",
+        "intensity"
+      ],
       "executable_parallel": "fractal/scmultiplex_feature_measurements.py",
       "meta_parallel": {
         "cpus_per_task": 4,
@@ -1218,6 +1274,10 @@
     },
     {
       "name": "scMultiplex Expand Labels",
+      "tags": [
+        "2D",
+        "3D"
+      ],
       "executable_parallel": "fractal/expand_labels.py",
       "meta_parallel": {
         "cpus_per_task": 4,
@@ -1281,5 +1341,6 @@
     }
   ],
   "has_args_schemas": true,
-  "args_schema_version": "pydantic_v2"
+  "args_schema_version": "pydantic_v2",
+  "authors": "Nicole Repina, Enrico Tagliavini, Tim-Oliver Buchholz, Joel Luethi"
 }
