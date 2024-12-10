@@ -40,6 +40,7 @@ from scmultiplex.features.feature_wrapper import get_regionprops_measurements
 
 __OME_NGFF_VERSION__ = fractal_tasks_core.__OME_NGFF_VERSION__
 
+from scmultiplex.meshing.FilterFunctions import mask_by_parent_object
 
 logger = logging.getLogger(__name__)
 
@@ -196,6 +197,27 @@ def scmultiplex_feature_measurements(  # noqa: C901
             f"the label image {label_image}"
         )
 
+    # If relevant, load parent object segmentation to mask child objects
+    if use_ROI_masks:
+        # TODO: Abstract this operation using ngio. It currently loads the
+        # masking label image based on the masking roi table metadata
+        roi_table_path = f"{zarr_url}/tables/{input_ROI_table}"
+        with zarr.open(roi_table_path, mode="r") as zarr_store:
+            attrs = zarr_store.attrs
+        masking_label_url = (
+            f"{zarr_url}/tables/{dict(attrs)['region']['path']}/{label_level}"
+        )
+        # Load well image as dask array for parent objects
+        mask_dask = da.from_zarr(masking_label_url)
+
+        # Upscale masking image to target resolution
+        mask_dask = upscale_array(
+            array=mask_dask,
+            target_shape=target_shape,
+            axis=axis,
+            pad_with_zeros=True,
+        )
+
     # Loop over ROIs to make measurements
     df_well = pd.DataFrame()
     df_info_well = pd.DataFrame()
@@ -205,8 +227,9 @@ def scmultiplex_feature_measurements(  # noqa: C901
 
         logger.debug(f"ROI {i_ROI+1}/{num_ROIs}: {region=}")
 
-        # Define some constant values to be added as a separat column to
+        # Define some constant values to be added as a separate column to
         # the obs table
+        # TODO: consider chanding "ROI_name" to "ROI_index"
         extra_values = {
             "ROI_table_name": input_ROI_table,
             "ROI_name": ROI_table.obs.index[i_ROI],
@@ -218,10 +241,26 @@ def scmultiplex_feature_measurements(  # noqa: C901
 
         label_img = input_label_image[region].compute()
         if use_ROI_masks:
-            current_label = int(ROI_table.obs.iloc[i_ROI]["label"])
-            background = label_img != current_label
-            label_img[background] = 0
+            current_label = int(float(ROI_table.obs.iloc[i_ROI]["label"]))
             extra_values["ROI_label"] = current_label
+            # For feature extraction of child objects (e.g. nuclei) masked
+            # by parent (e.g. organoid), mask by parent image
+            label_img, parent_mask = mask_by_parent_object(
+                label_img, mask_dask, list_indices, i_ROI, current_label
+            )
+            # Only proceed if labelmap is not empty
+            if np.amax(label_img) == 0:
+                logger.warning(
+                    f"Skipping region label {current_label}. Label image "
+                    "contains no labeled objects."
+                )
+                # Skip this object
+                continue
+            else:
+                logger.info(
+                    f"Calculating features for {label_image} object(s) masked "
+                    f"by region label {current_label}"
+                )
 
         if label_img.shape[0] == 1:
             logger.debug("Label image is 2D only, processing with 2D options")
@@ -239,7 +278,6 @@ def scmultiplex_feature_measurements(  # noqa: C901
                 f"Loaded an image of shape {label_img.shape}. "
                 "Processing is only supported for 2D & 3D images"
             )
-
         # Set inputs
         df_roi = pd.DataFrame()
         df_info_roi = pd.DataFrame()
@@ -273,7 +311,6 @@ def scmultiplex_feature_measurements(  # noqa: C901
                     channel_prefix=input_name,
                     extra_values=extra_values,
                 )
-
                 # Only measure morphology for the first intensity channel provided
                 # => just once per label image
                 first_channel = False
@@ -331,7 +368,7 @@ def scmultiplex_feature_measurements(  # noqa: C901
         df_well = df_well.astype(measurement_dtype)
         df_well.index = df_well.index.map(str)
         # Convert to anndata
-        measurement_table = ad.AnnData(df_well, dtype=measurement_dtype)
+        measurement_table = ad.AnnData(df_well)
         measurement_table.obs = df_info_well
     else:
         # Create empty anndata table
@@ -351,6 +388,10 @@ def scmultiplex_feature_measurements(  # noqa: C901
             instance_key="label",
         ),
     )
+
+    logger.info(f"End feature_measurement task for {zarr_url}/labels/{label_image}")
+
+    return {}
 
 
 if __name__ == "__main__":

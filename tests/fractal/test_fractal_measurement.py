@@ -226,16 +226,20 @@ def test_3D_fractal_measurements(
 
 
 inputs_masked = [{}, single_input_channels]
+inputs_masked = [single_input_channels]
 
 
 @pytest.mark.filterwarnings("ignore:Transforming to str index.")
 @pytest.mark.parametrize("input_channels,", inputs_masked)
-def test_masked_measurements(
+def test_masked_measurements_test(
     tiny_zenodo_zarrs_base_path,
     metadata_tiny_zenodo,
     column_names,
     input_channels,
 ):
+    # FIXME: Get a smaller test dataset to test this on. This test takes ~40s.
+    # Criteria: Has masking ROI table, resolution of label image != resolution
+    # of intensity image.
     # Test measuring when using a ROI table with masks
     allow_duplicate_labels = False
     zarr_url = f"{tiny_zenodo_zarrs_base_path}/{image_path_2D}"
@@ -285,6 +289,45 @@ def test_masked_measurements(
     expected_table_path = Path(zarr_url) / "tables" / f"expected_{output_table_name}"
     df_expected = load_features_for_well(expected_table_path)
     assert_frame_equal(df, df_expected)
+
+
+@pytest.mark.filterwarnings("ignore:Transforming to str index.")
+def test_masked_measurements_with_orgs_and_nuc(
+    linking_zenodo_zarrs,
+):
+    """
+    The purpose is to test masked measurements where the mask is a different
+    label image than the labels to be measured. See
+    https://github.com/fmi-basel/gliberal-scMultipleX/pull/122 for details.
+    """
+    allow_duplicate_labels = False
+    zarr_url = f"{linking_zenodo_zarrs[0]}/C/02/0"
+    input_ROI_table = "org_ROI_table"
+    measure_morphology = True
+    output_table_name = "measurements_nuc_masked"
+    input_channels = {"C01": ChannelInputModel(wavelength_id="A04_C01")}
+
+    # Prepare fractal task
+    label_image = "nuc"
+
+    scmultiplex_feature_measurements(
+        zarr_url=zarr_url,
+        input_ROI_table=input_ROI_table,
+        input_channels=input_channels,
+        label_image=label_image,
+        label_level=label_level,
+        level=level,
+        output_table_name=output_table_name,
+        measure_morphology=measure_morphology,
+        allow_duplicate_labels=allow_duplicate_labels,
+    )
+
+    # Check that there are measurement for all 20 nuclei (before #122,
+    # there was only 1 measurements)
+    # Check & verify the output_table
+    ad_path = Path(zarr_url) / "tables" / output_table_name
+    df = load_features_for_well(ad_path)
+    assert len(df) == 20
 
 
 inputs_empty = [
