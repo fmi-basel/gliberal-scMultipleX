@@ -1309,5 +1309,5 @@
   ],
   "has_args_schemas": true,
   "args_schema_version": "pydantic_v2",
-  "authors": "Nicole Repina, Enrico Tagliavini, Tim-Oliver Buchholz, Joel L\u00fcthi"
+  "authors": "Nicole Repina, Enrico Tagliavini, Tim-Oliver Buchholz, Joel Luethi"
 }

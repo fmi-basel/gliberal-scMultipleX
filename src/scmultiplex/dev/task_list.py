@@ -73,6 +73,7 @@ TASK_LIST = [
         meta={"cpus_per_task": 4, "mem": 16000},
         category="Segmentation",
         modality="HCS",
+        tags=["Classical segmentation", "multiplexing"],
     ),
     CompoundTask(
         name="scMultiplex Spherical Harmonics from Label Image",
