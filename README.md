@@ -20,10 +20,12 @@ See scMultipleX GitHub [Wiki](https://github.com/fmi-basel/gliberal-scMultipleX/
 
 # Making releases
 
-To make new releases, tag a specific commit in main (e.g. with v0.7.10) and push that tag to Github. The CI will take care of making a Github release and pushing it to PyPI.
+To make new releases, just create a Github release and create a semantic version tag upon release (e.g. v0.9.0). Make sure you include the "v" before the version number. The CI will add the whl files to the release for easier addition to Fractal server & making sure the package is listed on the Fractal task overview.
+
+Alternatively, you can tag a specific commit in main (e.g. with v0.9.0) and push that tag to Github. The CI will take care of making a Github release and pushing it to PyPI.
 ```
-git tag v0.7.10
-git push origin v0.7.10
+git tag v0.9.0
+git push origin v0.9.0
 ```
 
 # Contributors and License
