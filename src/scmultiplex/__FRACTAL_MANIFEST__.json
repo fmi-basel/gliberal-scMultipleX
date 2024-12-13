@@ -110,7 +110,8 @@
         "type": "object",
         "title": "CalculateObjectLinking"
       },
-      "docs_info": "## _image_based_registration_hcs_init\nInitialized calculate registration task\n\nThis task prepares a parallelization list of all zarr_urls that need to be\nused to calculate the registration between acquisitions (all zarr_urls\nexcept the reference acquisition vs. the reference acquisition).\nThis task only works for HCS OME-Zarrs for 2 reasons: Only HCS OME-Zarrs\ncurrently have defined acquisition metadata to determine reference\nacquisitions. And we have only implemented the grouping of images for\nHCS OME-Zarrs by well (with the assumption that every well just has 1\nimage per acqusition).\n## calculate_object_linking\nCalculate object linking based on segmentation label map images\n\nThis task consists of 4 parts:\n\n1. Load the object segmentation images for each well (paired reference and alignment round)\n2. Calculate the shift transformation for the image pair\n3. Apply shifts to image pair and identify matching object labels given an iou cutoff threshold\n3. Store the identified matches as a linking table in alignment round directory\n\nParallelization level: image\n"
+      "docs_info": "## _image_based_registration_hcs_init\nInitialized calculate registration task\n\nThis task prepares a parallelization list of all zarr_urls that need to be\nused to calculate the registration between acquisitions (all zarr_urls\nexcept the reference acquisition vs. the reference acquisition).\nThis task only works for HCS OME-Zarrs for 2 reasons: Only HCS OME-Zarrs\ncurrently have defined acquisition metadata to determine reference\nacquisitions. And we have only implemented the grouping of images for\nHCS OME-Zarrs by well (with the assumption that every well just has 1\nimage per acqusition).\n## calculate_object_linking\nCalculate object linking based on segmentation label map images\n\nThis task consists of 4 parts:\n\n1. Load the object segmentation images for each well (paired reference and alignment round)\n2. Calculate the shift transformation for the image pair\n3. Apply shifts to image pair and identify matching object labels given an iou cutoff threshold\n3. Store the identified matches as a linking table in alignment round directory\n\nParallelization level: image\n",
+      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
     },
     {
       "name": "scMultiplex Calculate Linking Consensus",
@@ -207,7 +208,8 @@
         "type": "object",
         "title": "CalculateLinkingConsensus"
       },
-      "docs_info": "## _init_group_by_well_for_multiplexing\nFinds images for all acquisitions per well.\n\nReturns the parallelization_list to run `find_registration_consensus`.\n## calculate_linking_consensus\nApplies pre-calculated registration to ROI tables.\n\nApply pre-calculated registration such that resulting ROIs contain\nthe consensus align region between all cycles.\n\nParallelization level: well\n"
+      "docs_info": "## _init_group_by_well_for_multiplexing\nFinds images for all acquisitions per well.\n\nReturns the parallelization_list to run `find_registration_consensus`.\n## calculate_linking_consensus\nApplies pre-calculated registration to ROI tables.\n\nApply pre-calculated registration such that resulting ROIs contain\nthe consensus align region between all cycles.\n\nParallelization level: well\n",
+      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
     },
     {
       "name": "scMultiplex Relabel by Linking Consensus",
@@ -313,7 +315,8 @@
         "type": "object",
         "title": "RelabelByLinkingConsensus"
       },
-      "docs_info": "## _image_based_registration_hcs_allrounds_init\nInitialized calculate registration task\n\nSame as _image_based_registration_hcs_init.py only does not exclude reference round in zarr_url list;\nall rounds are processed.\n## relabel_by_linking_consensus\nRelabels image labels and ROI tables based on consensus linking.\n\nParallelization level: image\n"
+      "docs_info": "## _image_based_registration_hcs_allrounds_init\nInitialized calculate registration task\n\nSame as _image_based_registration_hcs_init.py only does not exclude reference round in zarr_url list;\nall rounds are processed.\n## relabel_by_linking_consensus\nRelabels image labels and ROI tables based on consensus linking.\n\nParallelization level: image\n",
+      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
     },
     {
       "name": "scMultiplex Calculate Platymatch Registration",
@@ -477,7 +480,8 @@
         "type": "object",
         "title": "CalculatePlatymatchRegistration"
       },
-      "docs_info": "## _image_based_registration_hcs_init\nInitialized calculate registration task\n\nThis task prepares a parallelization list of all zarr_urls that need to be\nused to calculate the registration between acquisitions (all zarr_urls\nexcept the reference acquisition vs. the reference acquisition).\nThis task only works for HCS OME-Zarrs for 2 reasons: Only HCS OME-Zarrs\ncurrently have defined acquisition metadata to determine reference\nacquisitions. And we have only implemented the grouping of images for\nHCS OME-Zarrs by well (with the assumption that every well just has 1\nimage per acqusition).\n## calculate_platymatch_registration\nCalculate point-cloud-based registration with PlatyMatch.\n\nThis task consists of 4 parts:\n\n1. Load the sub-object segmentation images for each well (paired reference and alignment round)\n2. Select sub-objects that belong to object region by loading with object ROI table and mask by object mask.\n   Object pair is defined by consensus linking. Filter the sub-objects to remove small debris that was segmented.\n3. Calculate affine and optionally the free-form deformation for each object pair\n4. Output: save the identified matches as a linking table in alignment round directory\n   and optionally the transformation matrix on disk.\n\nParallelization level: image\n"
+      "docs_info": "## _image_based_registration_hcs_init\nInitialized calculate registration task\n\nThis task prepares a parallelization list of all zarr_urls that need to be\nused to calculate the registration between acquisitions (all zarr_urls\nexcept the reference acquisition vs. the reference acquisition).\nThis task only works for HCS OME-Zarrs for 2 reasons: Only HCS OME-Zarrs\ncurrently have defined acquisition metadata to determine reference\nacquisitions. And we have only implemented the grouping of images for\nHCS OME-Zarrs by well (with the assumption that every well just has 1\nimage per acqusition).\n## calculate_platymatch_registration\nCalculate point-cloud-based registration with PlatyMatch.\n\nThis task consists of 4 parts:\n\n1. Load the sub-object segmentation images for each well (paired reference and alignment round)\n2. Select sub-objects that belong to object region by loading with object ROI table and mask by object mask.\n   Object pair is defined by consensus linking. Filter the sub-objects to remove small debris that was segmented.\n3. Calculate affine and optionally the free-form deformation for each object pair\n4. Output: save the identified matches as a linking table in alignment round directory\n   and optionally the transformation matrix on disk.\n\nParallelization level: image\n",
+      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
     },
     {
       "name": "scMultiplex Surface Mesh Multiscale",
@@ -662,7 +666,8 @@
         "type": "object",
         "title": "SurfaceMeshMultiscale"
       },
-      "docs_info": "## _init_group_by_well_for_multiplexing\nFinds images for all acquisitions per well.\n\nReturns the parallelization_list to run `find_registration_consensus`.\n## surface_mesh_multiscale\nCalculate 3D surface mesh of parent object (e.g. tissue, organoid)\nfrom 3D cell-level segmentation of children (e.g. nuclei)\n\nRecommended to run on child objects that have been filtered to remove debris and disconnected components\n(e.g. following cleanup_3d_segmentation task)\n\nThis task consists of 4 parts:\n\n1. Load the sub-object (e.g. nuc) segmentation images for each object of a given reference round; skip other rounds.\n    Select sub-objects (e.g. nuc) that belong to parent object region by masking by parent.\n2. Perform label fusion and edge detection to generate surface label image.\n3. Calculate surface mesh of label image using vtkDiscreteFlyingEdges3D algorithm. Smoothing is applied with\n    vtkWindowedSincPolyDataFilter and tuned with 4 task parameters: passband, smoothing_iterations, feature_angle,\n    polynomial_degree (minimal effect).\n    The number of triangles in the mesh is optionally reduced with vtkQuadricDecimation filter to form a good\n    approximation to the original geometry and is tuned with task parameter target_reduction.\n4. Output: save the (1) meshes (.stl) per object id in meshes folder and (2) well label map as a new label in zarr.\n    Note that label map output may be clipped for objects that are dense and have overlapping pixels.\n    In this case, the 'winning' object in the overlap region is the one with higher label id.\n"
+      "docs_info": "## _init_group_by_well_for_multiplexing\nFinds images for all acquisitions per well.\n\nReturns the parallelization_list to run `find_registration_consensus`.\n## surface_mesh_multiscale\nCalculate 3D surface mesh of parent object (e.g. tissue, organoid)\nfrom 3D cell-level segmentation of children (e.g. nuclei)\n\nRecommended to run on child objects that have been filtered to remove debris and disconnected components\n(e.g. following cleanup_3d_segmentation task)\n\nThis task consists of 4 parts:\n\n1. Load the sub-object (e.g. nuc) segmentation images for each object of a given reference round; skip other rounds.\n    Select sub-objects (e.g. nuc) that belong to parent object region by masking by parent.\n2. Perform label fusion and edge detection to generate surface label image.\n3. Calculate surface mesh of label image using vtkDiscreteFlyingEdges3D algorithm. Smoothing is applied with\n    vtkWindowedSincPolyDataFilter and tuned with 4 task parameters: passband, smoothing_iterations, feature_angle,\n    polynomial_degree (minimal effect).\n    The number of triangles in the mesh is optionally reduced with vtkQuadricDecimation filter to form a good\n    approximation to the original geometry and is tuned with task parameter target_reduction.\n4. Output: save the (1) meshes (.stl) per object id in meshes folder and (2) well label map as a new label in zarr.\n    Note that label map output may be clipped for objects that are dense and have overlapping pixels.\n    In this case, the 'winning' object in the overlap region is the one with higher label id.\n",
+      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
     },
     {
       "name": "scMultiplex Segment by Intensity Threshold",
@@ -901,7 +906,8 @@
         "type": "object",
         "title": "SegmentByIntensityThreshold"
       },
-      "docs_info": "## init_select_multiplexing_round\nFinds images for desired acquisition per well.\n\nReturns the parallelization_list.\n## segment_by_intensity_threshold\nCalculate full 3D object segmentation after 2D MIP-based segmentation using intensity thresholding of\nraw intensity image(s).\n\nThis task consists of 3 parts:\n\n1. Load the intensity images for selected channels using MIP-based segmentation ROIs.\n2. Generate 3D mask based on simple thresholding of the combined channel images. The thresholded image is\n    smoothened using gaussian blurring followed by Canny edge detection. Optional z-illumination correctopn\n    is applied on the fly. The MIP-based segmentation is used to mask\n    the resulting label image to roughly exclude any neighboring organoids and debris. To further exclude\n    neighboring organoids and debris, the largest connected component is selected as the final label image.\n3. Output: save the (1) new label image and (2) new masking ROI table in the selected zarr url.\n"
+      "docs_info": "## init_select_multiplexing_round\nFinds images for desired acquisition per well.\n\nReturns the parallelization_list.\n## segment_by_intensity_threshold\nCalculate full 3D object segmentation after 2D MIP-based segmentation using intensity thresholding of\nraw intensity image(s).\n\nThis task consists of 3 parts:\n\n1. Load the intensity images for selected channels using MIP-based segmentation ROIs.\n2. Generate 3D mask based on simple thresholding of the combined channel images. The thresholded image is\n    smoothened using gaussian blurring followed by Canny edge detection. Optional z-illumination correctopn\n    is applied on the fly. The MIP-based segmentation is used to mask\n    the resulting label image to roughly exclude any neighboring organoids and debris. To further exclude\n    neighboring organoids and debris, the largest connected component is selected as the final label image.\n3. Output: save the (1) new label image and (2) new masking ROI table in the selected zarr url.\n",
+      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
     },
     {
       "name": "scMultiplex Spherical Harmonics from Label Image",
@@ -1020,7 +1026,8 @@
         "type": "object",
         "title": "SphericalHarmonicsFromLabelimage"
       },
-      "docs_info": "## _init_group_by_well_for_multiplexing\nFinds images for all acquisitions per well.\n\nReturns the parallelization_list to run `find_registration_consensus`.\n## spherical_harmonics_from_labelimage\nCalculate spherical harmonics of 3D input label image using aics_shparam.\n\nThis task consists of 6 parts:\n\n1. Load 3D label image based on provided label name and ROI table\n2. Compute 3D mesh with vtkContourFilter using aics_shparam functions\n3. Compute spherical harmonics of mesh using aics_shparam\n4. Compute reconstruction error (mse) of computed harmonics\n5. Optionally generate reconstructed mesh from the calculated harmonics\n6. Output: save the (1) spherical harmonic coefficients and mse error as feature table\n    (2) reconstructed meshes (.stl) per object id in a new meshes folder within zarr structure\n"
+      "docs_info": "## _init_group_by_well_for_multiplexing\nFinds images for all acquisitions per well.\n\nReturns the parallelization_list to run `find_registration_consensus`.\n## spherical_harmonics_from_labelimage\nCalculate spherical harmonics of 3D input label image using aics_shparam.\n\nThis task consists of 6 parts:\n\n1. Load 3D label image based on provided label name and ROI table\n2. Compute 3D mesh with vtkContourFilter using aics_shparam functions\n3. Compute spherical harmonics of mesh using aics_shparam\n4. Compute reconstruction error (mse) of computed harmonics\n5. Optionally generate reconstructed mesh from the calculated harmonics\n6. Output: save the (1) spherical harmonic coefficients and mse error as feature table\n    (2) reconstructed meshes (.stl) per object id in a new meshes folder within zarr structure\n",
+      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
     },
     {
       "name": "scMultiplex Mesh Measurements",
@@ -1165,7 +1172,8 @@
         "type": "object",
         "title": "ScmultiplexMeshMeasurements"
       },
-      "docs_info": "## _init_group_by_well_for_multiplexing\nFinds images for all acquisitions per well.\n\nReturns the parallelization_list to run `find_registration_consensus`.\n## scmultiplex_mesh_measurements\nExtract shape features of 3D input meshes.\n\nThis task consists of 5 parts:\n\n1. Load meshes (.stl) from zarr structure that have been previously generated\n    (e.g. using Surface Mesh Multiscale task)\n2. Extract mesh morphology measurements: volume, surface area, extent, solidity, concavity, asymmetry,\n    aspect ratio, and normalized surface area to volume ratio. Units correspond to units of mesh. If mesh was\n    generated with surface_mesh_multiscale task, units are physical units (um). For further details of features see\n    scMultiplex FeatureFunctions.py\n3. Optionally calculate Gaussian curvature at each mesh point (set calculate_curvature = True)\n4. Optionally compute spherical harmonics of mesh using aics_shparam (set calculate_harmonics = True).\n    Compute reconstruction error (mse) of computed harmonics and optionally generate reconstructed mesh from the\n    calculated harmonics\n5. Output: save (1) extracted measurements as a new table (output_table_name), (2) optional spherical harmonic\n    coefficients and mse error as a separate feature table ('output_table_name'_harmonics) (3) optional\n    reconstructed meshes from spherical harmonics as .stl within zarr structure (3) optional convex hull\n    and bounding box on disk as .vtp within zarr structure (4) optional curvature meshes on disk as .vtp within\n    zarr structure.\n"
+      "docs_info": "## _init_group_by_well_for_multiplexing\nFinds images for all acquisitions per well.\n\nReturns the parallelization_list to run `find_registration_consensus`.\n## scmultiplex_mesh_measurements\nExtract shape features of 3D input meshes.\n\nThis task consists of 5 parts:\n\n1. Load meshes (.stl) from zarr structure that have been previously generated\n    (e.g. using Surface Mesh Multiscale task)\n2. Extract mesh morphology measurements: volume, surface area, extent, solidity, concavity, asymmetry,\n    aspect ratio, and normalized surface area to volume ratio. Units correspond to units of mesh. If mesh was\n    generated with surface_mesh_multiscale task, units are physical units (um). For further details of features see\n    scMultiplex FeatureFunctions.py\n3. Optionally calculate Gaussian curvature at each mesh point (set calculate_curvature = True)\n4. Optionally compute spherical harmonics of mesh using aics_shparam (set calculate_harmonics = True).\n    Compute reconstruction error (mse) of computed harmonics and optionally generate reconstructed mesh from the\n    calculated harmonics\n5. Output: save (1) extracted measurements as a new table (output_table_name), (2) optional spherical harmonic\n    coefficients and mse error as a separate feature table ('output_table_name'_harmonics) (3) optional\n    reconstructed meshes from spherical harmonics as .stl within zarr structure (3) optional convex hull\n    and bounding box on disk as .vtp within zarr structure (4) optional curvature meshes on disk as .vtp within\n    zarr structure.\n",
+      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
     },
     {
       "name": "scMultiplex Feature Measurements",
@@ -1270,7 +1278,8 @@
         "type": "object",
         "title": "ScmultiplexFeatureMeasurements"
       },
-      "docs_info": "## scmultiplex_feature_measurements\nMeasurements of intensities and morphologies\n\nWrapper task for scmultiplex measurements for Fractal to generate\nmeasurements of intensities and morphologies\n"
+      "docs_info": "## scmultiplex_feature_measurements\nMeasurements of intensities and morphologies\n\nWrapper task for scmultiplex measurements for Fractal to generate\nmeasurements of intensities and morphologies\n",
+      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
     },
     {
       "name": "scMultiplex Expand Labels",
@@ -1337,7 +1346,8 @@
         "type": "object",
         "title": "ExpandLabels"
       },
-      "docs_info": "## expand_labels\nExpand labels in 2D or 3D image without overlap.\n"
+      "docs_info": "## expand_labels\nExpand labels in 2D or 3D image without overlap.\n",
+      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
     }
   ],
   "has_args_schemas": true,
