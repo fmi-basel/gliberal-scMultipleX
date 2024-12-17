@@ -26,6 +26,7 @@ TASK_LIST = [
         category="Registration",
         modality="HCS",
         tags=["multiplexing", "2D"],
+        docs_info="file:task_info/calculate_object_linking.md",
     ),
     CompoundTask(
         name="scMultiplex Calculate Linking Consensus",
@@ -36,6 +37,7 @@ TASK_LIST = [
         category="Registration",
         modality="HCS",
         tags=["multiplexing", "2D", "3D"],
+        docs_info="file:task_info/calculate_linking_consensus.md",
     ),
     CompoundTask(
         name="scMultiplex Relabel by Linking Consensus",
@@ -46,6 +48,7 @@ TASK_LIST = [
         category="Registration",
         modality="HCS",
         tags=["multiplexing", "2D", "3D"],
+        docs_info="file:task_info/relabel_by_linking_consensus.md",
     ),
     CompoundTask(
         name="scMultiplex Calculate Platymatch Registration",
@@ -56,6 +59,7 @@ TASK_LIST = [
         category="Registration",
         modality="HCS",
         tags=["multiplexing", "3D"],
+        docs_info="file:task_info/calculate_platymatch_registration.md",
     ),
     CompoundTask(
         name="scMultiplex Surface Mesh Multiscale",
@@ -66,6 +70,7 @@ TASK_LIST = [
         category="Image Processing",
         modality="HCS",
         tags=["3D", "mesh"],
+        docs_info="file:task_info/surface_mesh_multiscale.md",
     ),
     CompoundTask(
         name="scMultiplex Segment by Intensity Threshold",
@@ -76,6 +81,7 @@ TASK_LIST = [
         category="Segmentation",
         modality="HCS",
         tags=["Classical segmentation", "3D"],
+        docs_info="file:task_info/segment_by_intensity_threshold.md",
     ),
     CompoundTask(
         name="scMultiplex Spherical Harmonics from Label Image",
@@ -86,6 +92,7 @@ TASK_LIST = [
         category="Measurement",
         modality="HCS",
         tags=["3D"],
+        docs_info="file:task_info/spherical_harmonics_from_label_image.md",
     ),
     CompoundTask(
         name="scMultiplex Mesh Measurements",
@@ -96,6 +103,7 @@ TASK_LIST = [
         category="Measurement",
         modality="HCS",
         tags=["3D", "mesh", "morphology"],
+        docs_info="file:task_info/mesh_measurements.md",
     ),
     ParallelTask(
         name="scMultiplex Feature Measurements",
@@ -103,11 +111,13 @@ TASK_LIST = [
         meta={"cpus_per_task": 4, "mem": 16000},
         category="Measurement",
         tags=["regionprops", "morphology", "intensity"],
+        docs_info="file:task_info/feature_measurements.md",
     ),
     ParallelTask(
         name="scMultiplex Expand Labels",
         executable="fractal/expand_labels.py",
         meta={"cpus_per_task": 4, "mem": 16000},
         tags=["2D", "3D"],
+        docs_info="file:task_info/expand_labels.md",
     ),
 ]
