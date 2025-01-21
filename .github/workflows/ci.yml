@@ -28,10 +28,12 @@ jobs:
         with:
           access_token: ${{ github.token }}
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
       - name: 🐍 Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
           cache-dependency-path: "pyproject.toml"
@@ -40,7 +42,19 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install -U pip
-          python -m pip install .[test,fractal-tasks,spherical-harmonics]
+          python -m pip install -e .[test,fractal-tasks,spherical-harmonics]
+
+      - name: Regenerate the manifest
+        run: python src/scmultiplex/dev/create_manifest.py
+
+      - name: Check if manifest has changed
+        run: |
+          if [ -n "$(git diff --exit-code ./src/scmultiplex/__FRACTAL_MANIFEST__.json)" ]; then
+          echo "__FRACTAL_MANIFEST__.json has changed. Please run 'python src/scmultiplex/dev/create_manifest.py' and commit the changes."
+            exit 1
+          else
+            echo "__FRACTAL_MANIFEST__.json has not changed."
+          fi
 
       - name: 🧪 Run Tests
         run: pytest --color=yes --cov --cov-report=xml --cov-report=term-missing
