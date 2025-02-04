@@ -354,6 +354,7 @@ def run_thresholding(
     pixmeta_raw,
     seg,
     intensity_threshold,
+    otsu_weight,
 ):
     """
     Main function for running intensity-based thresholding.
@@ -366,6 +367,7 @@ def run_thresholding(
 
     if threshold_type == "otsu":
         threshold = threshold_otsu(image=blurred)
+        threshold = otsu_weight * threshold
     elif threshold_type == "user-defined":
         threshold = intensity_threshold
     else:

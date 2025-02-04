@@ -338,6 +338,7 @@ def segment_by_intensity_threshold(
             pixmeta_raw,
             seg,
             intensity_threshold,
+            otsu_weight,
         )
 
         # Check whether is binary
