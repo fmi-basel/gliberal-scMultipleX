@@ -114,6 +114,9 @@ def segment_by_intensity_threshold(
         weight_channel_1: Float specifying weight of channel 1 image. Channels are combined as
             (weight_channel_1 * ch1_raw) + (weight_channel_2 * ch2_raw). When both weights are 0.5, channels
             are averaged. If no second channel is provided, this parameter is ignored.
+        combine_with_channel_2: if True, a second channel can be added. The Channel 1 and 2 images are combined using
+            weights specified with weight_channel_1 and weight_channel_2, and thresholding is performed using this
+            combined image.
         channel_2: Channel of second raw image to be combined with channel 1 image. Requires either
             `wavelength_id` (e.g. `A02_C02`) or `label` (e.g. `BCAT`).
         background_channel_2: Pixel intensity value of background to subtract from channel 2 raw image.
