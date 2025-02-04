@@ -17,11 +17,7 @@ import dask.array as da
 import numpy as np
 import pandas as pd
 import zarr
-from fractal_tasks_core.channels import (
-    ChannelNotFoundError,
-    OmeroChannel,
-    get_channel_from_image_zarr,
-)
+from fractal_tasks_core.channels import OmeroChannel, get_channel_from_image_zarr
 from fractal_tasks_core.labels import prepare_label_group
 from fractal_tasks_core.ngff import load_NgffWellMeta
 from fractal_tasks_core.roi import (
@@ -316,7 +312,14 @@ def compute_and_save_mesh(
 
 
 def load_channel_image(
-    channel_input_model, zarr_url, level, roi_table, roi_adata, xycoars_raw, pixmeta_raw
+    channel_input_model,
+    dask_array,
+    zarr_url,
+    level,
+    roi_table,
+    roi_adata,
+    xycoars_raw,
+    pixmeta_raw,
 ):
 
     ##############
@@ -324,22 +327,16 @@ def load_channel_image(
     ##############
 
     # Find channel index for channel
-    try:
-        tmp_channel: OmeroChannel = get_channel_from_image_zarr(
-            image_zarr_path=f"{zarr_url}",
-            wavelength_id=channel_input_model.wavelength_id,
-            label=channel_input_model.label,
-        )
-    except ChannelNotFoundError as e:
-        logger.warning(
-            "Channel not found, exit from the task.\n" f"Original error: {str(e)}"
-        )
-        return {}
+    tmp_channel: OmeroChannel = get_channel_from_image_zarr(
+        image_zarr_path=zarr_url,
+        wavelength_id=channel_input_model.wavelength_id,
+        label=channel_input_model.label,
+    )
 
     channel_id = tmp_channel.index
 
     # Load channel data
-    ch_dask_raw = da.from_zarr(f"{zarr_url}/{level}")[channel_id]
+    ch_dask_raw = dask_array[channel_id]
 
     ch_idlist_raw = convert_ROI_table_to_indices(
         roi_adata,

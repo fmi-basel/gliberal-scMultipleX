@@ -226,13 +226,31 @@ def segment_by_intensity_threshold(
     xycoars_raw = ngffmeta_raw.coarsening_xy
     pixmeta_raw = ngffmeta_raw.get_pixel_sizes_zyx(level=level)
 
+    img_array = da.from_zarr(f"{zarr_url}/{level}")
+
+    # Load channel 1 dask array and ID list
     ch1_dask_raw, ch1_idlist_raw = load_channel_image(
-        channel_1, zarr_url, level, roi_table, roi_adata, xycoars_raw, pixmeta_raw
+        channel_1,
+        img_array,
+        zarr_url,
+        level,
+        roi_table,
+        roi_adata,
+        xycoars_raw,
+        pixmeta_raw,
     )
 
+    # Optionally load channel 2 dask array and ID list
     if combine_with_channel_2:
         ch2_dask_raw, ch2_idlist_raw = load_channel_image(
-            channel_2, zarr_url, level, roi_table, roi_adata, xycoars_raw, pixmeta_raw
+            channel_2,
+            img_array,
+            zarr_url,
+            level,
+            roi_table,
+            roi_adata,
+            xycoars_raw,
+            pixmeta_raw,
         )
 
     ##############
