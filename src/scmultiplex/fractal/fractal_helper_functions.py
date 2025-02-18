@@ -19,10 +19,11 @@ import pandas as pd
 import zarr
 from fractal_tasks_core.channels import OmeroChannel, get_channel_from_image_zarr
 from fractal_tasks_core.labels import prepare_label_group
-from fractal_tasks_core.ngff import load_NgffWellMeta
+from fractal_tasks_core.ngff import load_NgffImageMeta, load_NgffWellMeta
 from fractal_tasks_core.roi import (
     array_to_bounding_box_table,
     check_valid_ROI_indices,
+    convert_indices_to_regions,
     convert_ROI_table_to_indices,
     empty_bounding_box_table,
     load_region,
@@ -348,3 +349,72 @@ def load_channel_image(
     check_valid_ROI_indices(ch_idlist_raw, roi_table)
 
     return ch_dask_raw, ch_idlist_raw
+
+
+def load_label_rois(
+    zarr_url,
+    label_name,
+    roi_table,
+    level,
+):
+
+    # Lazily load zarr array for reference cycle
+    # load well image as dask array e.g. for nuclear segmentation
+    label_dask = da.from_zarr(f"{zarr_url}/labels/{label_name}/{level}")
+
+    # Read ROIs of objects
+    roi_adata = ad.read_zarr(f"{zarr_url}/tables/{roi_table}")
+
+    # Read Zarr metadata
+    label_ngffmeta = load_NgffImageMeta(f"{zarr_url}/labels/{label_name}")
+    label_xycoars = (
+        label_ngffmeta.coarsening_xy
+    )  # need to know when building new pyramids
+    label_pixmeta = label_ngffmeta.get_pixel_sizes_zyx(level=level)
+
+    # Create list of indices for 3D ROIs spanning the entire Z direction
+    # Note that this ROI list is generated based on the input ROI table; if the input ROI table is for the group_by
+    # objects, then label regions will be loaded based on the group_by ROIs
+    roi_idlist = convert_ROI_table_to_indices(
+        roi_adata,
+        level=level,
+        coarsening_xy=label_xycoars,
+        full_res_pxl_sizes_zyx=label_pixmeta,
+    )
+
+    check_valid_ROI_indices(roi_idlist, roi_table)
+
+    if len(roi_idlist) == 0:
+        logger.warning("Well contains no objects")
+
+    return label_dask, roi_adata, roi_idlist, label_ngffmeta, label_pixmeta
+
+
+def load_image_array(zarr_url, level):
+    ngffmeta_raw = load_NgffImageMeta(f"{zarr_url}")
+    xycoars_raw = ngffmeta_raw.coarsening_xy
+    pixmeta_raw = ngffmeta_raw.get_pixel_sizes_zyx(level=level)
+
+    img_array = da.from_zarr(f"{zarr_url}/{level}")
+
+    return img_array, ngffmeta_raw, xycoars_raw, pixmeta_raw
+
+
+def load_seg_and_raw_region(
+    label_dask, channel_dask, label_idlist, channel_idlist, row_integer, compute
+):
+    # Load label image of label_name object as numpy array
+    seg_numpy = load_region(
+        data_zyx=label_dask,
+        region=convert_indices_to_regions(label_idlist[row_integer]),
+        compute=compute,
+    )
+
+    # Load raw image of specific channel for object
+    raw_numpy = load_region(
+        data_zyx=channel_dask,
+        region=convert_indices_to_regions(channel_idlist[row_integer]),
+        compute=compute,
+    )
+
+    return seg_numpy, raw_numpy
