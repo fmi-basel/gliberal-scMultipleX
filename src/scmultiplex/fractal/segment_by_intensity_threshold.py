@@ -12,40 +12,35 @@ Calculate full 3D object segmentation after 2D MIP-based segmentation using inte
 raw intensity image(s).
 """
 import logging
-from typing import Any
+from typing import Any, Optional
 
-import anndata as ad
-import dask.array as da
 import numpy as np
 import zarr
-from fractal_tasks_core.channels import (
-    ChannelInputModel,
-    ChannelNotFoundError,
-    OmeroChannel,
-    get_channel_from_image_zarr,
-)
-from fractal_tasks_core.ngff import load_NgffImageMeta
+from fractal_tasks_core.channels import ChannelInputModel
 from fractal_tasks_core.pyramids import build_pyramid
 from fractal_tasks_core.roi import (
-    check_valid_ROI_indices,
     convert_indices_to_regions,
-    convert_ROI_table_to_indices,
     get_overlapping_pairs_3D,
     load_region,
 )
 from fractal_tasks_core.tables import write_table
 from fractal_tasks_core.tasks.io_models import InitArgsRegistrationConsensus
 from pydantic import validate_call
-from skimage.exposure import rescale_intensity
 
 from scmultiplex.fractal.fractal_helper_functions import (
     format_roi_table,
     initialize_new_label,
+    load_channel_image,
+    load_image_array,
+    load_label_rois,
+    load_seg_and_raw_region,
     save_new_label_and_bbox_df,
 )
 from scmultiplex.meshing.LabelFusionFunctions import (
     linear_z_correction,
+    rescale_channel_image,
     run_thresholding,
+    select_label,
 )
 
 logger = logging.getLogger(__name__)
@@ -65,9 +60,10 @@ def segment_by_intensity_threshold(
     background_channel_1: int = 800,
     maximum_channel_1: int,
     weight_channel_1: float = 0.5,
-    channel_2: ChannelInputModel,
-    background_channel_2: int = 400,
-    maximum_channel_2: int,
+    combine_with_channel_2: bool = False,
+    channel_2: Optional[ChannelInputModel] = None,
+    background_channel_2: Optional[int] = None,
+    maximum_channel_2: Optional[int] = None,
     weight_channel_2: float = 0.5,
     otsu_threshold: bool = True,
     otsu_weight: float = 1.0,
@@ -115,7 +111,10 @@ def segment_by_intensity_threshold(
         maximum_channel_1: Maximum pixel intensity value that channel 1 image is rescaled to.
         weight_channel_1: Float specifying weight of channel 1 image. Channels are combined as
             (weight_channel_1 * ch1_raw) + (weight_channel_2 * ch2_raw). When both weights are 0.5, channels
-            are averaged.
+            are averaged. If no second channel is provided, this parameter is ignored.
+        combine_with_channel_2: if True, a second channel can be added. The Channel 1 and 2 images are combined using
+            weights specified with weight_channel_1 and weight_channel_2, and thresholding is performed using this
+            combined image.
         channel_2: Channel of second raw image to be combined with channel 1 image. Requires either
             `wavelength_id` (e.g. `A02_C02`) or `label` (e.g. `BCAT`).
         background_channel_2: Pixel intensity value of background to subtract from channel 2 raw image.
@@ -177,104 +176,55 @@ def segment_by_intensity_threshold(
             "intensity threshold value."
         )
 
-    if (
-        maximum_channel_1 < background_channel_1
-        or maximum_channel_2 < background_channel_2
-    ):
+    if maximum_channel_1 < background_channel_1:
+        raise ValueError("Maximum value of image must be higher than image background.")
+
+    if combine_with_channel_2 and maximum_channel_2 < background_channel_2:
         raise ValueError("Maximum value of image must be higher than image background.")
 
     ##############
     # Load segmentation image  ###
     ##############
 
-    # Lazily load zarr array for reference cycle
-    # load well image as dask array e.g. for nuclear segmentation
-    label_dask = da.from_zarr(f"{zarr_url}/labels/{label_name}/{level}")
-
-    # Read ROIs of objects
-    roi_adata = ad.read_zarr(f"{zarr_url}/tables/{roi_table}")
-
-    # Read Zarr metadata
-    label_ngffmeta = load_NgffImageMeta(f"{zarr_url}/labels/{label_name}")
-    label_xycoars = (
-        label_ngffmeta.coarsening_xy
-    )  # need to know when building new pyramids
-    label_pixmeta = label_ngffmeta.get_pixel_sizes_zyx(level=level)
-
-    # Create list of indices for 3D ROIs spanning the entire Z direction
-    # Note that this ROI list is generated based on the input ROI table; if the input ROI table is for the group_by
-    # objects, then label regions will be loaded based on the group_by ROIs
-    roi_idlist = convert_ROI_table_to_indices(
-        roi_adata,
-        level=level,
-        coarsening_xy=label_xycoars,
-        full_res_pxl_sizes_zyx=label_pixmeta,
+    label_dask, roi_adata, roi_idlist, label_ngffmeta, label_pixmeta = load_label_rois(
+        zarr_url,
+        label_name,
+        roi_table,
+        level,
     )
-
-    check_valid_ROI_indices(roi_idlist, roi_table)
-
-    if len(roi_idlist) == 0:
-        logger.warning("Well contains no objects")
 
     ##############
-    # Load Channel images  ###
+    # Load channel image(s)  ###
     ##############
 
-    # Find channel index for channel 1
-    try:
-        tmp_channel1: OmeroChannel = get_channel_from_image_zarr(
-            image_zarr_path=f"{zarr_url}",
-            wavelength_id=channel_1.wavelength_id,
-            label=channel_1.label,
-        )
-    except ChannelNotFoundError as e:
-        logger.warning(
-            "Channel not found, exit from the task.\n" f"Original error: {str(e)}"
-        )
-        return {}
-
-    channel_1_id = tmp_channel1.index
-
-    # Find channel index for channel 2
-    try:
-        tmp_channel2: OmeroChannel = get_channel_from_image_zarr(
-            image_zarr_path=f"{zarr_url}",
-            wavelength_id=channel_2.wavelength_id,
-            label=channel_2.label,
-        )
-    except ChannelNotFoundError as e:
-        logger.warning(
-            "Channel not found, exit from the task.\n" f"Original error: {str(e)}"
-        )
-        return {}
-
-    channel_2_id = tmp_channel2.index
-
-    # Load channel data
-    ch1_dask_raw = da.from_zarr(f"{zarr_url}/{level}")[channel_1_id]
-    ch2_dask_raw = da.from_zarr(f"{zarr_url}/{level}")[channel_2_id]
-
-    # Read Zarr metadata
-    ngffmeta_raw = load_NgffImageMeta(f"{zarr_url}")
-    xycoars_raw = ngffmeta_raw.coarsening_xy
-    pixmeta_raw = ngffmeta_raw.get_pixel_sizes_zyx(level=level)
-
-    ch1_idlist_raw = convert_ROI_table_to_indices(
-        roi_adata,
-        level=level,
-        coarsening_xy=xycoars_raw,
-        full_res_pxl_sizes_zyx=pixmeta_raw,
+    img_array, ngffmeta_raw, xycoars_raw, pixmeta_raw = load_image_array(
+        zarr_url, level
     )
 
-    ch2_idlist_raw = convert_ROI_table_to_indices(
+    # Load channel 1 dask array and ID list
+    ch1_dask_raw, ch1_idlist_raw = load_channel_image(
+        channel_1,
+        img_array,
+        zarr_url,
+        level,
+        roi_table,
         roi_adata,
-        level=level,
-        coarsening_xy=xycoars_raw,
-        full_res_pxl_sizes_zyx=pixmeta_raw,
+        xycoars_raw,
+        pixmeta_raw,
     )
 
-    check_valid_ROI_indices(ch1_idlist_raw, roi_table)
-    check_valid_ROI_indices(ch2_idlist_raw, roi_table)
+    # Optionally load channel 2 dask array and ID list
+    if combine_with_channel_2:
+        ch2_dask_raw, ch2_idlist_raw = load_channel_image(
+            channel_2,
+            img_array,
+            zarr_url,
+            level,
+            roi_table,
+            roi_adata,
+            xycoars_raw,
+            pixmeta_raw,
+        )
 
     ##############
     # Initialize parameters to save the newly calculated label map  ###
@@ -312,25 +262,8 @@ def segment_by_intensity_threshold(
         row_int = int(row)
         label_str = roi_labels[row_int]
 
-        # Load label image of label_name object as numpy array
-        seg = load_region(
-            data_zyx=label_dask,
-            region=convert_indices_to_regions(roi_idlist[row_int]),
-            compute=compute,
-        )
-
-        # Load channel 1 raw image for object
-        ch1_raw = load_region(
-            data_zyx=ch1_dask_raw,
-            region=convert_indices_to_regions(ch1_idlist_raw[row_int]),
-            compute=compute,
-        )
-
-        # Load channel 2 raw image for object
-        ch2_raw = load_region(
-            data_zyx=ch2_dask_raw,
-            region=convert_indices_to_regions(ch2_idlist_raw[row_int]),
-            compute=compute,
+        seg, ch1_raw = load_seg_and_raw_region(
+            label_dask, ch1_dask_raw, roi_idlist, ch1_idlist_raw, row_int, compute
         )
 
         if seg.shape != ch1_raw.shape:
@@ -342,46 +275,44 @@ def segment_by_intensity_threshold(
                 f"Object ID {label_str} does not exist in loaded segmentation image. Does input ROI "
                 f"table match label map?"
             )
-        # Select label that corresponds to current object, set all other objects to 0
-        seg[seg != float(label_str)] = 0
-        # Binarize object segmentation image
-        seg[seg > 0] = 1
 
-        ch1_raw[ch1_raw <= background_channel_1] = 0
-        ch1_raw[
-            ch1_raw > 0
-        ] -= background_channel_1  # will never have negative values this way
-
-        ch1_raw = rescale_intensity(
-            ch1_raw, in_range=(0, maximum_channel_1 - background_channel_1)
+        seg = select_label(seg, label_str)
+        ch1_raw_rescaled = rescale_channel_image(
+            ch1_raw, background_channel_1, maximum_channel_1
         )
 
-        ch2_raw[ch2_raw <= background_channel_2] = 0
-        ch2_raw[
-            ch2_raw > 0
-        ] -= background_channel_2  # will never have negative values this way
+        if combine_with_channel_2:
+            # Load channel 2 raw image for object
+            ch2_raw = load_region(
+                data_zyx=ch2_dask_raw,
+                region=convert_indices_to_regions(ch2_idlist_raw[row_int]),
+                compute=compute,
+            )
 
-        ch2_raw = rescale_intensity(
-            ch2_raw, in_range=(0, maximum_channel_2 - background_channel_2)
-        )
-        # Combine raw images
-        # TODO: make second channel optional, can also use only 1 image
+            ch2_raw_rescaled = rescale_channel_image(
+                ch2_raw, background_channel_2, maximum_channel_2
+            )
 
-        combo = (weight_channel_1 * ch1_raw) + (
-            weight_channel_2 * ch2_raw
-        )  # temporary: take average
-        # TODO: correct check here that values above 65535 are not clipped; generalize to different input types
-        combo[combo > 65535] = 65535
+            image_to_segment = (weight_channel_1 * ch1_raw_rescaled) + (
+                weight_channel_2 * ch2_raw_rescaled
+            )  # temporary: take average
+            # TODO: correct check here that values above 65535 are not clipped; generalize to different input types
+            image_to_segment[image_to_segment > 65535] = 65535
+
+        else:
+            image_to_segment = ch1_raw_rescaled
 
         if linear_z_illumination_correction:
-            combo = linear_z_correction(combo, start_z_slice, m_slope)
+            image_to_segment = linear_z_correction(
+                image_to_segment, start_z_slice, m_slope
+            )
+            # TODO: correct check here that values above 65535 are not clipped; generalize to different input types
+            image_to_segment[image_to_segment > 65535] = 65535
 
-        combo[combo > 65535] = 65535
         # TODO: consider using https://github.com/seung-lab/fill_voids to fill luman holes
-        # TODO: update Zenodo test dataset so that org seg matches raw image level
 
         seg3d, padded_zslice_count, roi_count, threshold = run_thresholding(
-            combo,
+            image_to_segment,
             threshold_type,
             gaussian_sigma_raw_image,
             gaussian_sigma_threshold_image,
@@ -391,6 +322,7 @@ def segment_by_intensity_threshold(
             pixmeta_raw,
             seg,
             intensity_threshold,
+            otsu_weight,
         )
 
         # Check whether is binary

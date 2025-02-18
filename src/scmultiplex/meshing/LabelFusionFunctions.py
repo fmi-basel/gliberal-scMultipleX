@@ -9,6 +9,7 @@
 import numpy as np
 import pandas as pd
 from scipy.ndimage import binary_erosion, binary_fill_holes
+from skimage.exposure import rescale_intensity
 from skimage.feature import canny
 from skimage.filters import gaussian, threshold_otsu
 from skimage.measure import label, regionprops, regionprops_table
@@ -353,6 +354,7 @@ def run_thresholding(
     pixmeta_raw,
     seg,
     intensity_threshold,
+    otsu_weight,
 ):
     """
     Main function for running intensity-based thresholding.
@@ -365,6 +367,7 @@ def run_thresholding(
 
     if threshold_type == "otsu":
         threshold = threshold_otsu(image=blurred)
+        threshold = otsu_weight * threshold
     elif threshold_type == "user-defined":
         threshold = intensity_threshold
     else:
@@ -393,3 +396,28 @@ def run_thresholding(
     contour, roi_count = select_largest_component(contour)
 
     return contour, padded_zslice_count, roi_count, threshold
+
+
+def rescale_channel_image(ch_raw, background_intensity, maximum_intensity):
+
+    """Remove background and rescale intensity to a maximum value. Input is 3D numpy array image."""
+
+    ch_raw[ch_raw <= background_intensity] = 0
+    ch_raw[
+        ch_raw > 0
+    ] -= background_intensity  # will never have negative values this way
+
+    ch_raw_rescaled = rescale_intensity(
+        ch_raw, in_range=(0, maximum_intensity - background_intensity)
+    )
+
+    return ch_raw_rescaled
+
+
+def select_label(seg, label_str):
+    # Select label that corresponds to current object, set all other objects to 0
+    seg[seg != float(label_str)] = 0
+    # Binarize object segmentation image
+    seg[seg > 0] = 1
+
+    return seg
