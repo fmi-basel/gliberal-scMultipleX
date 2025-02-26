@@ -508,3 +508,30 @@ def calculate_correction(
     )
 
     return row
+
+
+def check_zillum_correction_table(adata, low_threshold, high_threshold):
+    """
+    Raise warnings if any values of anndata X matrix are less than or equal to a low_threshold value, or
+    greater than a high_threshold value.
+    This checks whether z-illumination matrix normalization and fits have run as expected.
+    """
+
+    low_indices = np.where(np.any(adata.X <= low_threshold, axis=1))[0]
+    hi_indices = np.where(np.any(adata.X > high_threshold, axis=1))[0]
+
+    # if any rows have values below threshold, raise a warning.
+    if low_indices.size > 0:
+        low_objects = adata.obs["label"].iloc[low_indices].tolist()
+
+        logger.warning(
+            f"Values lower than {low_threshold} detected in correction table, which may lead to over-correction "
+            f"of objects. Check fits for objects {low_objects}."
+        )
+
+    if hi_indices.size > 0:
+        raise ValueError(
+            f"Value greater than {high_threshold} detected in matrix. Check normalization."
+        )
+
+    return

@@ -32,7 +32,10 @@ from scmultiplex.fractal.fractal_helper_functions import (
     load_label_rois,
     load_seg_and_raw_region,
 )
-from scmultiplex.illumination.illum_correction_functions import calculate_correction
+from scmultiplex.illumination.illum_correction_functions import (
+    calculate_correction,
+    check_zillum_correction_table,
+)
 from scmultiplex.meshing.LabelFusionFunctions import select_label
 
 logger = logging.getLogger(__name__)
@@ -58,6 +61,7 @@ def calculate_z_illumination_correction(
     logger.info(
         f"Running for {zarr_url=}. \n"
         f"Calculating z-illumination correction for objects in {label_name=} with {roi_table=}."
+        f"Using {percentile=} for intensity detection. "
     )
 
     # Always use highest resolution label
@@ -184,11 +188,14 @@ def calculate_z_illumination_correction(
         # follows similar logic as feature extraction task
         if not df_correction.empty:
             correction_table = format_roi_table([df_correction])
+            # Raise warnings if any values of anndata X matrix are less than or equal to a low_threshold value, or
+            # greater than a high_threshold value.
+            check_zillum_correction_table(
+                correction_table, low_threshold=0.05, high_threshold=1.0
+            )
         else:
             # Create empty anndata table
             correction_table = ad.AnnData()
-
-        # TODO: check that no values are lower or equal to 0, and nothing greater than 1
 
         # Write to zarr group
         image_group = zarr.group(f"{zarr_url}")
