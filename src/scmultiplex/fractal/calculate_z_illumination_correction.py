@@ -45,10 +45,10 @@ def calculate_z_illumination_correction(
     zarr_url: str,
     init_args: InitArgsRegistrationConsensus,
     # Task-specific arguments
+    input_channels: list[ChannelInputModel],
     label_name: str = "org",
     roi_table: str = "org_ROI_table",
-    input_channels: list[ChannelInputModel],
-    output_table_name: str = "zillum",
+    percentile: int = 90,
 ) -> dict[str, Any]:
 
     """
@@ -62,6 +62,9 @@ def calculate_z_illumination_correction(
 
     # Always use highest resolution label
     level = 0
+
+    # Always save table with 'zillum' suffix
+    output_table_name = "zillum"
 
     ##############
     # Load segmentation image  ###
@@ -168,7 +171,7 @@ def calculate_z_illumination_correction(
                 full_z_count,
                 label_str,
                 filepath,
-                percentile=80,
+                percentile=percentile,
             )
 
             object_count += 1
@@ -184,6 +187,8 @@ def calculate_z_illumination_correction(
         else:
             # Create empty anndata table
             correction_table = ad.AnnData()
+
+        # TODO: check that no values are lower or equal to 0, and nothing greater than 1
 
         # Write to zarr group
         image_group = zarr.group(f"{zarr_url}")
