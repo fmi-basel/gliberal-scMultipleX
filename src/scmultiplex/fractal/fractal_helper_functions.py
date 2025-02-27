@@ -1,4 +1,4 @@
-# Copyright 2024 (C) Friedrich Miescher Institute for Biomedical Research and
+# Copyright 2025 (C) Friedrich Miescher Institute for Biomedical Research and
 # University of Zurich
 #
 # Original authors:
@@ -8,6 +8,7 @@
 #
 import logging
 import os as os
+import shutil
 from functools import reduce
 from pathlib import Path
 from typing import Sequence
@@ -19,7 +20,11 @@ import pandas as pd
 import zarr
 from fractal_tasks_core.channels import OmeroChannel, get_channel_from_image_zarr
 from fractal_tasks_core.labels import prepare_label_group
-from fractal_tasks_core.ngff import load_NgffImageMeta, load_NgffWellMeta
+from fractal_tasks_core.ngff import (
+    ZarrGroupNotFoundError,
+    load_NgffImageMeta,
+    load_NgffWellMeta,
+)
 from fractal_tasks_core.roi import (
     array_to_bounding_box_table,
     check_valid_ROI_indices,
@@ -28,6 +33,8 @@ from fractal_tasks_core.roi import (
     empty_bounding_box_table,
     load_region,
 )
+from fractal_tasks_core.tasks._zarr_utils import _update_well_metadata
+from fractal_tasks_core.utils import _split_well_path_image_path
 
 from scmultiplex.meshing.MeshFunctions import (
     export_stl_polydata,
@@ -418,3 +425,98 @@ def load_seg_and_raw_region(
     )
 
     return seg_numpy, raw_numpy
+
+
+def read_table_from_zarrurl(zarr_url, table_name):
+    path = f"{zarr_url}/tables/{table_name}"
+    if os.path.exists(path):
+        adata = ad.read_zarr(path)
+    else:
+        raise ValueError(f"Table {table_name} not found in {zarr_url=}")
+    return adata
+
+
+def check_match_zarr_chunking(dask1, dask2):
+    if (dask1.shape != dask2.shape) or (dask1.chunks != dask2.chunks):
+        raise ValueError(
+            f"Arrays do match: array {dask1} with shape {dask1.shape} and chunk sizes {dask1.chunks}"
+            f"does not correspond to array {dask2} with shape {dask2.shape} and chunk size {dask2.chunks}"
+        )
+    return
+
+
+def get_channel_index_from_inputmodel(zarr_url, channel_input_model):
+    omero_channel = get_channel_from_image_zarr(
+        image_zarr_path=zarr_url,
+        label=channel_input_model.label,
+        wavelength_id=channel_input_model.wavelength_id,
+    )
+    return omero_channel.index
+
+
+def replace_origin_by_output(origin_zarr_url, output_zarr_url):
+    # Replace origin (input) zarr with the newly created Zarr image
+    os.rename(origin_zarr_url, f"{origin_zarr_url}_tmp")
+    os.rename(output_zarr_url, origin_zarr_url)
+    shutil.rmtree(f"{origin_zarr_url}_tmp")
+    return
+
+
+def update_fractal_well_metadata(zarr_url, output_zarr_url):
+    # Keep z-illumination corrected zarr separate from input zarr
+    # In this case, update Fractal image list metadata
+    image_list_updates = dict(
+        image_list_updates=[dict(zarr_url=output_zarr_url, origin=zarr_url)]
+    )
+    well_url, in_name = _split_well_path_image_path(zarr_url)
+    well_url, out_name = _split_well_path_image_path(output_zarr_url)
+    try:
+        _update_well_metadata(
+            well_url=well_url,
+            old_image_path=in_name,
+            new_image_path=out_name,
+        )
+    except ZarrGroupNotFoundError:
+        logger.debug(f"{zarr_url} is not in an HCS plate. No well metadata got updated")
+    except ValueError:
+        logger.debug(
+            f"Could not update well metadata, likely because "
+            f" {output_zarr_url} was already listed there."
+        )
+
+    return image_list_updates
+
+
+def copy_folder_from_zarrurl(origin_zarr_url, output_zarr_url, folder_name):
+    """
+    Temp fix before ngio, literally copy over folder of os.
+    Folder_name is string, e.g 'labels', or 'plots'
+    """
+    origin_folder_path = f"{origin_zarr_url}/{folder_name}"
+    output_folder_path = f"{output_zarr_url}/{folder_name}"
+
+    # if labels present in origin, move them
+    if os.path.exists(origin_folder_path):
+        # make labels directory in destination path
+        try:
+            shutil.copytree(origin_folder_path, output_folder_path)
+        # if folder directory already exists in the target zarr, check content before copying
+        except FileExistsError:
+            # get all files in labels directory
+            origin_folder_files = {f for f in os.listdir(origin_folder_path)}
+            output_folder_files = {f for f in os.listdir(output_folder_path)}
+            if output_folder_files != origin_folder_files:
+                raise ValueError(
+                    f"Output zarr contains {folder_name} files not present in origin. Are you "
+                    f"sure you want to overwrite? "
+                )
+            else:
+                logger.info(
+                    f"Folder {folder_name} already present in output zarr directory, "
+                    f"skipping copying from origin. "
+                )
+    else:
+        logger.info(
+            f"Folder name {folder_name} does not exist in origin zarr, skipping copying"
+        )
+    return
