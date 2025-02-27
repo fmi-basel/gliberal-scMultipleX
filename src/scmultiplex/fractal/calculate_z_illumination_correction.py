@@ -32,7 +32,7 @@ from scmultiplex.fractal.fractal_helper_functions import (
     load_label_rois,
     load_seg_and_raw_region,
 )
-from scmultiplex.illumination.illum_correction_functions import (
+from scmultiplex.illumination.calculate_correction_functions import (
     calculate_correction,
     check_zillum_correction_table,
 )
