@@ -113,10 +113,12 @@ TASK_LIST = [
         tags=["regionprops", "morphology", "intensity"],
         docs_info="file:task_info/feature_measurements.md",
     ),
-    ParallelTask(
+    CompoundTask(
         name="scMultiplex Expand Labels",
+        executable_init="fractal/init_select_many_rounds.py",
         executable="fractal/expand_labels.py",
         meta={"cpus_per_task": 4, "mem": 16000},
+        category="Image Processing",
         tags=["2D", "3D"],
         docs_info="file:task_info/expand_labels.md",
     ),
