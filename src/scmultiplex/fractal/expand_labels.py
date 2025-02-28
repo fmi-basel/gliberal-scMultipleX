@@ -5,30 +5,18 @@
 # Author: Nicole Repina              <nicole.repina@fmi.ch>                  #
 #                                                                            #
 ##############################################################################
-
-
-"""
-Expand labels in 2D or 3D image without overlap.
-"""
 import logging
 from typing import Any, Union
 
-import anndata as ad
-import dask.array as da
 import numpy as np
-from fractal_tasks_core.ngff import load_NgffImageMeta
 from fractal_tasks_core.pyramids import build_pyramid
-from fractal_tasks_core.roi import (
-    check_valid_ROI_indices,
-    convert_indices_to_regions,
-    convert_ROI_table_to_indices,
-    load_region,
-)
+from fractal_tasks_core.roi import convert_indices_to_regions, load_region
 from pydantic import validate_call
-from zarr.errors import ArrayNotFoundError
 
 from scmultiplex.fractal.fractal_helper_functions import (
+    get_zattrs,
     initialize_new_label,
+    load_label_rois,
     save_new_label_with_overlap,
 )
 from scmultiplex.meshing.FilterFunctions import mask_by_parent_object
@@ -44,37 +32,49 @@ def expand_labels(
     zarr_url: str,
     # Task-specific arguments
     label_name_to_expand: str = "nuc",
-    group_by: Union[str, None] = None,
     roi_table: str = "org_ROI_table_linked",
+    masking_label_map: Union[str, None] = None,
+    mask_output: bool = True,
     expand_by_pixels: Union[int, None] = None,
     calculate_image_based_expansion_distance: bool = False,
     expand_by_factor: Union[float, None] = None,
-    mask_expansion_by_parent: bool = False,
 ) -> dict[str, Any]:
     """
-    Expand labels in 2D or 3D image without overlap.
+    Expand labels in 2D or 3D segmentation images in XY. For 3D images, expansion is performed on each 2D
+    z-slice iteratively. Thus, labels are only expanded in XY (i.e. laterally, not in z). Labels are grown outwards
+    by up to the distance specified by expand_by_pixels or expand_by_factor, without overflowing into
+    neighboring regions. See skimage.segmentation.expand_labels() for further documentation.
+
+    Expansion is run on input label_name_to_expand, iterating over regions of input roi_table. It is possible to run
+    expansion on the full well image (e.g by specifying well_ROI_table) as input roi_table, or on individual objects
+    within image (e.g. by specifying a segmentation masking ROI table) as input roi_table. In the later case, a common
+    use case would be to expand in 3D nuclei of each organoid in dataset.
+
+    Output: the expanded label image is saved as a new label in zarr, with name {label_name_to_expand}_expanded.
 
     Args:
         zarr_url: Path or url to the individual OME-Zarr image to be processed.
-            Refers to the zarr_url of the reference acquisition.
-            (standard argument for Fractal tasks, managed by Fractal server).
         label_name_to_expand: Label name of segmentation to be expanded.
-        group_by: Label name of segmentated objects that are parents of label_name. If None (default), no grouping
-            is applied and expansion is calculated for the input object (label_name_to_expand).
-            Instead, if a group_by label is specified, the
-            label_name_to_expand objects will be masked and grouped by this object. For example, when group_by = 'org',
-            the nuclear segmentation is masked by the organoid parent and all nuclei belonging to the parent are loaded
-            as a label image.
-        roi_table: Name of the ROI table used to iterate over objects and load object regions. If group_by is passed,
-            this is the ROI table for the group_by objects, e.g. org_ROI_table.
-        expand_by_pixels: Integer value for pixel distance to expand by.
+        roi_table: Name of the ROI table used to iterate over objects and load object regions. If a table of type
+            "roi_table" is passed, e.g. well_ROI_table, all objects for each region in the table will be loaded
+            and expanded simultaneously. If a table of type "masking_roi_table" is passed, e.g. a segmentation
+            ROI table, the task iterates over these objects and loads only the children (i.e. label_name_to_expand) that
+            belong to the parent object.
+        masking_label_map: Label name of segmented objects that are parents of label_name. This input is
+            mandatory if a roi table of type "masking_roi_table" is provided. It is the name of the label map
+            that corresponds to the input ROI table. The masking_label_map will be used to mask label_name_to_expand
+            objects, to only select children belonging to given parent.
+        mask_output: If True, expanded label is masked by parent label. Only used if masking_label_map is provided.
+            Recommended to set as True, to avoid overwriting of children labels between neighboring parents. However,
+            it may lead to expanded results to be cropped by parent mask; in this case, the parent mask can first be
+            expanded.
+        expand_by_pixels: Default expansion parameter. Integer value for pixel distance to expand by.
         calculate_image_based_expansion_distance: If true, overrides any set expand_by_pixels value, and expansion
             distance is calculated based on the average label size in loaded region. In this case, expandby_factor must
             be supplied.
-        expand_by_factor: Multiplier that specifies pixels by which to expand each label. Float in range
+        expand_by_factor: Only used if calculate_image_based_expansion_distance is True.
+            Multiplier that specifies pixels by which to expand each label. Float in range
             [0, 1 or higher], e.g. 0.2 means that 20% of mean equivalent diameter of labels in region is used.
-        mask_expansion_by_parent: If True, final expanded labels are masked by group_by object. Recommended to set
-            to True for child/parent masking.
     """
 
     logger.info(
@@ -82,7 +82,6 @@ def expand_labels(
     )
     # TODO: for NGIO refactor, this task follows logic of surface_mesh_multiscale task
     # TODO: add integration tests
-    # TODO: check that this also runs on MIP full well org seg
 
     # Check correct task inputs:
     if calculate_image_based_expansion_distance:
@@ -109,41 +108,36 @@ def expand_labels(
     # always use highest resolution label
     level = 0
 
-    # Lazily load zarr array for label image to expand
-    # If label does not exist in zarr url, the url is skipped
-    try:
-        label_dask = da.from_zarr(f"{zarr_url}/labels/{label_name_to_expand}/{level}")
-    except ArrayNotFoundError as e:
-        logger.warning(
-            "Label not found, exit from the task for this zarr url.\n"
-            f"Original error: {str(e)}"
-        )
-        return {}
-
-    # Read ROIs of objects
-    roi_adata = ad.read_zarr(f"{zarr_url}/tables/{roi_table}")
-
-    # Read Zarr metadata of label to expand
-    label_ngffmeta = load_NgffImageMeta(f"{zarr_url}/labels/{label_name_to_expand}")
-    label_xycoars = (
-        label_ngffmeta.coarsening_xy
-    )  # need to know when building new pyramids
-    label_pixmeta = label_ngffmeta.get_pixel_sizes_zyx(level=level)
-
-    # Create list of indices for 3D ROIs spanning the entire Z direction
-    # Note that this ROI list is generated based on the input ROI table; if the input ROI table is for the group_by
-    # objects, then label regions will be loaded based on the group_by ROIs
-    roi_idlist = convert_ROI_table_to_indices(
-        roi_adata,
-        level=level,
-        coarsening_xy=label_xycoars,
-        full_res_pxl_sizes_zyx=label_pixmeta,
+    # Read expansion label and ROI table
+    label_dask, roi_adata, roi_idlist, label_ngffmeta, label_pixmeta = load_label_rois(
+        zarr_url, label_name_to_expand, roi_table, level
     )
+    roi_attrs = get_zattrs(f"{zarr_url}/tables/{roi_table}")
 
-    check_valid_ROI_indices(roi_idlist, roi_table)
+    # Check ROI input types
+    table_type = roi_attrs["type"]
+    if table_type == "masking_roi_table":
+        if masking_label_map is None:
+            raise ValueError(
+                "Masking ROI table selected, but no corresponding label map supplied. "
+                "Enter masking_label_map in task input. "
+            )
 
-    if len(roi_idlist) == 0:
-        logger.warning("Well contains no objects")
+        logger.info(
+            f"Using masking ROI table to group input labels by {masking_label_map} segmentation with"
+            f"ROI table {roi_table}."
+        )
+
+        # ROIs to iterate over
+        instance_key = roi_attrs["instance_key"]  # e.g. "label"
+        roi_labels = roi_adata.obs_vector(instance_key)
+
+    elif table_type == "roi_table":
+        logger.info(
+            f"Using ROI table {roi_table} for loading objects without masking. "
+        )
+    else:
+        raise ValueError(f"Unrecognized table type {table_type}.")
 
     # Initialize parameters to save the newly calculated label map
     # Save with same dimensions as child labels from which they are calculated
@@ -165,50 +159,56 @@ def expand_labels(
     )
 
     logger.info(
-        f"New array saved as {output_label_name=} will have shape {shape} and chunks {chunks}"
+        f"New array saved as {output_label_name=} will have shape {shape} and chunks {chunks}."
     )
 
     # initialize new ROI table
     # bbox_dataframe_list = []
 
     ##############
-    # Filter nuclei by parent mask ###
+    # Optionally filter children by parent mask ###
     ##############
 
-    if group_by is not None:
-        # Load group_by object segmentation to mask child objects by parent group_by object
+    if masking_label_map:
+        # Load masking object segmentation to mask child objects
         # Load well image as dask array for parent objects
-        groupby_dask = da.from_zarr(f"{zarr_url}/labels/{group_by}/{level}")
 
-        # Read Zarr metadata
-        groupby_ngffmeta = load_NgffImageMeta(f"{zarr_url}/labels/{group_by}")
-        groupby_xycoars = groupby_ngffmeta.coarsening_xy
-        groupby_pixmeta = groupby_ngffmeta.get_pixel_sizes_zyx(level=level)
-
-        groupby_idlist = convert_ROI_table_to_indices(
-            roi_adata,
-            level=level,
-            coarsening_xy=groupby_xycoars,
-            full_res_pxl_sizes_zyx=groupby_pixmeta,
+        (
+            mask_dask,
+            mask_adata,
+            mask_idlist,
+            mask_ngffmeta,
+            mask_pixmeta,
+        ) = load_label_rois(
+            zarr_url,
+            masking_label_map,
+            roi_table,
+            level,
         )
 
-        check_valid_ROI_indices(groupby_idlist, roi_table)
+    ##############
+    # Apply expansion ###
+    ##############
 
-    # Get labels to iterate over
-    # TODO handle case when user input well_ROI_table
-    roi_labels = roi_adata.obs_vector("label")
-    total_label_count = len(roi_labels)
     compute = True
+
+    total_label_count = len(roi_adata.obs_names)
 
     logger.info(
         f"Starting iteration over {total_label_count} detected objects in ROI table."
     )
 
     # For each object in input ROI table...
-    for row in roi_adata.obs_names:
-        row_int = int(row)
-        label_str = roi_labels[row_int]
-        region = convert_indices_to_regions(roi_idlist[row_int])
+    for id, obsname in enumerate(roi_adata.obs_names):  # works for Well ROItable
+
+        if table_type == "masking_roi_table":
+            row_int = int(obsname)
+            label_str = roi_labels[row_int]
+            region = convert_indices_to_regions(roi_idlist[row_int])
+
+        elif table_type == "roi_table":
+            label_str = obsname
+            region = convert_indices_to_regions(roi_idlist[id])
 
         # Load label image of object to expand as numpy array
         seg = load_region(
@@ -217,20 +217,11 @@ def expand_labels(
             compute=compute,
         )
 
-        if group_by is not None:
+        if table_type == "masking_roi_table":
             # Mask objects by parent group_by object
             seg, parent_mask = mask_by_parent_object(
-                seg, groupby_dask, groupby_idlist, row_int, label_str
+                seg, mask_dask, mask_idlist, row_int, label_str
             )
-        else:
-            # Check that label exists in object
-            if float(label_str) not in seg:
-                raise ValueError(
-                    f"Object ID {label_str} does not exist in loaded segmentation image. Does input ROI "
-                    f"table match label map?"
-                )
-            # Select label that corresponds to current object, set all other objects to 0
-            seg[seg != float(label_str)] = 0
 
         ##############
         # Perform label expansion  ###
@@ -247,7 +238,7 @@ def expand_labels(
             expansion_distance_image_based=calculate_image_based_expansion_distance,
         )
 
-        if mask_expansion_by_parent and group_by is not None:
+        if mask_output and table_type == "masking_roi_table":
             seg_expanded = seg_expanded * parent_mask
 
         logger.info(f"Expanded label(s) in region {label_str} by {distance} pixels.")
