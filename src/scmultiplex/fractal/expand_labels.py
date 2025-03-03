@@ -56,7 +56,9 @@ def expand_labels(
     within image (e.g. by specifying a segmentation masking ROI table) as input roi_table. In the later case, a common
     use case would be to expand in 3D nuclei of each organoid in dataset.
 
-    Output: the expanded label image is saved as a new label in zarr, with name {label_name_to_expand}_expanded.
+    Output: the expanded label image is saved as a new label in zarr, with name {label_name_to_expand}_expanded. The
+    new ROI table for the expanded label image is saved as a masking ROI table, with name
+    {label_name_to_expand}_expanded_ROI_table.
 
     Args:
         zarr_url: Path or url to the individual OME-Zarr image to be processed.
@@ -264,8 +266,8 @@ def expand_labels(
         ##############
 
         # Store labels as new label map in zarr
-        # Note that pixels of overlap in the case where two labelmaps are touching are overwritten by the last
-        # written object
+        # IF mask_output=False and expanded labels extend beyond parent label, note that pixels of overlap between
+        # children of neighboring parents will be overwritten by the last written object.
 
         save_new_label_with_overlap(
             seg_expanded,
