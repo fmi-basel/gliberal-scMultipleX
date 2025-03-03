@@ -6,6 +6,7 @@
 #                                                                            #
 ##############################################################################
 
+import dask.array as da
 import numpy as np
 import pandas as pd
 from scipy.ndimage import binary_erosion, binary_fill_holes
@@ -421,3 +422,31 @@ def select_label(seg, label_str):
     seg[seg > 0] = 1
 
     return seg
+
+
+def simple_fuse_labels(label_dask, connectivity):
+    dtype = label_dask.dtype
+    dtype_max = np.iinfo(dtype).max
+
+    # Set all values > 0 to True
+    binary_array = label_dask > 0  # binary boolean array
+    binary_numpy = binary_array.compute()
+
+    # Default connectivity is maximum based on array dimensions
+    if connectivity is None:
+        connectivity = binary_numpy.ndim
+
+    # Apply skimage label function
+    fused_numpy, label_count = label(
+        binary_numpy, background=0, return_num=True, connectivity=connectivity
+    )
+
+    if label_count > dtype_max:
+        raise ValueError(
+            f"Number of identified labels {label_count} exceeds {dtype} maximum of {dtype_max}."
+        )
+
+    # Convert back to dask to save on disk with same chunk sizes and dtype as input label map
+    fused_dask = da.from_array(fused_numpy, chunks=label_dask.chunksize).astype(dtype)
+
+    return fused_numpy, fused_dask, label_count, connectivity
