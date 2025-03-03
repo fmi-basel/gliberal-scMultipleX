@@ -30,9 +30,11 @@ from fractal_tasks_core.roi import (
     check_valid_ROI_indices,
     convert_indices_to_regions,
     convert_ROI_table_to_indices,
+    create_roi_table_from_df_list,
     empty_bounding_box_table,
     load_region,
 )
+from fractal_tasks_core.tables import write_table
 from fractal_tasks_core.tasks._zarr_utils import _update_well_metadata
 from fractal_tasks_core.utils import _split_well_path_image_path
 from zarr.errors import ArrayNotFoundError
@@ -544,3 +546,35 @@ def copy_folder_from_zarrurl(origin_zarr_url, output_zarr_url, folder_name):
             f"Folder name {folder_name} does not exist in origin zarr, skipping copying"
         )
     return
+
+
+def save_masking_roi_table_from_df_list(
+    bbox_dataframe_list,
+    zarr_url,
+    output_roi_table_name,
+    output_label_name,
+    overwrite=True,
+):
+    """Save new ROI table to zarr, returns the anndata object bbox_table which is saved to disk."""
+    bbox_table = create_roi_table_from_df_list(bbox_dataframe_list)
+    # Write to zarr group
+    image_group = zarr.group(zarr_url)
+    logger.info(
+        f"Now writing masking bounding-box ROI table with {bbox_table.shape[0]} objects to "
+        f"{zarr_url}/tables/{output_roi_table_name}"
+    )
+
+    table_attrs = {
+        "type": "masking_roi_table",
+        "region": {"path": f"../labels/{output_label_name}"},
+        "instance_key": "label",
+    }
+
+    write_table(
+        image_group,
+        output_roi_table_name,
+        bbox_table,
+        overwrite=overwrite,
+        table_attrs=table_attrs,
+    )
+    return bbox_table

@@ -9,14 +9,20 @@ import logging
 from typing import Any, Union
 
 import numpy as np
+import pandas as pd
 from fractal_tasks_core.pyramids import build_pyramid
-from fractal_tasks_core.roi import convert_indices_to_regions, load_region
+from fractal_tasks_core.roi import (
+    array_to_bounding_box_table,
+    convert_indices_to_regions,
+    load_region,
+)
 from pydantic import validate_call
 
 from scmultiplex.fractal.fractal_helper_functions import (
     get_zattrs,
     initialize_new_label,
     load_label_rois,
+    save_masking_roi_table_from_df_list,
     save_new_label_with_overlap,
 )
 from scmultiplex.meshing.FilterFunctions import mask_by_parent_object
@@ -143,7 +149,7 @@ def expand_labels(
     # Save with same dimensions as child labels from which they are calculated
 
     output_label_name = f"{label_name_to_expand}_expanded"
-    # output_roi_table_name = f"{label_name_to_expand}_ROI_table_expanded"
+    output_roi_table_name = f"{output_label_name}_ROI_table"
 
     shape = label_dask.shape
     chunks = label_dask.chunksize
@@ -163,10 +169,10 @@ def expand_labels(
     )
 
     # initialize new ROI table
-    # bbox_dataframe_list = []
+    bbox_dataframe_list = []
 
     ##############
-    # Optionally filter children by parent mask ###
+    # Optionally load parent mask to filter children by parent ###
     ##############
 
     if masking_label_map:
@@ -199,7 +205,7 @@ def expand_labels(
     )
 
     # For each object in input ROI table...
-    for id, obsname in enumerate(roi_adata.obs_names):  # works for Well ROItable
+    for i, obsname in enumerate(roi_adata.obs_names):
 
         if table_type == "masking_roi_table":
             row_int = int(obsname)
@@ -208,7 +214,7 @@ def expand_labels(
 
         elif table_type == "roi_table":
             label_str = obsname
-            region = convert_indices_to_regions(roi_idlist[id])
+            region = convert_indices_to_regions(roi_idlist[i])
 
         # Load label image of object to expand as numpy array
         seg = load_region(
@@ -241,10 +247,20 @@ def expand_labels(
         if mask_output and table_type == "masking_roi_table":
             seg_expanded = seg_expanded * parent_mask
 
+        origin_zyx = tuple(s.start for s in region)
+
+        bbox_df = array_to_bounding_box_table(
+            seg_expanded,
+            label_pixmeta,
+            origin_zyx=origin_zyx,
+        )
+
+        bbox_dataframe_list.append(bbox_df)
+
         logger.info(f"Expanded label(s) in region {label_str} by {distance} pixels.")
 
         ##############
-        # Save labels and make ROI table ###
+        # Save labels ###
         ##############
 
         # Store labels as new label map in zarr
@@ -260,6 +276,9 @@ def expand_labels(
             compute,
         )
 
+    ##############
+    # Build pyramid and save new masking ROI table of expanded labels ###
+    ##############
     # Starting from on-disk highest-resolution data, build and write to disk a pyramid of coarser levels
     build_pyramid(
         zarrurl=f"{zarr_url}/labels/{output_label_name}",
@@ -274,7 +293,21 @@ def expand_labels(
         f"Built a pyramid for the {zarr_url}/labels/{output_label_name} label image"
     )
 
-    # TODO: save ROI table
+    bbox_table = save_masking_roi_table_from_df_list(
+        bbox_dataframe_list,
+        zarr_url,
+        output_roi_table_name,
+        output_label_name,
+        overwrite=True,
+    )
+
+    logger.debug(
+        pd.DataFrame(
+            bbox_table.X,
+            index=bbox_table.obs_vector("label"),
+            columns=bbox_table.var_names,
+        )
+    )
 
     logger.info(f"End expand_labels task for {zarr_url}/labels/{label_name_to_expand}")
 
