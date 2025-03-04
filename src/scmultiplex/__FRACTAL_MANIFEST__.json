@@ -1290,15 +1290,50 @@
     },
     {
       "name": "scMultiplex Expand Labels",
+      "category": "Image Processing",
       "tags": [
         "2D",
         "3D"
       ],
       "docs_info": "### Purpose\n- Expands segmented **labels** in 2D or 3D images **without overlap**.\n- Supports expansion by a fixed pixel distance or dynamically based on **label size**.\n- Optionally masks expanded labels using **parent objects** to prevent spillover.\n- Outputs an expanded label image and preserves non-overlapping object boundaries.\n\n### Outputs\n- A new **expanded label image** saved with an `_expanded` suffix.\n\n### Limitations\n- If masking by parent is enabled, the parent object label image must be provided.\n- Expansion beyond object boundaries may be clipped, depending on the surrounding labels and image dimensions.\n",
+      "executable_non_parallel": "fractal/init_select_many_rounds.py",
       "executable_parallel": "fractal/expand_labels.py",
       "meta_parallel": {
         "cpus_per_task": 4,
         "mem": 16000
+      },
+      "args_schema_non_parallel": {
+        "additionalProperties": false,
+        "properties": {
+          "zarr_urls": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Zarr Urls",
+            "type": "array",
+            "description": "List of paths or urls to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "zarr_dir": {
+            "title": "Zarr Dir",
+            "type": "string",
+            "description": "path of the directory where the new OME-Zarrs will be created. Not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "select_acquisitions": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Select Acquisitions",
+            "type": "array",
+            "description": "List of rounds to which correction should be applied, list of integers."
+          }
+        },
+        "required": [
+          "zarr_urls",
+          "zarr_dir",
+          "select_acquisitions"
+        ],
+        "type": "object",
+        "title": "InitSelectManyRounds"
       },
       "args_schema_parallel": {
         "additionalProperties": false,
@@ -1306,7 +1341,7 @@
           "zarr_url": {
             "title": "Zarr Url",
             "type": "string",
-            "description": "Path or url to the individual OME-Zarr image to be processed. Refers to the zarr_url of the reference acquisition. (standard argument for Fractal tasks, managed by Fractal server)."
+            "description": "Path or url to the individual OME-Zarr image to be processed."
           },
           "label_name_to_expand": {
             "default": "nuc",
@@ -1314,21 +1349,27 @@
             "type": "string",
             "description": "Label name of segmentation to be expanded."
           },
-          "group_by": {
-            "title": "Group By",
-            "type": "string",
-            "description": "Label name of segmentated objects that are parents of label_name. If None (default), no grouping is applied and expansion is calculated for the input object (label_name_to_expand). Instead, if a group_by label is specified, the label_name_to_expand objects will be masked and grouped by this object. For example, when group_by = 'org', the nuclear segmentation is masked by the organoid parent and all nuclei belonging to the parent are loaded as a label image."
-          },
           "roi_table": {
             "default": "org_ROI_table_linked",
             "title": "Roi Table",
             "type": "string",
-            "description": "Name of the ROI table used to iterate over objects and load object regions. If group_by is passed, this is the ROI table for the group_by objects, e.g. org_ROI_table."
+            "description": "Name of the ROI table used to iterate over objects and load object regions. If a table of type \"roi_table\" is passed, e.g. well_ROI_table, all objects for each region in the table will be loaded and expanded simultaneously. If a table of type \"masking_roi_table\" is passed, e.g. a segmentation ROI table, the task iterates over these objects and loads only the children (i.e. label_name_to_expand) that belong to the parent object."
+          },
+          "masking_label_map": {
+            "title": "Masking Label Map",
+            "type": "string",
+            "description": "Label name of segmented objects that are parents of label_name. This input is mandatory if a roi table of type \"masking_roi_table\" is provided. It is the name of the label map that corresponds to the input ROI table. The masking_label_map will be used to mask label_name_to_expand objects, to only select children belonging to given parent."
+          },
+          "mask_output": {
+            "default": true,
+            "title": "Mask Output",
+            "type": "boolean",
+            "description": "If True, expanded label is masked by parent label. Only used if masking_label_map is provided. Recommended to set as True, to avoid overwriting of children labels between neighboring parents. However, it may lead to expanded results to be cropped by parent mask; in this case, the parent mask can first be expanded."
           },
           "expand_by_pixels": {
             "title": "Expand By Pixels",
             "type": "integer",
-            "description": "Integer value for pixel distance to expand by."
+            "description": "Default expansion parameter. Integer value for pixel distance to expand by."
           },
           "calculate_image_based_expansion_distance": {
             "default": false,
@@ -1339,13 +1380,7 @@
           "expand_by_factor": {
             "title": "Expand By Factor",
             "type": "number",
-            "description": "Multiplier that specifies pixels by which to expand each label. Float in range [0, 1 or higher], e.g. 0.2 means that 20% of mean equivalent diameter of labels in region is used."
-          },
-          "mask_expansion_by_parent": {
-            "default": false,
-            "title": "Mask Expansion By Parent",
-            "type": "boolean",
-            "description": "If True, final expanded labels are masked by group_by object. Recommended to set to True for child/parent masking."
+            "description": "Only used if calculate_image_based_expansion_distance is True. Multiplier that specifies pixels by which to expand each label. Float in range [0, 1 or higher], e.g. 0.2 means that 20% of mean equivalent diameter of labels in region is used."
           }
         },
         "required": [
@@ -1654,6 +1689,80 @@
         ],
         "type": "object",
         "title": "ApplyZIlluminationCorrection"
+      },
+      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+    },
+    {
+      "name": "scMultiplex Fuse Touching Labels",
+      "category": "Image Processing",
+      "tags": [
+        "2D"
+      ],
+      "docs_info": "### Purpose\n- Fuse touching labels in segmentation images, in 2D or 3D. Connected components are identified during labeling\n    based on the connectivity argument. For a more detailed explanation of 1- or 2- connectivity, see documentation\n    of skimage.measure.label() function. When set to None (default), full connectivity (ndim of input array) is used.\n\n- Input is segmentation image with 0 value for background. Anything above 0 is assumed to be a labeled object.\n    Touching labels are labeled in numerically increasing order starting from 1 to n, where n is the number of\n    connected components (objects) identified.\n\n- This task has been tested for fusion of 2D MIP segmentation. Since fusion must occur on the full well numpy\n    array loaded into memory, performance may be poor for large 3D arrays.\n\n### Outputs\n- The fused label image is saved as a new label in zarr, with name {label_name_to_fuse}_fused.\n- The new ROI table for the fused label image is saved as a masking ROI table, with name\n    {label_name_to_fuse}_fused_ROI_table.\n",
+      "executable_non_parallel": "fractal/init_select_many_rounds.py",
+      "executable_parallel": "fractal/fuse_touching_labels.py",
+      "meta_parallel": {
+        "cpus_per_task": 4,
+        "mem": 16000
+      },
+      "args_schema_non_parallel": {
+        "additionalProperties": false,
+        "properties": {
+          "zarr_urls": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Zarr Urls",
+            "type": "array",
+            "description": "List of paths or urls to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "zarr_dir": {
+            "title": "Zarr Dir",
+            "type": "string",
+            "description": "path of the directory where the new OME-Zarrs will be created. Not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "select_acquisitions": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Select Acquisitions",
+            "type": "array",
+            "description": "List of rounds to which correction should be applied, list of integers."
+          }
+        },
+        "required": [
+          "zarr_urls",
+          "zarr_dir",
+          "select_acquisitions"
+        ],
+        "type": "object",
+        "title": "InitSelectManyRounds"
+      },
+      "args_schema_parallel": {
+        "additionalProperties": false,
+        "properties": {
+          "zarr_url": {
+            "title": "Zarr Url",
+            "type": "string",
+            "description": "Missing description"
+          },
+          "label_name_to_fuse": {
+            "default": "org",
+            "title": "Label Name To Fuse",
+            "type": "string",
+            "description": "Missing description"
+          },
+          "connectivity": {
+            "title": "Connectivity",
+            "type": "integer",
+            "description": "Missing description"
+          }
+        },
+        "required": [
+          "zarr_url"
+        ],
+        "type": "object",
+        "title": "FuseTouchingLabels"
       },
       "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
     }

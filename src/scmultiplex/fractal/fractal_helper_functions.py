@@ -30,11 +30,14 @@ from fractal_tasks_core.roi import (
     check_valid_ROI_indices,
     convert_indices_to_regions,
     convert_ROI_table_to_indices,
+    create_roi_table_from_df_list,
     empty_bounding_box_table,
     load_region,
 )
+from fractal_tasks_core.tables import write_table
 from fractal_tasks_core.tasks._zarr_utils import _update_well_metadata
 from fractal_tasks_core.utils import _split_well_path_image_path
+from zarr.errors import ArrayNotFoundError
 
 from scmultiplex.meshing.MeshFunctions import (
     export_stl_polydata,
@@ -45,8 +48,11 @@ from scmultiplex.meshing.MeshFunctions import (
 logger = logging.getLogger(__name__)
 
 
-def read_table_and_attrs(zarr_url: Path, roi_table):
-    table_url = zarr_url / f"tables/{roi_table}"
+def read_table_and_attrs(zarr_url, roi_table):
+    if isinstance(zarr_url, Path):
+        table_url = zarr_url / f"tables/{roi_table}"
+    else:
+        table_url = f"{zarr_url}/tables/{roi_table}"
     table = ad.read_zarr(table_url)
     table_attrs = get_zattrs(table_url)
     return table, table_attrs
@@ -181,12 +187,25 @@ def extract_acq_info(zarr_url):
 
 
 def initialize_new_label(
-    zarr_url, shape, chunks, label_dtype, inherit_from_label, output_label_name, logger
+    zarr_url,
+    shape,
+    chunks,
+    label_dtype,
+    inherit_from_label,
+    output_label_name,
+    logger,
 ):
     store = zarr.storage.FSStore(f"{zarr_url}/labels/{output_label_name}/0")
 
-    if len(shape) != 3 or len(chunks) != 3 or shape[0] == 1:
-        raise ValueError("Expecting 3D image")
+    if len(shape) != 3 or len(chunks) != 3:
+        raise ValueError(
+            "Array must be 3D; if input image is 2D, the 3rd dimension must be set to 1. "
+        )
+
+    if shape[0] == 1:
+        logger.info("Initializing 2D label image array.")
+    else:
+        logger.info("Initializing 3D label image array.")
 
     # Add metadata to labels group
     # Get the label_attrs correctly
@@ -367,7 +386,14 @@ def load_label_rois(
 
     # Lazily load zarr array for reference cycle
     # load well image as dask array e.g. for nuclear segmentation
-    label_dask = da.from_zarr(f"{zarr_url}/labels/{label_name}/{level}")
+    try:
+        label_dask = da.from_zarr(f"{zarr_url}/labels/{label_name}/{level}")
+    except ArrayNotFoundError as e:
+        logger.warning(
+            "Label not found, exit from the task for this zarr url.\n"
+            f"Original error: {str(e)}"
+        )
+        return {}
 
     # Read ROIs of objects
     roi_adata = ad.read_zarr(f"{zarr_url}/tables/{roi_table}")
@@ -520,3 +546,35 @@ def copy_folder_from_zarrurl(origin_zarr_url, output_zarr_url, folder_name):
             f"Folder name {folder_name} does not exist in origin zarr, skipping copying"
         )
     return
+
+
+def save_masking_roi_table_from_df_list(
+    bbox_dataframe_list,
+    zarr_url,
+    output_roi_table_name,
+    output_label_name,
+    overwrite=True,
+):
+    """Save new ROI table to zarr, returns the anndata object bbox_table which is saved to disk."""
+    bbox_table = create_roi_table_from_df_list(bbox_dataframe_list)
+    # Write to zarr group
+    image_group = zarr.group(zarr_url)
+    logger.info(
+        f"Now writing masking bounding-box ROI table with {bbox_table.shape[0]} objects to "
+        f"{zarr_url}/tables/{output_roi_table_name}"
+    )
+
+    table_attrs = {
+        "type": "masking_roi_table",
+        "region": {"path": f"../labels/{output_label_name}"},
+        "instance_key": "label",
+    }
+
+    write_table(
+        image_group,
+        output_roi_table_name,
+        bbox_table,
+        overwrite=overwrite,
+        table_attrs=table_attrs,
+    )
+    return bbox_table

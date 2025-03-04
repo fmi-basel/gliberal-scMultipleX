@@ -5,6 +5,8 @@
 # Author: Nicole Repina              <nicole.repina@fmi.ch>                  #
 #                                                                            #
 ##############################################################################
+import logging
+
 import numpy as np
 import pandas as pd
 from fractal_tasks_core.roi import convert_indices_to_regions, load_region
@@ -14,6 +16,7 @@ from skimage.measure import regionprops_table
 from scmultiplex.linking.NucleiLinkingFunctions import calculate_quantiles
 
 # warnings.filterwarnings("ignore")
+logger = logging.getLogger(__name__)
 
 
 def filter_small_sizes_per_round(props_numpy, column=-1, threshold=0.05):
@@ -65,10 +68,9 @@ def calculate_mean_volume(seg):
     return size_mean
 
 
-def mask_by_parent_object(
-    seg, parent_dask, parent_idlist_parentmeta, row_int, parent_label_id
-):
+def get_parent_mask(parent_dask, parent_idlist_parentmeta, row_int, parent_label_id):
     """
+    Returns parent mask.
     Mask input numpy array (seg) by parent numpy array (region loaded from dask_parent)
     Assumes seg array already loaded into memory, and here load matching organoid array to perform multiplication
     Mask is the parent object loaded from parent zarr array, where
@@ -107,18 +109,37 @@ def mask_by_parent_object(
         region=convert_indices_to_regions(parent_idlist_parentmeta[row_int]),
         compute=True,
     )
-    # if object segmentation was run at a different level than nuclear segmentation,
-    # need to upscale arrays to match shape
-    if parent.shape != seg.shape:
-        parent = upscale_array(
-            array=parent, target_shape=seg.shape, pad_with_zeros=False
-        )
 
     # mask nuclei by parent object
     parent_mask = np.zeros_like(parent)
     parent_mask[
         parent == int(parent_label_id)
     ] = 1  # select only current object and binarize object mask
+
+    return parent_mask
+
+
+def mask_by_parent_object(
+    seg, parent_dask, parent_idlist_parentmeta, row_int, parent_label_id
+):
+    """
+    Mask input numpy array (seg) by parent numpy array (region loaded from dask_parent)
+    Assumes seg array already loaded into memory, and here load matching organoid array to perform multiplication
+    Mask is the parent object loaded from parent zarr array, where
+        parent_idlist_parentmeta is output of convert_ROI_table_to_indices function
+    """
+
+    parent_mask = get_parent_mask(
+        parent_dask, parent_idlist_parentmeta, row_int, parent_label_id
+    )
+    # if object segmentation was run at a different level than nuclear segmentation,
+    # need to upscale arrays to match shape
+    if parent_mask.shape != seg.shape:
+        parent_mask = upscale_array(
+            array=parent_mask, target_shape=seg.shape, pad_with_zeros=False
+        )
+        logger.info("Upscaling parent mask to match segmentation shape.")
+
     seg_masked = seg * parent_mask
 
     return seg_masked, parent_mask
