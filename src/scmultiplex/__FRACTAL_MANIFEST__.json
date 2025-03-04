@@ -1691,6 +1691,80 @@
         "title": "ApplyZIlluminationCorrection"
       },
       "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+    },
+    {
+      "name": "scMultiplex Fuse Touching Labels",
+      "category": "Image Processing",
+      "tags": [
+        "2D"
+      ],
+      "docs_info": "### Purpose\n- Fuse touching labels in segmentation images, in 2D or 3D. Connected components are identified during labeling\n    based on the connectivity argument. For a more detailed explanation of 1- or 2- connectivity, see documentation\n    of skimage.measure.label() function. When set to None (default), full connectivity (ndim of input array) is used.\n\n- Input is segmentation image with 0 value for background. Anything above 0 is assumed to be a labeled object.\n    Touching labels are labeled in numerically increasing order starting from 1 to n, where n is the number of\n    connected components (objects) identified.\n\n- This task has been tested for fusion of 2D MIP segmentation. Since fusion must occur on the full well numpy\n    array loaded into memory, performance may be poor for large 3D arrays.\n\n### Outputs\n- The fused label image is saved as a new label in zarr, with name {label_name_to_fuse}_fused.\n- The new ROI table for the fused label image is saved as a masking ROI table, with name\n    {label_name_to_fuse}_fused_ROI_table.\n",
+      "executable_non_parallel": "fractal/init_select_many_rounds.py",
+      "executable_parallel": "fractal/fuse_touching_labels.py",
+      "meta_parallel": {
+        "cpus_per_task": 4,
+        "mem": 16000
+      },
+      "args_schema_non_parallel": {
+        "additionalProperties": false,
+        "properties": {
+          "zarr_urls": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Zarr Urls",
+            "type": "array",
+            "description": "List of paths or urls to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "zarr_dir": {
+            "title": "Zarr Dir",
+            "type": "string",
+            "description": "path of the directory where the new OME-Zarrs will be created. Not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "select_acquisitions": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Select Acquisitions",
+            "type": "array",
+            "description": "List of rounds to which correction should be applied, list of integers."
+          }
+        },
+        "required": [
+          "zarr_urls",
+          "zarr_dir",
+          "select_acquisitions"
+        ],
+        "type": "object",
+        "title": "InitSelectManyRounds"
+      },
+      "args_schema_parallel": {
+        "additionalProperties": false,
+        "properties": {
+          "zarr_url": {
+            "title": "Zarr Url",
+            "type": "string",
+            "description": "Missing description"
+          },
+          "label_name_to_fuse": {
+            "default": "org",
+            "title": "Label Name To Fuse",
+            "type": "string",
+            "description": "Missing description"
+          },
+          "connectivity": {
+            "title": "Connectivity",
+            "type": "integer",
+            "description": "Missing description"
+          }
+        },
+        "required": [
+          "zarr_url"
+        ],
+        "type": "object",
+        "title": "FuseTouchingLabels"
+      },
+      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
     }
   ],
   "has_args_schemas": true,

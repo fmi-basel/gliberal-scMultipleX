@@ -147,4 +147,13 @@ TASK_LIST = [
         input_types=dict(z_illum_corrected=False, is_3D=True),
         output_types=dict(z_illum_corrected=True, is_3D=True),
     ),
+    CompoundTask(
+        name="scMultiplex Fuse Touching Labels",
+        executable_init="fractal/init_select_many_rounds.py",
+        executable="fractal/fuse_touching_labels.py",
+        meta={"cpus_per_task": 4, "mem": 16000},
+        category="Image Processing",
+        tags=["2D"],
+        docs_info="file:task_info/fuse_touching_labels.md",
+    ),
 ]
