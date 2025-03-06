@@ -6,11 +6,6 @@
 #                                                                            #
 ##############################################################################
 
-
-"""
-Calculate full 3D object segmentation after 2D MIP-based segmentation using intensity thresholding of
-raw intensity image(s).
-"""
 import logging
 from typing import Any, Optional
 
@@ -147,9 +142,8 @@ def segment_by_intensity_threshold(
         expand_by_pixels: Expand initial threshold mask by this number of pixels and fill holes. Mask is subsequently
             dilated and returned to original size. This step serves to fill holes in dim regions. Higher values lead
             to more holes filled, but neighboring objects or debris may become fused.
-        contour_value_outer: Float in range [0,1]. Image values below this threshold are set to 0 after
-            Gaussian blur using gaus_sigma_thresh_img. Higher threshold values result in tighter fit of edge mask
-            to intensity image.
+        contour_value_outer: Float in range [0,1]. This is the value used to draw contour line around object.
+            Higher values result in tighter fit of edge mask to intensity image.
         linear_z_illumination_correction: Set to True if linear z illumination correction is desired. Iterate over
             z-slices to apply correction.
         start_z_slice: Z-slice number at which to begin to apply linear correction, e.g. slice 40 if
@@ -157,6 +151,11 @@ def segment_by_intensity_threshold(
         m_slope: Slope factor of illumination correction. Higher values have more extreme correction. This value sets
             the multiplier for a given z-slice by formula m_slope * (i - start_z_slice) + 1, where i is the current
             z-slice in iterator.
+        segment_lumen: if True, lumen (assumed to be negative space in object) will also be segmented. In this case,
+            three label maps are output: outer contour (epithelial surface) with holes filled, inner contour (lumen),
+            and the epithelial mask (difference between outer and inner regions).
+        contour_value_inner: Float in range [0,1]. This is the value used to draw contour line around lumen of object.
+            Higher values result in tighter fit of edge mask to intensity image.
     """
 
     logger.info(
@@ -238,20 +237,20 @@ def segment_by_intensity_threshold(
     ##############
     if segment_lumen:
         output_label_names = [
-            f"{label_name}_contour",
-            f"{label_name}_lumen",
-            f"{label_name}_epi",
+            f"{label_name}_outer",
+            f"{label_name}_inner",
+            f"{label_name}_diff",
         ]
         output_roi_names = [
-            f"{label_name}_contour_ROI_table",
-            f"{label_name}_lumen_ROI_table",
-            f"{label_name}_epi_ROI_table",
+            f"{label_name}_outer_ROI_table",
+            f"{label_name}_inner_ROI_table",
+            f"{label_name}_diff_ROI_table",
         ]
         bbox_df_lists = [[], [], []]
 
     else:
-        output_label_names = [f"{label_name}_contour"]
-        output_roi_names = [f"{label_name}_contour_ROI_table"]
+        output_label_names = [f"{label_name}_outer"]
+        output_roi_names = [f"{label_name}_outer_ROI_table"]
         bbox_df_lists = [[]]
 
     shape = label_dask.shape
