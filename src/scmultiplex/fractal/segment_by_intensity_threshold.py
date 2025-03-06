@@ -73,11 +73,12 @@ def segment_by_intensity_threshold(
     gaussian_sigma_threshold_image: float = 20,
     small_objects_diameter: float = 30,
     expand_by_pixels: int = 20,
-    canny_threshold: float = 0.4,
+    contour_value_outer: float = 0.8,
     linear_z_illumination_correction: bool = False,
     start_z_slice: int = 40,
     m_slope: float = 0.015,
     segment_lumen: bool = False,
+    contour_value_inner: float = 0.8,
 ) -> dict[str, Any]:
     """
     Calculate full 3D object segmentation after 2D MIP-based segmentation using intensity thresholding of
@@ -146,7 +147,7 @@ def segment_by_intensity_threshold(
         expand_by_pixels: Expand initial threshold mask by this number of pixels and fill holes. Mask is subsequently
             dilated and returned to original size. This step serves to fill holes in dim regions. Higher values lead
             to more holes filled, but neighboring objects or debris may become fused.
-        canny_threshold: Float in range [0,1]. Image values below this threshold are set to 0 after
+        contour_value_outer: Float in range [0,1]. Image values below this threshold are set to 0 after
             Gaussian blur using gaus_sigma_thresh_img. Higher threshold values result in tighter fit of edge mask
             to intensity image.
         linear_z_illumination_correction: Set to True if linear z illumination correction is desired. Iterate over
@@ -358,7 +359,8 @@ def segment_by_intensity_threshold(
             gaussian_sigma_threshold_image,
             small_objects_diameter,
             expand_by_pixels,
-            canny_threshold,
+            contour_value_outer,
+            contour_value_inner,
             pixmeta_raw,
             seg,
             intensity_threshold,

@@ -118,7 +118,9 @@ def anisotropic_gaussian_blur(seg_binary, sigma, pixmeta, convert_to_8bit=True):
     return blurred, anisotropic_sigma
 
 
-def find_edges(cleaned, contour_value, min_size, segment_lumen=False):
+def find_edges(
+    cleaned, contour_value_outer, contour_value_inner, min_size, segment_lumen=False
+):
     """
     Find edges of input 3D image by z-slice
     """
@@ -127,9 +129,6 @@ def find_edges(cleaned, contour_value, min_size, segment_lumen=False):
 
     if segment_lumen:
         lumen_stack = np.zeros_like(cleaned)
-
-    # Values below Canny threshold are set to 0. This is similar to setting a contour value.
-    cleaned[cleaned < contour_value] = 0
 
     # Count the number of zslices that require padding
     padded_zslice_count = 0
@@ -156,25 +155,31 @@ def find_edges(cleaned, contour_value, min_size, segment_lumen=False):
 
         outer = np.zeros_like(zslice)
 
-        contours = find_contours(zslice, level=contour_value, fully_connected="high")
+        outer_contours = find_contours(
+            zslice, level=contour_value_outer, fully_connected="high"
+        )
         # if any contours are detected...
-        if contours:
+        if outer_contours:
             # Sort contours by length (assuming the two longest ones are the ones we need)
-            contours = sorted(contours, key=len, reverse=True)
+            outer_contours = sorted(outer_contours, key=len, reverse=True)
 
             # assume largest contour is contour of outer epithelium
-            if len(contours) > 0:
-                outer_contour = contours[0]
+            if len(outer_contours) > 0:
+                outer_contour = outer_contours[0]
                 # identify pixels belonging to inside of contour
                 rr, cc = polygon(
                     outer_contour[:, 0], outer_contour[:, 1], shape=zslice.shape
                 )
                 outer[rr, cc] = 1  # Set pixels inside the polygon to 1
 
-            # and that second-largest contour is lumen
-            if segment_lumen and len(contours) > 1:
+        if segment_lumen:
+            inner_contours = find_contours(
+                zslice, level=contour_value_inner, fully_connected="high"
+            )
+            # assume second-largest contour is lumen
+            if len(inner_contours) > 1:
                 lumen = np.zeros_like(zslice)
-                inner_contour = contours[1]
+                inner_contour = inner_contours[1]
                 # identify pixels belonging to inside of contour
                 rr, cc = polygon(
                     inner_contour[:, 0], inner_contour[:, 1], shape=zslice.shape
@@ -200,6 +205,7 @@ def find_edges(cleaned, contour_value, min_size, segment_lumen=False):
 
     if segment_lumen:
         lumen_stack = (lumen_stack * 255).astype(np.uint8)
+        # TODO remove hard-coded size factor here; allowing lumen debris to be 20x smaller than small object size
         lumen_stack = label(remove_small_objects(lumen_stack, min_size / 20))
         return outer_stack, lumen_stack, padded_zslice_count
 
@@ -395,7 +401,8 @@ def run_thresholding(
     gaus_sigma_thresh_img,
     small_objects_diameter,
     expand_by_pixel,
-    canny_threshold,
+    contour_value_outer,
+    contour_value_inner,
     pixmeta_raw,
     seg,
     intensity_threshold,
@@ -445,7 +452,8 @@ def run_thresholding(
 
         contour, lumen, padded_zslice_count = find_edges(
             cleaned,
-            canny_threshold,
+            contour_value_outer,
+            contour_value_inner,
             small_objects_3dthreshold,
             segment_lumen=segment_lumen,
         )
@@ -474,7 +482,8 @@ def run_thresholding(
     else:
         contour, padded_zslice_count = find_edges(
             cleaned,
-            canny_threshold,
+            contour_value_outer,
+            contour_value_inner,
             small_objects_3dthreshold,
             segment_lumen=segment_lumen,
         )
