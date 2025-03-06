@@ -12,7 +12,6 @@ import pandas as pd
 from scipy.ndimage import binary_erosion, binary_fill_holes
 from skimage.draw import polygon
 from skimage.exposure import rescale_intensity
-from skimage.feature import canny
 from skimage.filters import gaussian, threshold_otsu
 from skimage.measure import find_contours, label, regionprops, regionprops_table
 from skimage.morphology import disk, remove_small_objects
@@ -124,7 +123,7 @@ def find_edges(cleaned, contour_value, min_size, segment_lumen=False):
     Find edges of input 3D image by z-slice
     """
     # Initialize empty array
-    edges_canny = np.zeros_like(cleaned)
+    outer_stack = np.zeros_like(cleaned)
 
     if segment_lumen:
         lumen_stack = np.zeros_like(cleaned)
@@ -144,65 +143,67 @@ def find_edges(cleaned, contour_value, min_size, segment_lumen=False):
         # If zslice is empty, skip the zslice
         if np.count_nonzero(zslice) == 0:
             continue
-        else:
-            # Get pixel values at borders of image
-            image_border = load_border_values(zslice)
 
-            # If any values are non-zero, object is touching image edge and thus requires zero-padding
-            # This ensures that Canny filter generates a closed surface
-            if np.any(image_border):
-                zslice = np.pad(zslice, 1)
-                padded_zslice_count += 1
-                padded = True
+        # Get pixel values at borders of image
+        image_border = load_border_values(zslice)
 
-            if segment_lumen:
-                lumen = np.zeros_like(zslice)
-                contours = find_contours(
-                    zslice, level=contour_value, fully_connected="high"
+        # If any values are non-zero, object is touching image edge and thus requires zero-padding
+        # This ensures that Canny filter generates a closed surface
+        if np.any(image_border):
+            zslice = np.pad(zslice, 1)
+            padded_zslice_count += 1
+            padded = True
+
+        outer = np.zeros_like(zslice)
+
+        contours = find_contours(zslice, level=contour_value, fully_connected="high")
+        # if any contours are detected...
+        if contours:
+            # Sort contours by length (assuming the two longest ones are the ones we need)
+            contours = sorted(contours, key=len, reverse=True)
+
+            # assume largest contour is contour of outer epithelium
+            if len(contours) > 0:
+                outer_contour = contours[0]
+                # identify pixels belonging to inside of contour
+                rr, cc = polygon(
+                    outer_contour[:, 0], outer_contour[:, 1], shape=zslice.shape
                 )
-                # if any contours are detected...
-                if contours:
-                    # Sort contours by length (assuming the two longest ones are the ones we need)
-                    contours = sorted(contours, key=len, reverse=True)
+                outer[rr, cc] = 1  # Set pixels inside the polygon to 1
 
-                    # assume largest contour is contour of outer epithelium
-                    # and that second-largest contour is lumen
-                    if len(contours) > 1:
-                        inner_contour = contours[1]
-                        # identify pixels belonging to inside of contour
-                        rr, cc = polygon(
-                            inner_contour[:, 0], inner_contour[:, 1], shape=zslice.shape
-                        )
-                        lumen[rr, cc] = 1  # Set pixels inside the polygon to 1
-                        lumen_found = True
+            # and that second-largest contour is lumen
+            if segment_lumen and len(contours) > 1:
+                lumen = np.zeros_like(zslice)
+                inner_contour = contours[1]
+                # identify pixels belonging to inside of contour
+                rr, cc = polygon(
+                    inner_contour[:, 0], inner_contour[:, 1], shape=zslice.shape
+                )
+                lumen[rr, cc] = 1  # Set pixels inside the polygon to 1
+                lumen_found = True
 
-            # Perform edge detection with Canny filter (see skimage documentation) for outer epithelium
-            edges = canny(zslice)
-            # Fill to generate solid object
-            edges = binary_fill_holes(edges)
+        # Remove padding
+        if padded:
+            outer = remove_border(outer)
+            if lumen_found:
+                lumen = remove_border(lumen)
 
-            # Remove padding
-            if padded:
-                edges = remove_border(edges)
-                if lumen_found:
-                    lumen = remove_border(lumen)
+        outer_stack[i, :, :] = outer
 
-            edges_canny[i, :, :] = edges
-
-            if segment_lumen:
-                lumen_stack[i, :, :] = lumen
+        if lumen_found:
+            lumen_stack[i, :, :] = lumen
 
     # Convert to 8-bit image
-    edges_canny = (edges_canny * 255).astype(np.uint8)
+    outer_stack = (outer_stack * 255).astype(np.uint8)
     # Filter out small objects that are smaller than radius of expansion and convert to labelmap
-    edges_canny = label(remove_small_objects(edges_canny, min_size))
+    outer_stack = label(remove_small_objects(outer_stack, min_size))
 
     if segment_lumen:
         lumen_stack = (lumen_stack * 255).astype(np.uint8)
         lumen_stack = label(remove_small_objects(lumen_stack, min_size / 20))
-        return edges_canny, lumen_stack, padded_zslice_count
+        return outer_stack, lumen_stack, padded_zslice_count
 
-    return edges_canny, padded_zslice_count
+    return outer_stack, padded_zslice_count
 
 
 def filter_by_volume(seg, volume_filter_threshold):
