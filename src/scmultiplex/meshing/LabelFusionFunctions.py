@@ -358,7 +358,7 @@ def run_label_fusion(
 
     blurred, anisotropic_sigma = anisotropic_gaussian_blur(seg_binary, sigma, pixmeta)
     edges_canny, padded_zslice_count = find_edges(
-        blurred, canny_threshold, expandby_pix
+        blurred, canny_threshold, canny_threshold, expandby_pix, segment_lumen=False
     )
 
     # Filter by organoid label image from 2D segmentation (converted to 3D)
