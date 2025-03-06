@@ -269,10 +269,14 @@ def clean_binary_image(
     """
     cleaned = np.zeros_like(image_binary, dtype=np.float64)
 
-    iterations = int(round(expandby_pix / 2))
-
     # Iterate over each zslice in image
     for i, zslice in enumerate(image_binary):
+
+        # Remove small objects prior to expansion
+        zslice = zslice > 0
+        zslice = remove_small_objects(zslice, small_objects_threshold)
+        zslice = zslice.astype(int)
+
         if fill_holes:
             zslice = binary_fill_holes(zslice)
         zslice = expand_labels(
@@ -281,7 +285,8 @@ def clean_binary_image(
         if fill_holes:
             zslice = binary_fill_holes(zslice)
         zslice = binary_erosion(
-            zslice, disk(1), iterations=iterations
+            zslice,
+            disk(expandby_pix),
         )  # dilate mask to original size
         zslice = remove_small_objects(zslice, small_objects_threshold)
         zslice = (zslice * 255).astype(np.uint8)  # convert 0-255
