@@ -86,6 +86,8 @@ def format_roi_table(bbox_dataframe_list):
     Copied from cellpose Fractal task
     Returns anndata to save
     """
+    # Remove empty dataframes
+    bbox_dataframe_list = [df for df in bbox_dataframe_list if not df.empty]
     # Handle the case where `bbox_dataframe_list` is empty (typically
     # because list_indices is also empty)
     if len(bbox_dataframe_list) == 0:
