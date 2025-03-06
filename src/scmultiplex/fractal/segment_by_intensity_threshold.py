@@ -19,7 +19,6 @@ from fractal_tasks_core.roi import (
     load_region,
 )
 from fractal_tasks_core.tables import write_table
-from fractal_tasks_core.tasks.io_models import InitArgsRegistrationConsensus
 from pydantic import validate_call
 
 from scmultiplex.fractal.fractal_helper_functions import (
@@ -47,7 +46,6 @@ def segment_by_intensity_threshold(
     *,
     # Fractal arguments
     zarr_url: str,
-    init_args: InitArgsRegistrationConsensus,
     # Task-specific arguments
     label_name: str = "org",
     roi_table: str = "org_ROI_table",

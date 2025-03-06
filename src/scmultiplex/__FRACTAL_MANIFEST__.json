@@ -678,7 +678,7 @@
         "3D"
       ],
       "docs_info": "### Purpose\n- Performs **full 3D object segmentation** of raw intensity images using intensity thresholding.\n- Combines two intensity channels, applies **Gaussian smoothing** and **Canny edge detection** for refined masks.\n- Filters out debris and neighboring objects by selecting the **largest connected component** within a masked region.\n- Outputs a new 3D segmentation label image and an updated masking ROI table.\n\n### Outputs\n- A **new 3D label image** stored in the dataset, with refined object segmentation.\n- A corresponding **bounding-box ROI table** saved as `{output_label_name}_ROI_table`.\n\n### Limitations\n- Requires pre-segmented 2D MIP-based ROI regions as input for masking.\n- Supports intensity thresholding with either **Otsu's method** or a user-defined threshold.\n- Assumes consistent image resolution and pixel intensities across channels.\n- Regions with extreme intensity variations or overlapping objects may require manual parameter tuning for optimal results.\n",
-      "executable_non_parallel": "fractal/init_select_multiplexing_round.py",
+      "executable_non_parallel": "fractal/init_select_many_rounds.py",
       "executable_parallel": "fractal/segment_by_intensity_threshold.py",
       "meta_non_parallel": {
         "cpus_per_task": 1,
@@ -704,19 +704,22 @@
             "type": "string",
             "description": "path of the directory where the new OME-Zarrs will be created. Not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
           },
-          "selected_acquisition": {
-            "default": 0,
-            "title": "Selected Acquisition",
-            "type": "integer",
-            "description": "Which multiplexing round to select for processing. Uses the OME-NGFF HCS well metadata acquisition keys to find the round."
+          "select_acquisitions": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Select Acquisitions",
+            "type": "array",
+            "description": "List of rounds to which correction should be applied, list of integers."
           }
         },
         "required": [
           "zarr_urls",
-          "zarr_dir"
+          "zarr_dir",
+          "select_acquisitions"
         ],
         "type": "object",
-        "title": "InitSelectMultiplexingRound"
+        "title": "InitSelectManyRounds"
       },
       "args_schema_parallel": {
         "$defs": {
@@ -736,23 +739,6 @@
             },
             "title": "ChannelInputModel",
             "type": "object"
-          },
-          "InitArgsRegistrationConsensus": {
-            "description": "Registration consensus init args.",
-            "properties": {
-              "zarr_url_list": {
-                "items": {
-                  "type": "string"
-                },
-                "title": "Zarr Url List",
-                "type": "array"
-              }
-            },
-            "required": [
-              "zarr_url_list"
-            ],
-            "title": "InitArgsRegistrationConsensus",
-            "type": "object"
           }
         },
         "additionalProperties": false,
@@ -761,11 +747,6 @@
             "title": "Zarr Url",
             "type": "string",
             "description": "Path or url to the individual OME-Zarr image to be processed. Refers to the zarr_url of the reference acquisition. (standard argument for Fractal tasks, managed by Fractal server)."
-          },
-          "init_args": {
-            "$ref": "#/$defs/InitArgsRegistrationConsensus",
-            "title": "Init Args",
-            "description": "Intialization arguments provided by `init_group_by_well_for_multiplexing`. It contains the zarr_url_list listing all the zarr_urls in the same well as the zarr_url of the reference acquisition that are being processed. (standard argument for Fractal tasks, managed by Fractal server)."
           },
           "label_name": {
             "default": "org",
@@ -880,11 +861,11 @@
             "type": "integer",
             "description": "Expand initial threshold mask by this number of pixels and fill holes. Mask is subsequently dilated and returned to original size. This step serves to fill holes in dim regions. Higher values lead to more holes filled, but neighboring objects or debris may become fused."
           },
-          "canny_threshold": {
-            "default": 0.4,
-            "title": "Canny Threshold",
+          "contour_value_outer": {
+            "default": 0.8,
+            "title": "Contour Value Outer",
             "type": "number",
-            "description": "Float in range [0,1]. Image values below this threshold are set to 0 after Gaussian blur using gaus_sigma_thresh_img. Higher threshold values result in tighter fit of edge mask to intensity image."
+            "description": "Float in range [0,1]. This is the value used to draw contour line around object. Higher values result in tighter fit of edge mask to intensity image."
           },
           "linear_z_illumination_correction": {
             "default": false,
@@ -903,11 +884,22 @@
             "title": "M Slope",
             "type": "number",
             "description": "Slope factor of illumination correction. Higher values have more extreme correction. This value sets the multiplier for a given z-slice by formula m_slope * (i - start_z_slice) + 1, where i is the current z-slice in iterator."
+          },
+          "segment_lumen": {
+            "default": false,
+            "title": "Segment Lumen",
+            "type": "boolean",
+            "description": "if True, lumen (assumed to be negative space in object) will also be segmented. In this case, three label maps are output: outer contour (epithelial surface) with holes filled, inner contour (lumen), and the epithelial mask (difference between outer and inner regions)."
+          },
+          "contour_value_inner": {
+            "default": 0.8,
+            "title": "Contour Value Inner",
+            "type": "number",
+            "description": "Float in range [0,1]. This is the value used to draw contour line around lumen of object. Higher values result in tighter fit of edge mask to intensity image."
           }
         },
         "required": [
           "zarr_url",
-          "init_args",
           "channel_1",
           "maximum_channel_1"
         ],
