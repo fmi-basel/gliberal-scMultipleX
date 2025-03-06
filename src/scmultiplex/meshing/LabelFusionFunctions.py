@@ -10,10 +10,11 @@ import dask.array as da
 import numpy as np
 import pandas as pd
 from scipy.ndimage import binary_erosion, binary_fill_holes
+from skimage.draw import polygon
 from skimage.exposure import rescale_intensity
 from skimage.feature import canny
 from skimage.filters import gaussian, threshold_otsu
-from skimage.measure import label, regionprops, regionprops_table
+from skimage.measure import find_contours, label, regionprops, regionprops_table
 from skimage.morphology import disk, remove_small_objects
 from skimage.segmentation import expand_labels
 
@@ -118,23 +119,27 @@ def anisotropic_gaussian_blur(seg_binary, sigma, pixmeta, convert_to_8bit=True):
     return blurred, anisotropic_sigma
 
 
-def find_edges(blurred, canny_threshold, iterations):
+def find_edges(cleaned, contour_value, min_size, segment_lumen=False):
     """
     Find edges of input 3D image by z-slice
     """
     # Initialize empty array
-    edges_canny = np.zeros_like(blurred)
+    edges_canny = np.zeros_like(cleaned)
+
+    if segment_lumen:
+        lumen_stack = np.zeros_like(cleaned)
 
     # Values below Canny threshold are set to 0. This is similar to setting a contour value.
-    blurred[blurred < canny_threshold] = 0
+    cleaned[cleaned < contour_value] = 0
 
     # Count the number of zslices that require padding
     padded_zslice_count = 0
 
     # Iterate over each zslice in image
-    for i, zslice in enumerate(blurred):
+    for i, zslice in enumerate(cleaned):
 
         padded = False
+        lumen_found = False
 
         # If zslice is empty, skip the zslice
         if np.count_nonzero(zslice) == 0:
@@ -150,23 +155,52 @@ def find_edges(blurred, canny_threshold, iterations):
                 padded_zslice_count += 1
                 padded = True
 
-            # Perform edge detection with Canny filter (see skimage documentation)
-            edges = canny(zslice)
+            if segment_lumen:
+                lumen = np.zeros_like(zslice)
+                contours = find_contours(
+                    zslice, level=contour_value, fully_connected="high"
+                )
+                # if any contours are detected...
+                if contours:
+                    # Sort contours by length (assuming the two longest ones are the ones we need)
+                    contours = sorted(contours, key=len, reverse=True)
 
+                    # assume largest contour is contour of outer epithelium
+                    # and that second-largest contour is lumen
+                    if len(contours) > 1:
+                        inner_contour = contours[1]
+                        # identify pixels belonging to inside of contour
+                        rr, cc = polygon(
+                            inner_contour[:, 0], inner_contour[:, 1], shape=zslice.shape
+                        )
+                        lumen[rr, cc] = 1  # Set pixels inside the polygon to 1
+                        lumen_found = True
+
+            # Perform edge detection with Canny filter (see skimage documentation) for outer epithelium
+            edges = canny(zslice)
             # Fill to generate solid object
             edges = binary_fill_holes(edges)
 
             # Remove padding
             if padded:
                 edges = remove_border(edges)
+                if lumen_found:
+                    lumen = remove_border(lumen)
 
             edges_canny[i, :, :] = edges
 
+            if segment_lumen:
+                lumen_stack[i, :, :] = lumen
+
     # Convert to 8-bit image
     edges_canny = (edges_canny * 255).astype(np.uint8)
-
     # Filter out small objects that are smaller than radius of expansion and convert to labelmap
-    edges_canny = label(remove_small_objects(edges_canny, iterations))
+    edges_canny = label(remove_small_objects(edges_canny, min_size))
+
+    if segment_lumen:
+        lumen_stack = (lumen_stack * 255).astype(np.uint8)
+        lumen_stack = label(remove_small_objects(lumen_stack, min_size / 20))
+        return edges_canny, lumen_stack, padded_zslice_count
 
     return edges_canny, padded_zslice_count
 
@@ -222,7 +256,9 @@ def linear_z_correction(raw_image, start_thresh, m):
     return corrected_image
 
 
-def clean_binary_image(image_binary, sigma2d, small_objects_threshold, expandby_pix):
+def clean_binary_image(
+    image_binary, sigma2d, small_objects_threshold, expandby_pix, fill_holes=True
+):
     """
     Clean up an input binary image (0/1) by filling holes, expanding labels and filling holes,
     subsequent dilation, removing small objects (below small_objects_threshold),
@@ -236,11 +272,13 @@ def clean_binary_image(image_binary, sigma2d, small_objects_threshold, expandby_
 
     # Iterate over each zslice in image
     for i, zslice in enumerate(image_binary):
-        zslice = binary_fill_holes(zslice)
+        if fill_holes:
+            zslice = binary_fill_holes(zslice)
         zslice = expand_labels(
             zslice, expandby_pix
         )  # expand mask to fuse labels and hill holes
-        zslice = binary_fill_holes(zslice)
+        if fill_holes:
+            zslice = binary_fill_holes(zslice)
         zslice = binary_erosion(
             zslice, disk(1), iterations=iterations
         )  # dilate mask to original size
@@ -356,11 +394,16 @@ def run_thresholding(
     seg,
     intensity_threshold,
     otsu_weight,
+    segment_lumen,
 ):
     """
     Main function for running intensity-based thresholding.
     Used in Segment by Intensity Threshold Fractal task to generate 3D label map from intensity image.
     """
+    if segment_lumen:
+        fill_holes = False
+    else:
+        fill_holes = True
     # Apply 3D gaussian blur to raw intensity image prior to thresholding
     blurred, anisotropic_sigma = anisotropic_gaussian_blur(
         raw_image, gaus_sigma_raw_img, pixmeta_raw, convert_to_8bit=False
@@ -379,24 +422,56 @@ def run_thresholding(
     # Clean up binary mask by filling holes, removing small objects, and gaussian blur by z-slice
     small_objects_2dthreshold = np.pi * (small_objects_diameter / 2) ** 2
     cleaned = clean_binary_image(
-        combo_binary, gaus_sigma_thresh_img, small_objects_2dthreshold, expand_by_pixel
+        combo_binary,
+        gaus_sigma_thresh_img,
+        small_objects_2dthreshold,
+        expand_by_pixel,
+        fill_holes=fill_holes,
     )
 
     # Smoothen edges of mask via Canny edge detection
     small_objects_3dthreshold = (4 / 3) * np.pi * (small_objects_diameter / 2) ** 3
-    contour, padded_zslice_count = find_edges(
-        cleaned, canny_threshold, small_objects_3dthreshold
-    )
+    if segment_lumen:
 
-    # Filter by organoid label image from 2D segmentation (converted to 3D)
-    # This removes debris that is far from organoid (only in xy)
-    # and at least partially removes touching neighboring organoids
-    contour = contour * seg
+        contour, lumen, padded_zslice_count = find_edges(
+            cleaned,
+            canny_threshold,
+            small_objects_3dthreshold,
+            segment_lumen=segment_lumen,
+        )
 
-    # Discard small disconnected components
-    contour, roi_count = select_largest_component(contour)
+        # Filter by organoid label image from 2D segmentation (converted to 3D)
+        # This removes debris that is far from organoid (only in xy)
+        # and at least partially removes touching neighboring organoids
+        contour = contour * seg
+        lumen = lumen * seg
 
-    return contour, padded_zslice_count, roi_count, threshold
+        # Discard small disconnected components
+        contour, roi_count_contour = select_largest_component(contour)
+        lumen, roi_count_lumen = select_largest_component(lumen)
+        epithelium = contour - lumen
+
+        return (
+            contour,
+            lumen,
+            epithelium,
+            padded_zslice_count,
+            roi_count_contour,
+            roi_count_lumen,
+            threshold,
+        )
+
+    else:
+        contour, padded_zslice_count = find_edges(
+            cleaned,
+            canny_threshold,
+            small_objects_3dthreshold,
+            segment_lumen=segment_lumen,
+        )
+        contour = contour * seg
+        contour, roi_count_contour = select_largest_component(contour)
+
+    return contour, padded_zslice_count, roi_count_contour, threshold
 
 
 def rescale_channel_image(ch_raw, background_intensity, maximum_intensity):

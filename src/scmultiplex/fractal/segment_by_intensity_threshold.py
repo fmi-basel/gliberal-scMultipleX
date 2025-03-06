@@ -29,6 +29,7 @@ from pydantic import validate_call
 
 from scmultiplex.fractal.fractal_helper_functions import (
     format_roi_table,
+    get_zattrs,
     initialize_new_label,
     load_channel_image,
     load_image_array,
@@ -76,10 +77,14 @@ def segment_by_intensity_threshold(
     linear_z_illumination_correction: bool = False,
     start_z_slice: int = 40,
     m_slope: float = 0.015,
+    segment_lumen: bool = False,
 ) -> dict[str, Any]:
     """
     Calculate full 3D object segmentation after 2D MIP-based segmentation using intensity thresholding of
     raw intensity image(s).
+
+    Assumes input is a masking roi table, i.e. that segmentation has been performed. Task does
+    not work on roi tables e.g. well_ROI_table.
 
     This task consists of 3 parts:
 
@@ -192,6 +197,7 @@ def segment_by_intensity_threshold(
         roi_table,
         level,
     )
+    roi_attrs = get_zattrs(f"{zarr_url}/tables/{roi_table}")
 
     ##############
     # Load channel image(s)  ###
@@ -227,28 +233,48 @@ def segment_by_intensity_threshold(
         )
 
     ##############
-    # Initialize parameters to save the newly calculated label map  ###
+    # Initialize parameters to save the newly calculated label map and ROI tables  ###
     ##############
-    output_roi_table_name = f"{output_label_name}_ROI_table"
+    if segment_lumen:
+        output_label_names = [
+            f"{label_name}_contour",
+            f"{label_name}_lumen",
+            f"{label_name}_epi",
+        ]
+        output_roi_names = [
+            f"{label_name}_contour_ROI_table",
+            f"{label_name}_lumen_ROI_table",
+            f"{label_name}_epi_ROI_table",
+        ]
+        bbox_df_lists = [[], [], []]
+
+    else:
+        output_label_names = [f"{label_name}_contour"]
+        output_roi_names = [f"{label_name}_contour_ROI_table"]
+        bbox_df_lists = [[]]
 
     shape = label_dask.shape
     chunks = label_dask.chunksize
+    dtype = ch1_dask_raw.dtype
+    dtype_max = np.iinfo(dtype).max
 
-    new_label3d_array = initialize_new_label(
-        zarr_url, shape, chunks, np.uint32, label_name, output_label_name, logger
-    )
+    new_label3d_arrays = []
+    for i, name in enumerate(output_label_names):
+        new_label3d_arrays.append(
+            initialize_new_label(
+                zarr_url, shape, chunks, np.uint32, label_name, name, logger
+            )
+        )
 
     logger.info(f"Mask will have shape {shape} and chunks {chunks}")
-
-    # initialize new ROI table
-    bbox_dataframe_list = []
 
     ##############
     # Iterate over objects and perform segmentation  ###
     ##############
 
     # Get labels to iterate over
-    roi_labels = roi_adata.obs_vector("label")
+    instance_key = roi_attrs["instance_key"]  # e.g. "label"
+    roi_labels = roi_adata.obs_vector(instance_key)
     total_label_count = len(roi_labels)
     compute = True
     object_count = 0
@@ -296,8 +322,15 @@ def segment_by_intensity_threshold(
             image_to_segment = (weight_channel_1 * ch1_raw_rescaled) + (
                 weight_channel_2 * ch2_raw_rescaled
             )  # temporary: take average
-            # TODO: correct check here that values above 65535 are not clipped; generalize to different input types
-            image_to_segment[image_to_segment > 65535] = 65535
+
+            # Array is automatically upcasted if values higher than dtype_max is generated, here catch any overflow
+            if np.amax(image_to_segment) > dtype_max:
+                logger.warning(
+                    f"Correction generated intensity values beyond the max range of input data type. "
+                    f"These values have been clipped to {dtype_max=}"
+                )
+                # Correct clipped values; values above dtype_max are set to dtype_max
+                image_to_segment = np.clip(image_to_segment, None, dtype_max)
 
         else:
             image_to_segment = ch1_raw_rescaled
@@ -306,12 +339,19 @@ def segment_by_intensity_threshold(
             image_to_segment = linear_z_correction(
                 image_to_segment, start_z_slice, m_slope
             )
-            # TODO: correct check here that values above 65535 are not clipped; generalize to different input types
-            image_to_segment[image_to_segment > 65535] = 65535
+
+            # Array is automatically upcasted if values higher than dtype_max is generated, here catch any overflow
+            if np.amax(image_to_segment) > dtype_max:
+                logger.warning(
+                    f"Correction generated intensity values beyond the max range of input data type. "
+                    f"These values have been clipped to {dtype_max=}"
+                )
+                # Correct clipped values; values above dtype_max are set to dtype_max
+                image_to_segment = np.clip(image_to_segment, None, dtype_max)
 
         # TODO: consider using https://github.com/seung-lab/fill_voids to fill luman holes
 
-        seg3d, padded_zslice_count, roi_count, threshold = run_thresholding(
+        result = run_thresholding(
             image_to_segment,
             threshold_type,
             gaussian_sigma_raw_image,
@@ -323,19 +363,35 @@ def segment_by_intensity_threshold(
             seg,
             intensity_threshold,
             otsu_weight,
+            segment_lumen=segment_lumen,
         )
 
+        if segment_lumen:
+            (
+                contour,
+                lumen,
+                epithelium,
+                padded_zslice_count,
+                roi_count_contour,
+                roi_count_lumen,
+                threshold,
+            ) = result
+            labels_to_save = [contour, lumen, epithelium]
+        else:
+            contour, padded_zslice_count, roi_count_contour, threshold = result
+            labels_to_save = [contour]
+
         # Check whether is binary
-        if np.amax(seg3d) not in [0, 1]:
+        if np.amax(contour) not in [0, 1]:
             raise ValueError("Image not binary")
 
-        if roi_count > 0:
+        if roi_count_contour > 0:
             logger.info(
                 f"Successfully calculated 3D label map for object label {label_str} using "
                 f"threshold {np.round(threshold,1)}."
             )
             object_count += 1
-            if roi_count > 1:
+            if roi_count_contour > 1:
                 logger.info(
                     f"Object {label_str} contains more than 1 component. "
                     f"Largest component selected as label mask."
@@ -345,6 +401,9 @@ def segment_by_intensity_threshold(
                 f"Empty result for object label  {label_str}. No label calculated. "
                 f"Is small_objects_diameter or intensity_threshold too high?"
             )
+
+        if segment_lumen:
+            logger.info(f"Detected {roi_count_lumen} lumens in object.")
 
         if padded_zslice_count > 0:
             logger.info(
@@ -362,63 +421,73 @@ def segment_by_intensity_threshold(
         # written object. However, this should not change existing image borders from 2D MIP segmentation since the
         # new 3D label map is masked by the 2D MIP label.
 
-        # Convert edge detection label image value to match object label id
-        seg3d = seg3d * int(label_str)
+        for i, (out_label_name, np_img, array_on_disk, bbox_df_list) in enumerate(
+            zip(output_label_names, labels_to_save, new_label3d_arrays, bbox_df_lists)
+        ):
+            # Convert edge detection label image value to match object label id
+            np_img = np_img * int(label_str)
 
-        # Value of binary label image is set to value of current object here
-        bbox_df = save_new_label_and_bbox_df(
-            seg3d,
-            new_label3d_array,
-            zarr_url,
-            output_label_name,
-            convert_indices_to_regions(roi_idlist[row_int]),
-            label_pixmeta,
-            compute,
-            roi_idlist,
-            row_int,
+            # Value of binary label image is set to value of current object here
+            bbox_df = save_new_label_and_bbox_df(
+                np_img,
+                array_on_disk,
+                zarr_url,
+                out_label_name,
+                convert_indices_to_regions(roi_idlist[row_int]),
+                label_pixmeta,
+                compute,
+                roi_idlist,
+                row_int,
+            )
+
+            bbox_df_list.append(bbox_df)
+
+            overlap_list = []
+            for df in bbox_df_list:
+                overlap_list.extend(get_overlapping_pairs_3D(df, label_pixmeta))
+
+            if len(overlap_list) > 0:
+                logger.warning(
+                    f"{len(overlap_list)} bounding-box pairs overlap for label {out_label_name}"
+                )
+
+    for i, (out_label_name, out_roi_name, bbox_df_list) in enumerate(
+        zip(output_label_names, output_roi_names, bbox_df_lists)
+    ):
+
+        # Starting from on-disk highest-resolution data, build and write to disk a pyramid of coarser levels
+        build_pyramid(
+            zarrurl=f"{zarr_url}/labels/{out_label_name}",
+            overwrite=True,
+            num_levels=label_ngffmeta.num_levels,
+            coarsening_xy=label_ngffmeta.coarsening_xy,
+            chunksize=chunks,
+            aggregation_function=np.max,
         )
-        bbox_dataframe_list.append(bbox_df)
 
-        overlap_list = []
-        for df in bbox_dataframe_list:
-            overlap_list.extend(get_overlapping_pairs_3D(df, label_pixmeta))
+        logger.info(
+            f"Built a pyramid for the {zarr_url}/labels/{out_label_name} label image"
+        )
 
-        if len(overlap_list) > 0:
-            logger.warning(f"{len(overlap_list)} bounding-box pairs overlap")
+        bbox_table = format_roi_table(bbox_df_list)
+        # Write to zarr group
+        logger.info(
+            f"Writing new bounding-box ROI table to {zarr_url}/tables/{out_roi_name}"
+        )
 
-    # Starting from on-disk highest-resolution data, build and write to disk a pyramid of coarser levels
-    build_pyramid(
-        zarrurl=f"{zarr_url}/labels/{output_label_name}",
-        overwrite=True,
-        num_levels=label_ngffmeta.num_levels,
-        coarsening_xy=label_ngffmeta.coarsening_xy,
-        chunksize=chunks,
-        aggregation_function=np.max,
-    )
+        table_attrs = {
+            "type": "ngff:region_table",
+            "region": {"path": f"../labels/{output_label_name}"},
+            "instance_key": "label",
+        }
 
-    logger.info(
-        f"Built a pyramid for the {zarr_url}/labels/{output_label_name} label image"
-    )
-
-    bbox_table = format_roi_table(bbox_dataframe_list)
-    # Write to zarr group
-    logger.info(
-        f"Writing new bounding-box ROI table to {zarr_url}/tables/{output_roi_table_name}"
-    )
-
-    table_attrs = {
-        "type": "ngff:region_table",
-        "region": {"path": f"../labels/{output_label_name}"},
-        "instance_key": "label",
-    }
-
-    write_table(
-        zarr.group(zarr_url),
-        output_roi_table_name,
-        bbox_table,
-        overwrite=True,
-        table_attrs=table_attrs,
-    )
+        write_table(
+            zarr.group(zarr_url),
+            out_roi_name,
+            bbox_table,
+            overwrite=True,
+            table_attrs=table_attrs,
+        )
 
     logger.info(
         f"Successfully processed {object_count} out of {total_label_count} labels."
