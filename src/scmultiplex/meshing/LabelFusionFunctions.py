@@ -405,6 +405,10 @@ def run_thresholding(
         fill_holes = False
     else:
         fill_holes = True
+
+    # Mask raw image by input segmentation
+    raw_image = raw_image * seg
+
     # Apply 3D gaussian blur to raw intensity image prior to thresholding
     blurred, anisotropic_sigma = anisotropic_gaussian_blur(
         raw_image, gaus_sigma_raw_img, pixmeta_raw, convert_to_8bit=False
