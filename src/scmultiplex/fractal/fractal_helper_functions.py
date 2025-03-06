@@ -559,6 +559,8 @@ def save_masking_roi_table_from_df_list(
 ):
     """Save new ROI table to zarr, returns the anndata object bbox_table which is saved to disk."""
     bbox_table = create_roi_table_from_df_list(bbox_dataframe_list)
+    # Ensure that adata index is string
+    bbox_table.obs.index = bbox_table.obs.index.astype(str)
     # Write to zarr group
     image_group = zarr.group(zarr_url)
     logger.info(
