@@ -74,7 +74,7 @@ TASK_LIST = [
     ),
     CompoundTask(
         name="scMultiplex Segment by Intensity Threshold",
-        executable_init="fractal/init_select_multiplexing_round.py",
+        executable_init="fractal/init_select_many_rounds.py",
         executable="fractal/segment_by_intensity_threshold.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
         meta={"cpus_per_task": 4, "mem": 16000},

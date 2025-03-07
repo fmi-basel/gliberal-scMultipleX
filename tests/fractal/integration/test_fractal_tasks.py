@@ -81,24 +81,24 @@ test_calculate_platymatch_registration_output = np.array(
 )
 
 test_sphr_harmonics_from_labelimg_expected_output = np.array(
-    [10.86649, 9.2556, 13.3412]
+    [10.798882, 9.207903, 13.282207]
 )
 
 test_sphr_harmonics_from_mesh_expected_output = np.array(
-    [10.115658, 8.254395, 12.78826]
+    [10.046525, 8.232602, 12.735255]
 )
 
 test_scmultiplex_mesh_measurements_expected_output = np.array(
     [
-        4.3092324e03,
-        1.3029731e03,
-        1.0174618e00,
-        4.6224737e-01,
-        9.9401093e-01,
-        5.9890612e-03,
-        9.5799491e-03,
-        1.1295289e00,
-        1.0086931e00,
+        4.2192085e03,
+        1.2844763e03,
+        1.0172350e00,
+        4.5982581e-01,
+        9.9415630e-01,
+        5.8436790e-03,
+        7.8099235e-03,
+        1.1332338e00,
+        1.0085807e00,
     ]
 )
 
@@ -454,6 +454,7 @@ def test_scmultiplex_mesh_measurements(linking_zenodo_zarrs, name=name_3d):
         # check that first calculated spherical harmonic is correct
         output_table_path = f"{zarr_url}/tables/{output_table_name}_harmonics"
         output = ad.read_zarr(output_table_path).to_df().to_numpy()
+        print("output[!!!!!!!!!!!!!!!!0, :]", output[:, 0])
         assert_almost_equal(
             output[:, 0], test_sphr_harmonics_from_mesh_expected_output, decimal=4
         )

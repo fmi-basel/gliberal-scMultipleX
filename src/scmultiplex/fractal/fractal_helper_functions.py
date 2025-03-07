@@ -86,6 +86,8 @@ def format_roi_table(bbox_dataframe_list):
     Copied from cellpose Fractal task
     Returns anndata to save
     """
+    # Remove empty dataframes
+    bbox_dataframe_list = [df for df in bbox_dataframe_list if not df.empty]
     # Handle the case where `bbox_dataframe_list` is empty (typically
     # because list_indices is also empty)
     if len(bbox_dataframe_list) == 0:
@@ -557,6 +559,8 @@ def save_masking_roi_table_from_df_list(
 ):
     """Save new ROI table to zarr, returns the anndata object bbox_table which is saved to disk."""
     bbox_table = create_roi_table_from_df_list(bbox_dataframe_list)
+    # Ensure that adata index is string
+    bbox_table.obs.index = bbox_table.obs.index.astype(str)
     # Write to zarr group
     image_group = zarr.group(zarr_url)
     logger.info(
