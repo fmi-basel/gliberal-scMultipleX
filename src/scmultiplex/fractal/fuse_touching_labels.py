@@ -29,6 +29,7 @@ def fuse_touching_labels(
     *,
     # Fractal arguments
     zarr_url: str,
+    init_args: dict,
     # Task-specific arguments
     label_name_to_fuse: str = "org",
     connectivity: Union[int, None] = None,
@@ -51,6 +52,7 @@ def fuse_touching_labels(
 
     Args:
         zarr_url: Path or url to the individual OME-Zarr image to be processed.
+        init_args: Init arguments for Fractal server.
         label_name_to_fuse: Label name of segmentation to be fused.
         connectivity: Maximum number of orthogonal hops to consider a pixel/voxel as a neighbor. Accepted values
         are ranging from 1 to input.ndim. If None, a full connectivity of input.ndim is used.

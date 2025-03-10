@@ -36,6 +36,7 @@ def expand_labels(
     *,
     # Fractal arguments
     zarr_url: str,
+    init_args: dict,
     # Task-specific arguments
     label_name_to_expand: str = "nuc",
     roi_table: str = "org_ROI_table_linked",
@@ -62,6 +63,7 @@ def expand_labels(
 
     Args:
         zarr_url: Path or url to the individual OME-Zarr image to be processed.
+        init_args: Init arguments for Fractal server.
         label_name_to_expand: Label name of segmentation to be expanded.
         roi_table: Name of the ROI table used to iterate over objects and load object regions. If a table of type
             "roi_table" is passed, e.g. well_ROI_table, all objects for each region in the table will be loaded

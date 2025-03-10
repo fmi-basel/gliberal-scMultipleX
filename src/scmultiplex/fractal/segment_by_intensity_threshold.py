@@ -46,6 +46,7 @@ def segment_by_intensity_threshold(
     *,
     # Fractal arguments
     zarr_url: str,
+    init_args: dict,
     # Task-specific arguments
     label_name: str = "org",
     roi_table: str = "org_ROI_table",
@@ -94,11 +95,7 @@ def segment_by_intensity_threshold(
         zarr_url: Path or url to the individual OME-Zarr image to be processed.
             Refers to the zarr_url of the reference acquisition.
             (standard argument for Fractal tasks, managed by Fractal server).
-        init_args: Intialization arguments provided by
-            `init_group_by_well_for_multiplexing`. It contains the
-            zarr_url_list listing all the zarr_urls in the same well as the
-            zarr_url of the reference acquisition that are being processed.
-            (standard argument for Fractal tasks, managed by Fractal server).
+        init_args: Init arguments for Fractal server.
         label_name: Label name of segmentation (usually based on 2D MIP) that identifies objects in image.
         roi_table: Name of the ROI table that corresponds to label_name. This table is used to iterate over
             objects and load object regions.

@@ -748,6 +748,11 @@
             "type": "string",
             "description": "Path or url to the individual OME-Zarr image to be processed. Refers to the zarr_url of the reference acquisition. (standard argument for Fractal tasks, managed by Fractal server)."
           },
+          "init_args": {
+            "title": "Init Args",
+            "type": "object",
+            "description": "Init arguments for Fractal server."
+          },
           "label_name": {
             "default": "org",
             "title": "Label Name",
@@ -900,6 +905,7 @@
         },
         "required": [
           "zarr_url",
+          "init_args",
           "channel_1",
           "maximum_channel_1"
         ],
@@ -1335,6 +1341,11 @@
             "type": "string",
             "description": "Path or url to the individual OME-Zarr image to be processed."
           },
+          "init_args": {
+            "title": "Init Args",
+            "type": "object",
+            "description": "Init arguments for Fractal server."
+          },
           "label_name_to_expand": {
             "default": "nuc",
             "title": "Label Name To Expand",
@@ -1376,7 +1387,8 @@
           }
         },
         "required": [
-          "zarr_url"
+          "zarr_url",
+          "init_args"
         ],
         "type": "object",
         "title": "ExpandLabels"
@@ -1738,6 +1750,11 @@
             "type": "string",
             "description": "Missing description"
           },
+          "init_args": {
+            "title": "Init Args",
+            "type": "object",
+            "description": "Missing description"
+          },
           "label_name_to_fuse": {
             "default": "org",
             "title": "Label Name To Fuse",
@@ -1751,7 +1768,8 @@
           }
         },
         "required": [
-          "zarr_url"
+          "zarr_url",
+          "init_args"
         ],
         "type": "object",
         "title": "FuseTouchingLabels"
