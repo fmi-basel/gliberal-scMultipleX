@@ -471,6 +471,11 @@ def calculate_correction(
             "Detected object spans less than half of z-extent of region of interest"
         )
 
+    # if object spans less than 5 z-slices, polynomial fit of degree 4 cannot be performed.
+    if end_i - start_i < 5:
+        logger.warning("Less than 5 z-slices detected in object.")
+        return
+
     x_fit = x[start_i:end_i]
     y_fit = y[start_i:end_i]
 

@@ -226,10 +226,13 @@ def calculate_z_illumination_correction(
                 percentile=percentile,
             )
 
-            object_count += 1
+            if row is None:
+                logger.warning(f"Skipping object {label_str}.")
+            else:
+                object_count += 1
 
-            # convert to dictionary where key is z, value is i
-            df_correction.append(row)
+                # convert to dictionary where key is z, value is i
+                df_correction.append(row)
 
         df_correction = pd.DataFrame(df_correction)
 
