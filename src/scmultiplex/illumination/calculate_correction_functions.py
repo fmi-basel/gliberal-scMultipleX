@@ -217,11 +217,16 @@ def run_fits(model_list, x, y):
             mod.set_param_hint("shift", value=0.5)
 
             pars = mod.make_params()
-            out = mod.fit(y, pars, x=x)
-
-            models["ExponentialDecayConcave"] = mod
-            results["ExponentialDecayConcave"] = out
-            chisqr["ExponentialDecayConcave"] = out.chisqr
+            try:
+                out = mod.fit(y, pars, x=x)
+            except ValueError as e:
+                logger.warning(
+                    f"ValueError encountered for ExponentialDecayConcave fit: {e}"
+                )
+            else:
+                models["ExponentialDecayConcave"] = mod
+                results["ExponentialDecayConcave"] = out
+                chisqr["ExponentialDecayConcave"] = out.chisqr
 
         elif m == "ExponentialDecayConvex":
 
@@ -233,11 +238,16 @@ def run_fits(model_list, x, y):
             mod.set_param_hint("shift", value=0.5)
 
             pars = mod.make_params()
-            out = mod.fit(y, pars, x=x)
-
-            models["ExponentialDecayConvex"] = mod
-            results["ExponentialDecayConvex"] = out
-            chisqr["ExponentialDecayConvex"] = out.chisqr
+            try:
+                out = mod.fit(y, pars, x=x)
+            except ValueError as e:
+                logger.warning(
+                    f"ValueError encountered for ExponentialDecayConvex fit: {e}"
+                )
+            else:
+                models["ExponentialDecayConvex"] = mod
+                results["ExponentialDecayConvex"] = out
+                chisqr["ExponentialDecayConvex"] = out.chisqr
 
         else:
             raise ValueError(f"Model {m} does not exist")
