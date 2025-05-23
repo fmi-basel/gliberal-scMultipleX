@@ -39,7 +39,11 @@ from scmultiplex.fractal.fractal_helper_functions import (
     save_new_label_and_bbox_df,
 )
 from scmultiplex.meshing.FilterFunctions import mask_by_parent_object, remove_xy_pad
-from scmultiplex.meshing.LabelFusionFunctions import filter_by_volume, run_label_fusion
+from scmultiplex.meshing.LabelFusionFunctions import (
+    fill_holes_by_slice,
+    filter_by_volume,
+    run_label_fusion,
+)
 from scmultiplex.meshing.MeshFunctions import get_mass_properties
 
 logger = logging.getLogger(__name__)
@@ -61,8 +65,11 @@ def surface_mesh_multiscale(
     sigma_factor: float = 5,
     canny_threshold: float = 0.3,
     mask_contour_by_parent: bool = False,
-    volume_filter: bool = False,
-    volume_filter_threshold: float = 0.05,
+    fill_holes: bool = False,
+    filter_by_object_volume: bool = False,
+    object_volume_filter_threshold: int = 60000,
+    filter_children_by_volume: bool = False,
+    child_volume_filter_threshold: float = 0.05,
     polynomial_degree: int = 30,
     passband: float = 0.01,
     feature_angle: int = 160,
@@ -132,9 +139,17 @@ def surface_mesh_multiscale(
         mask_contour_by_parent: if True, the final multiscale edges are masking by 2D parent object mask. Can be used
             to define cleaner edge borders between touching organoids, but may crop surface mask if higher
             blurring is desired.
-        volume_filter: if True, performing volume filtering of nuclei to remove objects smaller
+        fill_holes: if True, the label image just prior to meshing has holes filled by iterating
+            over slices. Useful for filling lumens in segmentation.
+        filter_by_object_volume: if True, the label image is filtered by volume. This skips objects with lower
+            volume (number of pixels, calculated after all processing and hole filling, if applied)
+            than the object_volume_filter_threshold.
+        object_volume_filter_threshold: Integer threshold for object volume filtering. Number of pixels. E.g. if
+            set to 600, objects with a pixel count less than 600 are skipped. Only used if filter_by_object_volume
+            is True.
+        filter_children_by_volume: if True, performing volume filtering of nuclei to remove objects smaller
             than specified volume_filter_threshold.
-        volume_filter_threshold: Multiplier that specifies cutoff for volumes below which nuclei are filtered out,
+        child_volume_filter_threshold: Multiplier that specifies cutoff for volumes below which nuclei are filtered out,
             float in range [0,1], e.g. 0.05 means that 5% of median of nuclear volume distribution is used as cutoff.
             Specify this value if volume filtering is desired. Default 0.05.
         polynomial_degree: Mesh smoothing parameter. The number of polynomial degrees during surface mesh smoothing with
@@ -317,14 +332,14 @@ def surface_mesh_multiscale(
 
         if multiscale:
             xy_padwidth = int(sigma_factor)
-            if volume_filter:
+            if filter_children_by_volume:
                 (
                     seg,
                     segids_toremove,
                     removed_size_mean,
                     size_mean,
                     volume_cutoff,
-                ) = filter_by_volume(seg, volume_filter_threshold)
+                ) = filter_by_volume(seg, child_volume_filter_threshold)
 
                 if len(segids_toremove) > 0:
                     logger.info(
@@ -370,8 +385,6 @@ def surface_mesh_multiscale(
                     f"Successfully calculated 3D label map for object label {label_str}. Label expanded and eroded "
                     f"by {expandby_pix} pixels."
                 )
-
-                object_count += 1
 
                 if roi_count > 1:
                     logger.info(
@@ -426,8 +439,21 @@ def surface_mesh_multiscale(
 
         # Check that label image contains an object
         if np.amax(label_image) == 0:
-            logger.warning("Label image is empty. Skipping mesh saving!")
+            logger.warning("Label image is empty. Skipping!")
             continue
+
+        # Fill holes, e.g. lumen
+        if fill_holes:
+            # fill holes in label image
+            label_image = fill_holes_by_slice(label_image)
+
+        # Filter out small volumes e.g. debris or segmentation mistakes
+        if filter_by_object_volume:
+            # get number of pixels in object
+            counts = np.bincount(label_image.ravel())[-1]
+            if counts < object_volume_filter_threshold:
+                logger.warning("Volume of object is less than threshold. Skipping!")
+                continue
 
         mesh_polydata = compute_and_save_mesh(
             label_image,
@@ -444,6 +470,7 @@ def surface_mesh_multiscale(
         )
 
         logger.info(f"Successfully generated surface mesh for object label {label_str}")
+        object_count += 1
 
         if sphericity_check:
             volume, surface_area = get_mass_properties(mesh_polydata)
