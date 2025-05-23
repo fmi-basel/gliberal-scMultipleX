@@ -43,6 +43,7 @@ from scmultiplex.meshing.LabelFusionFunctions import (
     fill_holes_by_slice,
     filter_by_volume,
     run_label_fusion,
+    select_largest_component,
 )
 from scmultiplex.meshing.MeshFunctions import get_mass_properties
 
@@ -439,8 +440,16 @@ def surface_mesh_multiscale(
 
         # Check that label image contains an object
         if np.amax(label_image) == 0:
-            logger.warning("Label image is empty. Skipping!")
+            logger.warning(f"Label image is empty. Skipping object {label_str}!")
             continue
+
+        # Select largest component
+        label_image, roi_count = select_largest_component(label_image)
+        if roi_count > 1:
+            logger.warning(
+                f"Object {label_str} contains more than 1 component. "
+                f"Largest component selected as label mask."
+            )
 
         # Fill holes, e.g. lumen
         if fill_holes:
@@ -452,7 +461,9 @@ def surface_mesh_multiscale(
             # get number of pixels in object
             counts = np.bincount(label_image.ravel())[-1]
             if counts < object_volume_filter_threshold:
-                logger.warning("Volume of object is less than threshold. Skipping!")
+                logger.warning(
+                    f"Volume of object is less than threshold. Skipping object {label_str}!"
+                )
                 continue
 
         mesh_polydata = compute_and_save_mesh(
