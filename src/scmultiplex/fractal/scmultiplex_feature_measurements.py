@@ -81,8 +81,9 @@ def scmultiplex_feature_measurements(  # noqa: C901
             or channel_label information to allow Fractal to find the correct
             channel (but not both). Example: {"C01": {"wavelength_id":
             "A01_C01"}. To only measure morphology, provide an empty dict
-        input_ROI_table: Name of the ROI table to loop over. Needs to exists
-            as a ROI table in the OME-Zarr file
+        input_ROI_table: Name of the ROI table to loop over. Needs to exist
+            as a ROI table in the OME-Zarr file. The label that corresponds
+            to this ROI table to used for masking.
         level: Resolution of the intensity image to load for measurements.
             Only tested for level 0
         label_level: Resolution of the label image to load for measurements.

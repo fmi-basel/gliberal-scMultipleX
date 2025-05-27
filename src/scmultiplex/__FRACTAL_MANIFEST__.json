@@ -617,15 +617,33 @@
             "type": "boolean",
             "description": "if True, the final multiscale edges are masking by 2D parent object mask. Can be used to define cleaner edge borders between touching organoids, but may crop surface mask if higher blurring is desired."
           },
-          "volume_filter": {
+          "fill_holes": {
             "default": false,
-            "title": "Volume Filter",
+            "title": "Fill Holes",
+            "type": "boolean",
+            "description": "if True, the label image just prior to meshing has holes filled by iterating over slices. Useful for filling lumens in segmentation."
+          },
+          "filter_by_object_volume": {
+            "default": false,
+            "title": "Filter By Object Volume",
+            "type": "boolean",
+            "description": "if True, the label image is filtered by volume. This skips objects with lower volume (number of pixels, calculated after all processing and hole filling, if applied) than the object_volume_filter_threshold."
+          },
+          "object_volume_filter_threshold": {
+            "default": 60000,
+            "title": "Object Volume Filter Threshold",
+            "type": "integer",
+            "description": "Integer threshold for object volume filtering. Number of pixels. E.g. if set to 600, objects with a pixel count less than 600 are skipped. Only used if filter_by_object_volume is True."
+          },
+          "filter_children_by_volume": {
+            "default": false,
+            "title": "Filter Children By Volume",
             "type": "boolean",
             "description": "if True, performing volume filtering of nuclei to remove objects smaller than specified volume_filter_threshold."
           },
-          "volume_filter_threshold": {
+          "child_volume_filter_threshold": {
             "default": 0.05,
-            "title": "Volume Filter Threshold",
+            "title": "Child Volume Filter Threshold",
             "type": "number",
             "description": "Multiplier that specifies cutoff for volumes below which nuclei are filtered out, float in range [0,1], e.g. 0.05 means that 5% of median of nuclear volume distribution is used as cutoff. Specify this value if volume filtering is desired. Default 0.05."
           },
@@ -747,6 +765,11 @@
             "title": "Zarr Url",
             "type": "string",
             "description": "Path or url to the individual OME-Zarr image to be processed. Refers to the zarr_url of the reference acquisition. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "init_args": {
+            "title": "Init Args",
+            "type": "object",
+            "description": "Init arguments for Fractal server."
           },
           "label_name": {
             "default": "org",
@@ -900,6 +923,7 @@
         },
         "required": [
           "zarr_url",
+          "init_args",
           "channel_1",
           "maximum_channel_1"
         ],
@@ -1335,6 +1359,11 @@
             "type": "string",
             "description": "Path or url to the individual OME-Zarr image to be processed."
           },
+          "init_args": {
+            "title": "Init Args",
+            "type": "object",
+            "description": "Init arguments for Fractal server."
+          },
           "label_name_to_expand": {
             "default": "nuc",
             "title": "Label Name To Expand",
@@ -1376,7 +1405,8 @@
           }
         },
         "required": [
-          "zarr_url"
+          "zarr_url",
+          "init_args"
         ],
         "type": "object",
         "title": "ExpandLabels"
@@ -1738,6 +1768,11 @@
             "type": "string",
             "description": "Missing description"
           },
+          "init_args": {
+            "title": "Init Args",
+            "type": "object",
+            "description": "Missing description"
+          },
           "label_name_to_fuse": {
             "default": "org",
             "title": "Label Name To Fuse",
@@ -1751,7 +1786,8 @@
           }
         },
         "required": [
-          "zarr_url"
+          "zarr_url",
+          "init_args"
         ],
         "type": "object",
         "title": "FuseTouchingLabels"

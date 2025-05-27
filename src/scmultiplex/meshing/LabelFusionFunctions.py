@@ -96,6 +96,16 @@ def fuse_labels(seg, expandby_factor):
     return seg_binary, expandby_pix
 
 
+def fill_holes_by_slice(seg):
+    # Initialize empty array
+    seg_filled = np.zeros_like(seg)
+    # Iterate over each zslice in image
+    for i, zslice in enumerate(seg):
+        # Fill holes
+        seg_filled[i, :, :] = binary_fill_holes(zslice)
+    return seg_filled
+
+
 def anisotropic_gaussian_blur(seg_binary, sigma, pixmeta, convert_to_8bit=True):
     """
     Perform gaussian blur of binary 3D image with anisotropic sigma. Sigma anisotropy calculated from pixel spacing.
