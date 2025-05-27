@@ -1261,7 +1261,7 @@
             "default": "well_ROI_table",
             "title": "Input Roi Table",
             "type": "string",
-            "description": "Name of the ROI table to loop over. Needs to exists as a ROI table in the OME-Zarr file"
+            "description": "Name of the ROI table to loop over. Needs to exist as a ROI table in the OME-Zarr file. The label that corresponds to this ROI table to used for masking."
           },
           "level": {
             "default": 0,
