@@ -1793,6 +1793,80 @@
         "title": "FuseTouchingLabels"
       },
       "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+    },
+    {
+      "name": "Convert 3D Segmentation to MIP",
+      "input_types": {
+        "is_3D": true
+      },
+      "output_types": {
+        "is_3D": false
+      },
+      "tags": [
+        "Mixed modality",
+        "3D to 2D workflows"
+      ],
+      "docs_info": "### Purpose\n- Convert 3D segmentations into 2D maximum intensity projection (MIP) segmentations\n- Creates MIP along z axis\n- Useful for generating 2D MIP for multiplexed registration\n\n### Outputs\n- A new **MIP label image** saved as a label in the `_mip` 2D zarr.\n- A new **masking ROI table** saved as `{new_label_name}_ROI_table` in the 2D zarr.\n\n### Limitations\n- If multiple labels overlap along z, they are collapsed into a single value corresponding to the higher label id number (max) of the labels.",
+      "executable_parallel": "fractal/convert_3d_to_mip.py",
+      "meta_parallel": {
+        "cpus_per_task": 2,
+        "mem": 8000
+      },
+      "args_schema_parallel": {
+        "additionalProperties": false,
+        "properties": {
+          "zarr_url": {
+            "title": "Zarr Url",
+            "type": "string",
+            "description": "Path or url to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "label_name": {
+            "title": "Label Name",
+            "type": "string",
+            "description": "Name of the label to copy from 3D OME-Zarr to 2D OME-Zarr"
+          },
+          "level": {
+            "default": "0",
+            "title": "Level",
+            "type": "string",
+            "description": "Level of the 3D OME-Zarr label to copy from. Valid choices are \"0\", \"1\", etc. (depending on which levels are available in the OME-Zarr label)."
+          },
+          "new_label_name": {
+            "title": "New Label Name",
+            "type": "string",
+            "description": "Optionally overwriting the name of the label in the 2D OME-Zarr"
+          },
+          "plate_suffix": {
+            "default": "_mip",
+            "title": "Plate Suffix",
+            "type": "string",
+            "description": "Suffix that needs to be added to 3D OME-Zarr name to generate the path to the 2D OME-Zarr. If the 2D OME-Zarr is \"/path/to/my_plate_mip.zarr/B/03/0\" and the 3D OME-Zarr is located in \"/path/to/my_plate.zarr/B/03/0\", the correct suffix is \"_mip\"."
+          },
+          "image_suffix_3D_to_remove": {
+            "title": "Image Suffix 3D To Remove",
+            "type": "string",
+            "description": "If the image name between 2D & 3D don't match, this is the suffix that should be removed from the 3D image. If the 3D image is in \"/path/to/my_plate.zarr/B/03/ 0_registered\" and the 2D image is in \"/path/to/my_plate_mip.zarr/ B/03/0\", the value should be \"_registered\""
+          },
+          "image_suffix_2D_to_add": {
+            "title": "Image Suffix 2D To Add",
+            "type": "string",
+            "description": "If the image name between 2D & 3D don't match, this is the suffix that should be added to the 2D image. If the 3D image is in \"/path/to/my_plate.zarr/B/03/0\" and the 2D image is in \"/path/to/my_plate_mip.zarr/B/03/0_illum_corr\", the value should be \"_illum_corr\"."
+          },
+          "overwrite": {
+            "default": false,
+            "title": "Overwrite",
+            "type": "boolean",
+            "description": "If `True`, overwrite existing label and ROI tables in the 3D OME-Zarr"
+          }
+        },
+        "required": [
+          "zarr_url",
+          "label_name"
+        ],
+        "type": "object",
+        "title": "Convert3dToMip"
+      },
+      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
     }
   ],
   "has_args_schemas": true,
