@@ -1806,7 +1806,7 @@
         "Mixed modality",
         "3D to 2D workflows"
       ],
-      "docs_info": "### Purpose\n- Convert 3D segmentations into 2D maximum intensity projection (MIP) segmentations\n- Creates MIP along z axis\n- Useful for generating 2D MIP for multiplexed registration\n\n### Outputs\n- A new **MIP label image** saved as a label in the `_mip` 2D zarr.\n- A new **masking ROI table** saved as `{new_label_name}_ROI_table` in the 2D zarr.\n\n### Limitations\n- If multiple labels overlap along z, they are collapsed into a single value corresponding to the higher label id number (max) of the labels.",
+      "docs_info": "### Purpose\n- Convert 3D segmentations into 2D maximum intensity projection (MIP) segmentations\n- Creates MIP along z axis\n- Useful for generating 2D MIP for multiplexed registration\n\n### Outputs\n- A new **MIP label image** saved as a label in the `_mip` 2D zarr.\n- A new **masking ROI table** saved as `{new_label_name}_ROI_table` in the 2D zarr.\n\n### Limitations\n- If multiple labels overlap along z, they are collapsed into a single value corresponding to the higher label id number (max) of the labels.\n",
       "executable_parallel": "fractal/convert_3d_to_mip.py",
       "meta_parallel": {
         "cpus_per_task": 2,
