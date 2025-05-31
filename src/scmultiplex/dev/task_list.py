@@ -156,4 +156,16 @@ TASK_LIST = [
         tags=["2D"],
         docs_info="file:task_info/fuse_touching_labels.md",
     ),
+    ParallelTask(
+        input_types=dict(is_3D=True),
+        output_types=dict(is_3D=False),
+        name="Convert 3D Segmentation to MIP",
+        executable="fractal/convert_3d_to_mip.py",
+        meta={"cpus_per_task": 2, "mem": 8000},
+        tags=[
+            "Mixed modality",
+            "3D to 2D workflows",
+        ],
+        docs_info="file:task_info/convert_3d_to_mip.md",
+    ),
 ]
