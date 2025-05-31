@@ -27,6 +27,7 @@ from pydantic import validate_call
 
 from scmultiplex.fractal.fractal_helper_functions import (
     check_for_duplicates,
+    correct_label_column,
     extract_acq_info,
     get_zattrs,
     read_table_and_attrs,
@@ -108,6 +109,7 @@ def relabel_by_linking_consensus(
 
     # convert object labels in original ROI table to strings of integers
     # rx_label_adata contains all objects
+    rx_label_adata = correct_label_column(rx_label_adata, column_name="label")
     rx_label_adata.obs["label"] = (
         pd.to_numeric(rx_label_adata.obs["label"]).astype(int).astype(str)
     )
