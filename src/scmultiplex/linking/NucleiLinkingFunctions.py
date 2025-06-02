@@ -12,9 +12,11 @@
 import os.path
 import sys
 from copy import deepcopy
+from typing import Set, Tuple
 
 import dask.array as da
 import numpy as np
+import pandas as pd
 import SimpleITK as sitk
 from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
@@ -26,10 +28,15 @@ import scmultiplex
 
 sys.path.append(os.path.join(scmultiplex.__path__[0], r"platymatch"))
 
-from platymatch.estimate_transform.apply_transform import apply_affine_transform
-from platymatch.estimate_transform.perform_icp import perform_icp
-from platymatch.estimate_transform.shape_context import do_ransac_complete, get_unary
-from platymatch.utils.utils import (
+from platymatch.estimate_transform.apply_transform import (  # noqa: E402
+    apply_affine_transform,
+)
+from platymatch.estimate_transform.perform_icp import perform_icp  # noqa: E402
+from platymatch.estimate_transform.shape_context import (  # noqa: E402
+    do_ransac_complete,
+    get_unary,
+)
+from platymatch.utils.utils import (  # noqa: E402
     compute_average_bg_intensity,
     generate_ffd_transformed_image,
     get_centroid,
@@ -411,6 +418,88 @@ def relabel_RX_numpy(
         rx_numpy_matched = da.from_array(rx_numpy_matched)
 
     return rx_numpy_matched, count_input, count_output, labels_in_output
+
+
+# new functions for relinking
+def count_number_of_labels_in_dask(label_dask: da.Array) -> Tuple[int, Set[int]]:
+    """
+    Return (1) number of unique labels in dask array and (2) the set of those labels.
+    All labels except 0 are included. Input dask array must have only non-negative positive integers.
+    """
+
+    bcounts = da.bincount(label_dask.ravel())
+
+    existing_labels = (
+        (bcounts > 0).compute().nonzero()[0]
+    )  # compute array and count 'True' labels with .nonzero()
+    existing_labels = existing_labels[existing_labels != 0]  # drop 0 label
+
+    existing_labels_set = set(existing_labels)
+    number_of_labels = len(existing_labels_set)
+
+    return number_of_labels, existing_labels_set
+
+
+def make_correction_dict(
+    matches: pd.DataFrame,
+    moving_colname: str = "RX_nuc_id",
+    fixed_colname: str = "R0_nuc_id",
+) -> dict:
+
+    # key is moving_label (current label), value is fixed_label (value to rename to)
+    matching_dict = make_linking_dict(matches, moving_colname, fixed_colname)
+
+    return matching_dict
+
+
+def make_relabeled_block(
+    block1: np.ndarray,
+    matching_dict: dict,
+    label_dtype: np.dtype,
+) -> np.ndarray:
+
+    # return indeces of elements that are non-zero in block as tuple
+    pix_nonzero = np.nonzero(block1)
+
+    # initialize new block
+    relabeled_block = np.zeros_like(block1, dtype=label_dtype)
+
+    for nonzero_pixel in zip(*pix_nonzero):
+        # nonzero_pixel is [z,y,x]
+        # fetch value (as Python scalar) of array at given pixel, as string to match obs
+
+        key = block1[nonzero_pixel].item()  # fetch value of given pixel
+
+        try:
+            relabeled_value = matching_dict[key]
+        except KeyError:
+            pass
+        else:
+            relabeled_block[tuple(nonzero_pixel)] = relabeled_value
+
+    return relabeled_block
+
+
+def run_relabel_dask(
+    label_dask: da.Array,
+    matches: pd.DataFrame,
+    moving_colname: str = "RX_nuc_id",
+    fixed_colname: str = "R0_nuc_id",
+) -> da.Array:
+
+    matching_dict = make_correction_dict(matches, moving_colname, fixed_colname)
+
+    dtype = label_dask.dtype
+
+    relabeled_dask = da.map_blocks(
+        make_relabeled_block,
+        label_dask,
+        matching_dict=matching_dict,
+        label_dtype=dtype,
+        dtype=dtype,
+    )
+
+    return relabeled_dask
 
 
 def remove_labels(seg_img, labels_to_remove, datatype):
