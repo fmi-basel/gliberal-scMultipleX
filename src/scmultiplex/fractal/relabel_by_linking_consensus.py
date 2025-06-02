@@ -27,13 +27,15 @@ from pydantic import validate_call
 
 from scmultiplex.fractal.fractal_helper_functions import (
     check_for_duplicates,
+    correct_label_column,
     extract_acq_info,
     get_zattrs,
     read_table_and_attrs,
 )
 from scmultiplex.linking.NucleiLinkingFunctions import (
+    count_number_of_labels_in_dask,
     make_linking_dict,
-    relabel_RX_numpy,
+    run_relabel_dask,
 )
 
 logger = logging.getLogger(__name__)
@@ -108,6 +110,7 @@ def relabel_by_linking_consensus(
 
     # convert object labels in original ROI table to strings of integers
     # rx_label_adata contains all objects
+    rx_label_adata = correct_label_column(rx_label_adata, column_name="label")
     rx_label_adata.obs["label"] = (
         pd.to_numeric(rx_label_adata.obs["label"]).astype(int).astype(str)
     )
@@ -179,13 +182,17 @@ def relabel_by_linking_consensus(
     # Loop over linked labels and relabel. if label not in consensus, it is set to 0 (background).
     logger.info(f"Relabeling {zarr_url=} image...")
 
-    rx_dask_relabeled, count_input, count_output, labels_in_output = relabel_RX_numpy(
-        rx_dask,
-        consensus_pd,
+    rx_dask_relabeled = run_relabel_dask(
+        label_dask=rx_dask,
+        matches=consensus_pd,
         moving_colname=moving_colname,
         fixed_colname=fixed_colname,
-        daskarr=True,
     )
+
+    count_input, labels_in_input = count_number_of_labels_in_dask(rx_dask)
+
+    count_output, labels_in_output = count_number_of_labels_in_dask(rx_dask_relabeled)
+
     # Check outputs
     if count_input != rx_label_adata.n_obs:
         raise ValueError(

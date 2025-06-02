@@ -582,3 +582,16 @@ def save_masking_roi_table_from_df_list(
         table_attrs=table_attrs,
     )
     return bbox_table
+
+
+def correct_label_column(adata_roi_table, column_name="label"):
+    if column_name not in adata_roi_table.obs.columns:
+        if adata_roi_table.obs.index.name == column_name:
+            # Workaround for new ngio table
+            adata_roi_table.obs[column_name] = adata_roi_table.obs.index
+        else:
+            raise ValueError(
+                f"Column name {column_name} "
+                f" missing in {adata_roi_table.obs.columns=}"
+            )
+    return adata_roi_table
