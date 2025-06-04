@@ -308,7 +308,7 @@
           "new_label_name": {
             "title": "New Label Name",
             "type": "string",
-            "description": "Optionally new name for expanded label. If left None, default is {label_name}_linked"
+            "description": "Optionally new name for relabeled label. If left None, default is {label_name}_linked"
           },
           "consensus_table": {
             "default": "org_match_table_consensus",
