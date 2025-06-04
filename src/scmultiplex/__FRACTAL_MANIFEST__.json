@@ -90,6 +90,11 @@
             "type": "string",
             "description": "Name of the well ROI table. Input ROI table must have single ROI entry; e.g. `well_ROI_table`"
           },
+          "new_linking_table_name": {
+            "title": "New Linking Table Name",
+            "type": "string",
+            "description": "Optional new table name for linked matches, saved in RX alignment round directory. If left None, default is {label_name}_match_table"
+          },
           "level": {
             "default": 0,
             "title": "Level",
@@ -200,6 +205,11 @@
             "title": "Roi Table",
             "type": "string",
             "description": "Name of the matching table used to calculate consensus across multiplexing rounds. Typically, this matching table is the output of a linking task, e.g. org_match_table or nuc_match_table. This table must be present in all rounds except for reference round."
+          },
+          "new_consensus_table_name": {
+            "title": "New Consensus Table Name",
+            "type": "string",
+            "description": "Optional new table name for consensus matches, saved in reference round directory. If left None, default is {roi_table} + \"_consensus\""
           }
         },
         "required": [
@@ -294,6 +304,11 @@
             "title": "Label Name",
             "type": "string",
             "description": "Label name to be relabeled; e.g. `org` or `nuc`."
+          },
+          "new_label_name": {
+            "title": "New Label Name",
+            "type": "string",
+            "description": "Optionally new name for expanded label. If left None, default is {label_name}_linked"
           },
           "consensus_table": {
             "default": "org_match_table_consensus",
@@ -437,10 +452,15 @@
             "description": "Label name of segmented objects that is parent of label_name_to_register e.g. `org_linked`."
           },
           "roi_table": {
-            "default": "org_ROI_table_linked",
+            "default": "org_linked_ROI_table",
             "title": "Roi Table",
             "type": "string",
             "description": "Name of the ROI table over which the task loops to calculate the registration. e.g. linked consensus object table 'org_ROI_table_linked'"
+          },
+          "new_linking_table_name": {
+            "title": "New Linking Table Name",
+            "type": "string",
+            "description": "Optional new table name for linked matches, saved in RX alignment round directory. Suffix \"_affine\" or \"_ffd\" is added for the respective registration. If left None, default is {label_name_to_register} + \"_match_table_affine\" or \"_match_table_ffd\""
           },
           "level": {
             "default": 0,
@@ -598,6 +618,11 @@
             "title": "Save Mesh",
             "type": "boolean",
             "description": "if True, calculates and saves mesh on disk in the 'meshes' folder within zarr structure. Meshes saved as '.stl', except for the case of multi-object meshed (e.g. multiple nuclei within a parent organoid) that are saved as '.vtp' to preserve label ID information. Filename corresponds to parent object label id, or to label id in the case when group_by = None."
+          },
+          "new_mesh_name": {
+            "title": "New Mesh Name",
+            "type": "string",
+            "description": "Optionally new name for new label map (if multiscale) and mesh subfolder (if save_mesh) that is generated. If left None, default is {label_name}."
           },
           "expandby_factor": {
             "default": 0.6,
@@ -783,17 +808,17 @@
             "type": "string",
             "description": "Label name of segmentation (usually based on 2D MIP) that identifies objects in image."
           },
+          "new_label_name": {
+            "default": "org3d",
+            "title": "New Label Name",
+            "type": "string",
+            "description": "Desired name for new output label. The corresponding ROI table will be saved as {output_label_name}_ROI_table."
+          },
           "roi_table": {
             "default": "org_ROI_table",
             "title": "Roi Table",
             "type": "string",
             "description": "Name of the ROI table that corresponds to label_name. This table is used to iterate over objects and load object regions."
-          },
-          "output_label_name": {
-            "default": "org3d",
-            "title": "Output Label Name",
-            "type": "string",
-            "description": "Desired name for new output label. The corresponding ROI table will be saved as {output_label_name}_ROI_table."
           },
           "channel_1": {
             "$ref": "#/$defs/ChannelInputModel",
@@ -1376,6 +1401,11 @@
             "type": "string",
             "description": "Label name of segmentation to be expanded."
           },
+          "new_label_name": {
+            "title": "New Label Name",
+            "type": "string",
+            "description": "Optionally new name for expanded label. If left None, default is {label_name_to_expand}_expanded"
+          },
           "roi_table": {
             "default": "org_ROI_table_linked",
             "title": "Roi Table",
@@ -1782,6 +1812,11 @@
           "label_name_to_fuse": {
             "default": "org",
             "title": "Label Name To Fuse",
+            "type": "string",
+            "description": "Missing description"
+          },
+          "new_label_name": {
+            "title": "New Label Name",
             "type": "string",
             "description": "Missing description"
           },
