@@ -306,6 +306,12 @@
             "title": "Table To Relabel",
             "type": "string",
             "description": "Table name to relabel based on consensus linking. The table rows correspond to specified 'Label name', e.g. 'org_ROI_table' or 'nuc_ROI_table'"
+          },
+          "discard_labels_not_linked_across_all_rounds": {
+            "default": true,
+            "title": "Discard Labels Not Linked Across All Rounds",
+            "type": "boolean",
+            "description": "if True (default), labels that are linked in some but not all rounds are discarded, i.e. only objects linked across all rounds are kept. If False, partially linked labels are kept (e.g. if label is linked between R0 and R1, but missing in R2, the label is still kept)."
           }
         },
         "required": [
