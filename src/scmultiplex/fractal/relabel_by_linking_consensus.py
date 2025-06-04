@@ -68,7 +68,7 @@ def relabel_by_linking_consensus(
             reference_zarr_url that is used for registration.
             (standard argument for Fractal tasks, managed by Fractal server).
         label_name: Label name to be relabeled; e.g. `org` or `nuc`.
-        new_label_name: Optionally new name for expanded label.
+        new_label_name: Optionally new name for relabeled label.
             If left None, default is {label_name}_linked
         consensus_table: Name of consensus matching table that specifies consensus matches across rounds,
             typically stored in reference round zarr.
