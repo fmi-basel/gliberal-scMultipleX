@@ -12,6 +12,7 @@ Relabels image labels and ROI tables based on consensus linking.
 """
 import logging
 from pathlib import Path
+from typing import Optional
 
 import anndata as ad
 import dask.array as da
@@ -49,6 +50,7 @@ def relabel_by_linking_consensus(
     init_args: InitArgsRegistration,
     # Task-specific arguments
     label_name: str,
+    new_label_name: Optional[str] = None,
     consensus_table: str = "org_match_table_consensus",
     table_to_relabel: str = "org_ROI_table",
     discard_labels_not_linked_across_all_rounds: bool = True,
@@ -66,6 +68,8 @@ def relabel_by_linking_consensus(
             reference_zarr_url that is used for registration.
             (standard argument for Fractal tasks, managed by Fractal server).
         label_name: Label name to be relabeled; e.g. `org` or `nuc`.
+        new_label_name: Optionally new name for expanded label.
+            If left None, default is {label_name}_linked
         consensus_table: Name of consensus matching table that specifies consensus matches across rounds,
             typically stored in reference round zarr.
         table_to_relabel: Table name to relabel based on consensus linking. The table rows correspond
@@ -84,8 +88,10 @@ def relabel_by_linking_consensus(
     zarr_acquisition = extract_acq_info(zarr_url)
     ref_acquisition = extract_acq_info(r0_zarr_path)
 
-    new_label_name = label_name + "_linked"
-    new_table_name = table_to_relabel + "_linked"
+    if new_label_name is None:
+        new_label_name = label_name + "_linked"
+
+    new_table_name = new_label_name + "_ROI_table"
 
     logger.info(
         f"Running for {zarr_url=}. \n"

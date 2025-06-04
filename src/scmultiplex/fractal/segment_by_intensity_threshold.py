@@ -49,8 +49,8 @@ def segment_by_intensity_threshold(
     init_args: dict,
     # Task-specific arguments
     label_name: str = "org",
+    new_label_name: str = "org3d",
     roi_table: str = "org_ROI_table",
-    output_label_name: str = "org3d",
     channel_1: ChannelInputModel,
     background_channel_1: int = 800,
     maximum_channel_1: int,
@@ -97,10 +97,10 @@ def segment_by_intensity_threshold(
             (standard argument for Fractal tasks, managed by Fractal server).
         init_args: Init arguments for Fractal server.
         label_name: Label name of segmentation (usually based on 2D MIP) that identifies objects in image.
+        new_label_name: Desired name for new output label. The corresponding ROI
+            table will be saved as {output_label_name}_ROI_table.
         roi_table: Name of the ROI table that corresponds to label_name. This table is used to iterate over
             objects and load object regions.
-        output_label_name: Desired name for new output label. The corresponding ROI
-            table will be saved as {output_label_name}_ROI_table.
         channel_1: Channel of raw image used for thresholding. Requires either
             `wavelength_id` (e.g. `A01_C01`) or `label` (e.g. `DAPI`).
         background_channel_1: Pixel intensity value of background to subtract from channel 1 raw image.
@@ -232,20 +232,20 @@ def segment_by_intensity_threshold(
     ##############
     if segment_lumen:
         output_label_names = [
-            f"{label_name}_outer",
-            f"{label_name}_inner",
-            f"{label_name}_diff",
+            f"{new_label_name}_outer",
+            f"{new_label_name}_inner",
+            f"{new_label_name}_diff",
         ]
         output_roi_names = [
-            f"{label_name}_outer_ROI_table",
-            f"{label_name}_inner_ROI_table",
-            f"{label_name}_diff_ROI_table",
+            f"{new_label_name}_outer_ROI_table",
+            f"{new_label_name}_inner_ROI_table",
+            f"{new_label_name}_diff_ROI_table",
         ]
         bbox_df_lists = [[], [], []]
 
     else:
-        output_label_names = [f"{label_name}_outer"]
-        output_roi_names = [f"{label_name}_outer_ROI_table"]
+        output_label_names = [f"{new_label_name}_outer"]
+        output_roi_names = [f"{new_label_name}_outer_ROI_table"]
         bbox_df_lists = [[]]
 
     shape = label_dask.shape
@@ -473,7 +473,7 @@ def segment_by_intensity_threshold(
 
         table_attrs = {
             "type": "ngff:region_table",
-            "region": {"path": f"../labels/{output_label_name}"},
+            "region": {"path": f"../labels/{out_label_name}"},
             "instance_key": "label",
         }
 

@@ -12,7 +12,7 @@ Calculates 3D surface mesh of parent object (e.g. tissue, organoid)
 from 3D cell-level segmentation of children (e.g. nuclei)
 """
 import logging
-from typing import Any, Union
+from typing import Any, Optional, Union
 
 import anndata as ad
 import dask.array as da
@@ -62,6 +62,7 @@ def surface_mesh_multiscale(
     roi_table: str = "org_ROI_table_linked",
     multiscale: bool = True,
     save_mesh: bool = True,
+    new_mesh_name: Optional[str] = None,
     expandby_factor: float = 0.6,
     sigma_factor: float = 5,
     canny_threshold: float = 0.3,
@@ -129,6 +130,8 @@ def surface_mesh_multiscale(
             saved as '.stl', except for the case of multi-object meshed (e.g. multiple nuclei within a parent organoid)
             that are saved as '.vtp' to preserve label ID information. Filename corresponds to parent object label id,
             or to label id in the case when group_by = None.
+        new_mesh_name: Optionally new name for new label map (if multiscale) and mesh subfolder (if save_mesh) that is
+            generated. If left None, default is {label_name}.
         expandby_factor: only used if Multiscale = True. Multiplier that specifies pixels by which to expand each
             nuclear mask for merging, float in range [0, 1 or higher], e.g. 0.2 means that 20% of mean of
             nuclear equivalent diameter is used.
@@ -238,12 +241,17 @@ def surface_mesh_multiscale(
     if len(roi_idlist) == 0:
         logger.warning("Well contains no objects")
 
+    if new_mesh_name is None:
+        label_root = label_name
+    else:
+        label_root = new_mesh_name
+
     if multiscale:
         # Initialize parameters to save the newly calculated label map
         # Save with same dimensions as child labels from which they are calculated
 
-        output_label_name = f"{group_by}_from_{label_name}"
-        output_roi_table_name = f"{group_by}_ROI_table_from_{label_name}"
+        output_label_name = f"{group_by}_from_{label_root}"
+        output_roi_table_name = f"{output_label_name}_ROI_table"
 
         shape = label_dask.shape
         chunks = label_dask.chunksize
@@ -286,7 +294,6 @@ def surface_mesh_multiscale(
     compute = True
     sphericity_flag = 0
     object_count = 0
-    mesh_folder_name = None
 
     logger.info(
         f"Starting iteration over {total_label_count} detected objects in ROI table."
@@ -413,21 +420,21 @@ def surface_mesh_multiscale(
         if save_mesh and multiscale:
             # Mesh calculation for a new 3D object calculated from child objects (multiscale)
             label_image = edges_canny
-            mesh_folder_name = f"{group_by}_from_{label_name}"
+            mesh_folder_name = output_label_name
             object_name = label_str
             sphericity_check = True
             save_as_stl = True
         elif save_mesh and group_by is not None and multiscale is False:
             # Mesh calculation for existing child objects that are part of the group_by object
             label_image = seg
-            mesh_folder_name = f"{label_name}_grouped"
+            mesh_folder_name = f"{label_root}_grouped"
             object_name = label_str
             sphericity_check = False
             # Save as .vtp, since .stl does not support multiple object labels
             save_as_stl = False
         elif save_mesh and group_by is None and multiscale is False:
             label_image = seg
-            mesh_folder_name = f"{label_name}"
+            mesh_folder_name = f"{label_root}"
             object_name = label_str
             sphericity_check = True
             save_as_stl = True

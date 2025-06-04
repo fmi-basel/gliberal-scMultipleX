@@ -6,7 +6,7 @@
 #                                                                            #
 ##############################################################################
 import logging
-from typing import Any, Union
+from typing import Any, Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -32,6 +32,7 @@ def fuse_touching_labels(
     init_args: dict,
     # Task-specific arguments
     label_name_to_fuse: str = "org",
+    new_label_name: Optional[str] = None,
     connectivity: Union[int, None] = None,
 ) -> dict[str, Any]:
     """
@@ -54,6 +55,8 @@ def fuse_touching_labels(
         zarr_url: Path or url to the individual OME-Zarr image to be processed.
         init_args: Init arguments for Fractal server.
         label_name_to_fuse: Label name of segmentation to be fused.
+        new_label_name: Optionally new name for expanded label.
+            If left None, default is {label_name_to_fuse}_fused
         connectivity: Maximum number of orthogonal hops to consider a pixel/voxel as a neighbor. Accepted values
         are ranging from 1 to input.ndim. If None, a full connectivity of input.ndim is used.
     """
@@ -66,8 +69,12 @@ def fuse_touching_labels(
 
     label_dask, ngffmeta, xycoars, pixmeta = load_image_array(label_url, level)
 
-    output_label_name = f"{label_name_to_fuse}_fused"
-    output_roi_table_name = f"{label_name_to_fuse}_fused_ROI_table"
+    if new_label_name is None:
+        output_label_name = f"{label_name_to_fuse}_fused"
+    else:
+        output_label_name = new_label_name
+
+    output_roi_table_name = f"{output_label_name}_ROI_table"
 
     shape = label_dask.shape
     chunks = label_dask.chunksize

@@ -6,7 +6,7 @@
 #                                                                            #
 ##############################################################################
 import logging
-from typing import Any, Union
+from typing import Any, Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -39,6 +39,7 @@ def expand_labels(
     init_args: dict,
     # Task-specific arguments
     label_name_to_expand: str = "nuc",
+    new_label_name: Optional[str] = None,
     roi_table: str = "org_ROI_table_linked",
     masking_label_map: Union[str, None] = None,
     mask_output: bool = True,
@@ -65,6 +66,8 @@ def expand_labels(
         zarr_url: Path or url to the individual OME-Zarr image to be processed.
         init_args: Init arguments for Fractal server.
         label_name_to_expand: Label name of segmentation to be expanded.
+        new_label_name: Optionally new name for expanded label.
+            If left None, default is {label_name_to_expand}_expanded
         roi_table: Name of the ROI table used to iterate over objects and load object regions. If a table of type
             "roi_table" is passed, e.g. well_ROI_table, all objects for each region in the table will be loaded
             and expanded simultaneously. If a table of type "masking_roi_table" is passed, e.g. a segmentation
@@ -152,7 +155,11 @@ def expand_labels(
     # Initialize parameters to save the newly calculated label map
     # Save with same dimensions as child labels from which they are calculated
 
-    output_label_name = f"{label_name_to_expand}_expanded"
+    if new_label_name is None:
+        output_label_name = f"{label_name_to_expand}_expanded"
+    else:
+        output_label_name = new_label_name
+
     output_roi_table_name = f"{output_label_name}_ROI_table"
 
     shape = label_dask.shape
