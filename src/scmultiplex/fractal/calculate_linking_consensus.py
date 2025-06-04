@@ -12,6 +12,7 @@ Calculates consensus for linking tables across multiplexing rounds.
 Stores single consensus table in reference round directory.
 """
 import logging
+from typing import Optional
 
 import anndata as ad
 import numpy as np
@@ -37,6 +38,7 @@ def calculate_linking_consensus(
     init_args: InitArgsRegistrationConsensus,
     # Task-specific arguments
     roi_table: str = "org_match_table",
+    new_consensus_table_name: Optional[str] = None,
 ):
     """
     Applies pre-calculated registration to ROI tables.
@@ -59,11 +61,15 @@ def calculate_linking_consensus(
             multiplexing rounds. Typically, this matching table is the output of a linking task,
             e.g. org_match_table or nuc_match_table. This table must be present in all rounds
             except for reference round.
+        new_consensus_table_name: Optional new table name for consensus matches, saved in reference round directory.
+            If left None, default is {roi_table} + "_consensus"
 
     """
-    # TODO: test this task on sample data with more than two rounds
 
-    consensus_table_name = roi_table + "_consensus"
+    if new_consensus_table_name is None:
+        consensus_table_name = roi_table + "_consensus"
+    else:
+        consensus_table_name = new_consensus_table_name
 
     # zarr_url is the path to the reference round
     # init args contain the list to all rounds, including reference round

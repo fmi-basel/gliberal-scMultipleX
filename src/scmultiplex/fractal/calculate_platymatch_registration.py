@@ -15,7 +15,7 @@ import logging
 import os
 import sys
 from traceback import print_exc
-from typing import Any
+from typing import Any, Optional
 
 import anndata as ad
 import dask.array as da
@@ -70,7 +70,8 @@ def calculate_platymatch_registration(
     seg_channel: ChannelInputModel,
     label_name_to_register: str = "nuc",
     label_name_obj: str = "org_linked",
-    roi_table: str = "org_ROI_table_linked",
+    roi_table: str = "org_linked_ROI_table",
+    new_linking_table_name: Optional[str] = None,
     level: int = 0,
     save_transformation: bool = True,
     mask_by_parent: bool = True,
@@ -105,6 +106,9 @@ def calculate_platymatch_registration(
             label_name_to_register e.g. `org_linked`.
         roi_table: Name of the ROI table over which the task loops to
             calculate the registration. e.g. linked consensus object table 'org_ROI_table_linked'
+        new_linking_table_name: Optional new table name for linked matches, saved in RX
+            alignment round directory. Suffix "_affine" or "_ffd" is added for the respective registration.
+            If left None, default is {label_name_to_register} + "_match_table_affine" or "_match_table_ffd"
         level: Pyramid level of the labels to register. Choose `0` to
             process at full resolution.
         save_transformation: if True, saves the transformation matrix on disk in subfolder 'transformations'
@@ -614,7 +618,10 @@ def calculate_platymatch_registration(
         link_df_adata.obs_names = obsnames
         link_df_adata.var_names = varnames
 
-        new_link_table = label_name_to_register + "_match_table_affine"
+        if new_linking_table_name is None:
+            new_link_table = label_name_to_register + "_match_table_affine"
+        else:
+            new_link_table = new_linking_table_name + "_affine"
 
         # Save the linking table as a new table
         logger.info(
@@ -639,7 +646,10 @@ def calculate_platymatch_registration(
         link_df_adata.obs_names = obsnames
         link_df_adata.var_names = varnames
 
-        new_link_table = label_name_to_register + "_match_table_ffd"
+        if new_linking_table_name is None:
+            new_link_table = label_name_to_register + "_match_table_ffd"
+        else:
+            new_link_table = new_linking_table_name + "_ffd"
 
         # Save the linking table as a new table
         logger.info(
