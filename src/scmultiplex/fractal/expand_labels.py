@@ -26,7 +26,10 @@ from scmultiplex.fractal.fractal_helper_functions import (
     save_new_label_with_overlap,
 )
 from scmultiplex.meshing.FilterFunctions import mask_by_parent_object
-from scmultiplex.meshing.LabelFusionFunctions import run_expansion
+from scmultiplex.meshing.LabelFusionFunctions import (
+    fill_holes_by_slice_multi_instance,
+    run_expansion,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +47,7 @@ def expand_labels(
     expand_by_pixels: Union[int, None] = None,
     calculate_image_based_expansion_distance: bool = False,
     expand_by_factor: Union[float, None] = None,
+    fill_holes: bool = False,
 ) -> None:
     """
     Expand labels in 2D or 3D segmentation images in XY. For 3D images, expansion is performed on each 2D
@@ -85,6 +89,8 @@ def expand_labels(
         expand_by_factor: Only used if calculate_image_based_expansion_distance is True.
             Multiplier that specifies pixels by which to expand each label. Float in range
             [0, 1 or higher], e.g. 0.2 means that 20% of mean equivalent diameter of labels in region is used.
+        fill_holes: if True, the label image prior to expansion has holes filled by iterating
+            over slices. Useful for filling lumens in segmentation.
     """
 
     logger.info(
@@ -240,6 +246,11 @@ def expand_labels(
         ##############
         # Perform label expansion  ###
         ##############
+
+        # Fill holes, e.g. lumen
+        if fill_holes:
+            # fill holes in label image
+            seg = fill_holes_by_slice_multi_instance(seg)
 
         if calculate_image_based_expansion_distance:
             expandby = expand_by_factor

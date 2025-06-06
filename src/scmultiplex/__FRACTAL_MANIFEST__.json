@@ -1399,6 +1399,12 @@
             "title": "Expand By Factor",
             "type": "number",
             "description": "Only used if calculate_image_based_expansion_distance is True. Multiplier that specifies pixels by which to expand each label. Float in range [0, 1 or higher], e.g. 0.2 means that 20% of mean equivalent diameter of labels in region is used."
+          },
+          "fill_holes": {
+            "default": false,
+            "title": "Fill Holes",
+            "type": "boolean",
+            "description": "if True, the label image prior to expansion has holes filled by iterating over slices. Useful for filling lumens in segmentation."
           }
         },
         "required": [

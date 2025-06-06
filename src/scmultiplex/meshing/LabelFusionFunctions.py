@@ -106,6 +106,17 @@ def fill_holes_by_slice(seg):
     return seg_filled
 
 
+def fill_holes_by_slice_multi_instance(seg):
+    unique_labels = list(set(seg.ravel()) - {0})  # drop 0 background
+    filled_array = np.zeros_like(seg)
+    for lab in unique_labels:
+        binary_mask = seg == lab
+        filled_mask = fill_holes_by_slice(binary_mask)
+        # Assign filled mask to result with label
+        filled_array[filled_mask] = lab
+    return filled_array
+
+
 def anisotropic_gaussian_blur(seg_binary, sigma, pixmeta, convert_to_8bit=True):
     """
     Perform gaussian blur of binary 3D image with anisotropic sigma. Sigma anisotropy calculated from pixel spacing.
