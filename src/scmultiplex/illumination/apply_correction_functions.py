@@ -102,8 +102,12 @@ def make_correction_block(block1, correction_dict, block_info=None):
         z_index = nonzero_pixel[0]
         # get absolute z-index relative to entire dask array
         z_index_abs = z_index + z_start
-        # get value of correction from dict, for given z and label
-        correction_value = correction_dict[key][z_index_abs]
+        try:
+            # get value of correction from dict, for given z and label
+            correction_value = correction_dict[key][z_index_abs]
+        except KeyError:
+            # no correction for objects missing correction data
+            continue
         # place value into numpy array
         correction_block[tuple(nonzero_pixel)] = correction_value
 
