@@ -1751,6 +1751,12 @@
             "title": "Connectivity",
             "type": "integer",
             "description": "Missing description"
+          },
+          "fill_holes": {
+            "default": false,
+            "title": "Fill Holes",
+            "type": "boolean",
+            "description": "Missing description"
           }
         },
         "required": [

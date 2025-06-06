@@ -539,7 +539,7 @@ def select_label(seg, label_str):
     return seg
 
 
-def simple_fuse_labels(label_dask, connectivity):
+def simple_fuse_labels(label_dask, connectivity, fill_holes):
     dtype = label_dask.dtype
     dtype_max = np.iinfo(dtype).max
 
@@ -560,6 +560,9 @@ def simple_fuse_labels(label_dask, connectivity):
         raise ValueError(
             f"Number of identified labels {label_count} exceeds {dtype} maximum of {dtype_max}."
         )
+
+    if fill_holes:
+        fused_numpy = fill_holes_by_slice_multi_instance(fused_numpy)
 
     # Convert back to dask to save on disk with same chunk sizes and dtype as input label map
     fused_dask = da.from_array(fused_numpy, chunks=label_dask.chunksize).astype(dtype)

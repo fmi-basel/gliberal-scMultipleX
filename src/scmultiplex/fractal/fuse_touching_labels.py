@@ -32,6 +32,7 @@ def fuse_touching_labels(
     label_name_to_fuse: str = "org",
     new_label_name: Optional[str] = None,
     connectivity: Union[int, None] = None,
+    fill_holes: bool = False,
 ) -> None:
     """
     Fuse touching labels in segmentation images, in 2D or 3D. Connected components are identified during labeling
@@ -56,6 +57,8 @@ def fuse_touching_labels(
             If left None, default is {label_name_to_fuse}_fused
         connectivity: Maximum number of orthogonal hops to consider a pixel/voxel as a neighbor. Accepted values
         are ranging from 1 to input.ndim. If None, a full connectivity of input.ndim is used.
+        fill_holes: if True, the label image after fusion has holes filled by iterating
+            over slices. Useful for filling any gaps between fused labels.
     """
 
     logger.info(f"Running for {zarr_url=}. \n" f"and label image {label_name_to_fuse}.")
@@ -89,7 +92,7 @@ def fuse_touching_labels(
     logger.info("Started computation to fuse labels.")
 
     fused_numpy, fused_dask, label_count, connectivity_comp = simple_fuse_labels(
-        label_dask, connectivity
+        label_dask, connectivity, fill_holes=fill_holes
     )
 
     fused_dask.to_zarr(
