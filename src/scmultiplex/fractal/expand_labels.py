@@ -6,7 +6,7 @@
 #                                                                            #
 ##############################################################################
 import logging
-from typing import Any, Optional, Union
+from typing import Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -33,10 +33,8 @@ logger = logging.getLogger(__name__)
 
 @validate_call
 def expand_labels(
-    *,
     # Fractal arguments
     zarr_url: str,
-    init_args: dict,
     # Task-specific arguments
     label_name_to_expand: str = "nuc",
     new_label_name: Optional[str] = None,
@@ -46,7 +44,7 @@ def expand_labels(
     expand_by_pixels: Union[int, None] = None,
     calculate_image_based_expansion_distance: bool = False,
     expand_by_factor: Union[float, None] = None,
-) -> dict[str, Any]:
+) -> None:
     """
     Expand labels in 2D or 3D segmentation images in XY. For 3D images, expansion is performed on each 2D
     z-slice iteratively. Thus, labels are only expanded in XY (i.e. laterally, not in z). Labels are grown outwards
@@ -64,7 +62,6 @@ def expand_labels(
 
     Args:
         zarr_url: Path or url to the individual OME-Zarr image to be processed.
-        init_args: Init arguments for Fractal server.
         label_name_to_expand: Label name of segmentation to be expanded.
         new_label_name: Optionally new name for expanded label.
             If left None, default is {label_name_to_expand}_expanded
@@ -322,7 +319,7 @@ def expand_labels(
 
     logger.info(f"End expand_labels task for {zarr_url}/labels/{label_name_to_expand}")
 
-    return {}
+    return
 
 
 if __name__ == "__main__":

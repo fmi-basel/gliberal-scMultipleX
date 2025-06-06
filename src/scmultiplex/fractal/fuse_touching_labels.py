@@ -6,7 +6,7 @@
 #                                                                            #
 ##############################################################################
 import logging
-from typing import Any, Optional, Union
+from typing import Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -26,15 +26,13 @@ logger = logging.getLogger(__name__)
 
 @validate_call
 def fuse_touching_labels(
-    *,
     # Fractal arguments
     zarr_url: str,
-    init_args: dict,
     # Task-specific arguments
     label_name_to_fuse: str = "org",
     new_label_name: Optional[str] = None,
     connectivity: Union[int, None] = None,
-) -> dict[str, Any]:
+) -> None:
     """
     Fuse touching labels in segmentation images, in 2D or 3D. Connected components are identified during labeling
     based on the connectivity argument. For a more detailed explanation of 1- or 2- connectivity, see documentation
@@ -53,7 +51,6 @@ def fuse_touching_labels(
 
     Args:
         zarr_url: Path or url to the individual OME-Zarr image to be processed.
-        init_args: Init arguments for Fractal server.
         label_name_to_fuse: Label name of segmentation to be fused.
         new_label_name: Optionally new name for expanded label.
             If left None, default is {label_name_to_fuse}_fused
@@ -148,7 +145,7 @@ def fuse_touching_labels(
 
     logger.info(f"End fuse_touching_labels task for {zarr_url}")
 
-    return {}
+    return
 
 
 if __name__ == "__main__":
