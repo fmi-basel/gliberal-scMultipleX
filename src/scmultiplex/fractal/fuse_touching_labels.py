@@ -6,7 +6,7 @@
 #                                                                            #
 ##############################################################################
 import logging
-from typing import Any, Union
+from typing import Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -26,14 +26,14 @@ logger = logging.getLogger(__name__)
 
 @validate_call
 def fuse_touching_labels(
-    *,
     # Fractal arguments
     zarr_url: str,
-    init_args: dict,
     # Task-specific arguments
     label_name_to_fuse: str = "org",
+    new_label_name: Optional[str] = None,
     connectivity: Union[int, None] = None,
-) -> dict[str, Any]:
+    fill_holes: bool = False,
+) -> None:
     """
     Fuse touching labels in segmentation images, in 2D or 3D. Connected components are identified during labeling
     based on the connectivity argument. For a more detailed explanation of 1- or 2- connectivity, see documentation
@@ -52,10 +52,13 @@ def fuse_touching_labels(
 
     Args:
         zarr_url: Path or url to the individual OME-Zarr image to be processed.
-        init_args: Init arguments for Fractal server.
         label_name_to_fuse: Label name of segmentation to be fused.
+        new_label_name: Optionally new name for expanded label.
+            If left None, default is {label_name_to_fuse}_fused
         connectivity: Maximum number of orthogonal hops to consider a pixel/voxel as a neighbor. Accepted values
         are ranging from 1 to input.ndim. If None, a full connectivity of input.ndim is used.
+        fill_holes: if True, the label image after fusion has holes filled by iterating
+            over slices. Useful for filling any gaps between fused labels.
     """
 
     logger.info(f"Running for {zarr_url=}. \n" f"and label image {label_name_to_fuse}.")
@@ -66,8 +69,12 @@ def fuse_touching_labels(
 
     label_dask, ngffmeta, xycoars, pixmeta = load_image_array(label_url, level)
 
-    output_label_name = f"{label_name_to_fuse}_fused"
-    output_roi_table_name = f"{label_name_to_fuse}_fused_ROI_table"
+    if new_label_name is None:
+        output_label_name = f"{label_name_to_fuse}_fused"
+    else:
+        output_label_name = new_label_name
+
+    output_roi_table_name = f"{output_label_name}_ROI_table"
 
     shape = label_dask.shape
     chunks = label_dask.chunksize
@@ -85,7 +92,7 @@ def fuse_touching_labels(
     logger.info("Started computation to fuse labels.")
 
     fused_numpy, fused_dask, label_count, connectivity_comp = simple_fuse_labels(
-        label_dask, connectivity
+        label_dask, connectivity, fill_holes=fill_holes
     )
 
     fused_dask.to_zarr(
@@ -141,7 +148,7 @@ def fuse_touching_labels(
 
     logger.info(f"End fuse_touching_labels task for {zarr_url}")
 
-    return {}
+    return
 
 
 if __name__ == "__main__":

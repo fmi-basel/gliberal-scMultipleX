@@ -11,7 +11,7 @@
 Calculates linking tables for segmented objects in a well
 """
 import logging
-from typing import Any
+from typing import Any, Optional
 
 import anndata as ad
 import dask.array as da
@@ -47,6 +47,7 @@ def calculate_object_linking(
     # Task-specific arguments
     label_name: str,
     roi_table: str = "well_ROI_table",
+    new_linking_table_name: Optional[str] = None,
     level: int = 0,
     iou_cutoff: float = 0.2,
 ) -> dict[str, Any]:
@@ -73,6 +74,9 @@ def calculate_object_linking(
             registration; e.g. `org` from object segmentation.
         roi_table: Name of the well ROI table. Input ROI table must have single ROI entry;
             e.g. `well_ROI_table`
+        new_linking_table_name: Optional new table name for linked matches, saved in RX
+            alignment round directory.
+            If left None, default is {label_name}_match_table
         level: Pyramid level of the image to be processed. Choose `0` to
             process at full resolution.
         iou_cutoff: Float in range 0 to 1 to specify intersection over union cutoff.
@@ -205,7 +209,10 @@ def calculate_object_linking(
     ##############
 
     # Generate linking table: 3 columns ["R0_label", "RX_label", "iou"], where are RX is R1,R2, etc
-    new_link_table = label_name + "_match_table"
+    if new_linking_table_name is None:
+        new_link_table = label_name + "_match_table"
+    else:
+        new_link_table = new_linking_table_name
 
     # Save the shifted linking table as a new table
     logger.info(

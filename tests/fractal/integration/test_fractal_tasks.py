@@ -194,7 +194,7 @@ def test_relabel_by_linking_consensus(linking_zenodo_zarrs, name=name_mip):
             table_to_relabel=table_to_relabel,
         )
 
-        output_table_path = f"{zarr_url}/tables/{table_to_relabel}_linked"
+        output_table_path = f"{zarr_url}/tables/{label_name}_linked_ROI_table"
         output = ad.read_zarr(output_table_path).to_df().to_numpy()
         assert_almost_equal(
             output,
@@ -380,7 +380,7 @@ def test_sphr_harmonics_from_labelimage(linking_zenodo_zarrs, name=name_3d):
         zarr_url = img["zarr_url"]
         init_args = img["init_args"]
         label_name = "org_from_nuc"
-        roi_table = "org_ROI_table_from_nuc"
+        roi_table = "org_from_nuc_ROI_table"
 
         spherical_harmonics_from_labelimage(
             zarr_url=img["zarr_url"],
@@ -419,7 +419,7 @@ def test_scmultiplex_mesh_measurements(linking_zenodo_zarrs, name=name_3d):
         zarr_url = img["zarr_url"]
         init_args = img["init_args"]
         mesh_name = "org_from_nuc"
-        roi_table = "org_ROI_table_from_nuc"
+        roi_table = "org_from_nuc_ROI_table"
         output_table_name = "mesh_features"
 
         scmultiplex_mesh_measurements(
@@ -454,7 +454,6 @@ def test_scmultiplex_mesh_measurements(linking_zenodo_zarrs, name=name_3d):
         # check that first calculated spherical harmonic is correct
         output_table_path = f"{zarr_url}/tables/{output_table_name}_harmonics"
         output = ad.read_zarr(output_table_path).to_df().to_numpy()
-        print("output[!!!!!!!!!!!!!!!!0, :]", output[:, 0])
         assert_almost_equal(
             output[:, 0], test_sphr_harmonics_from_mesh_expected_output, decimal=4
         )

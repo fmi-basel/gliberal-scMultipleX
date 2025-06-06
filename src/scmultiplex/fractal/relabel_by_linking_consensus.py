@@ -12,6 +12,7 @@ Relabels image labels and ROI tables based on consensus linking.
 """
 import logging
 from pathlib import Path
+from typing import Optional
 
 import anndata as ad
 import dask.array as da
@@ -49,8 +50,10 @@ def relabel_by_linking_consensus(
     init_args: InitArgsRegistration,
     # Task-specific arguments
     label_name: str,
+    new_label_name: Optional[str] = None,
     consensus_table: str = "org_match_table_consensus",
     table_to_relabel: str = "org_ROI_table",
+    discard_labels_not_linked_across_all_rounds: bool = True,
 ):
     """
     Relabels image labels and ROI tables based on consensus linking.
@@ -65,10 +68,16 @@ def relabel_by_linking_consensus(
             reference_zarr_url that is used for registration.
             (standard argument for Fractal tasks, managed by Fractal server).
         label_name: Label name to be relabeled; e.g. `org` or `nuc`.
+        new_label_name: Optionally new name for relabeled label.
+            If left None, default is {label_name}_linked
         consensus_table: Name of consensus matching table that specifies consensus matches across rounds,
             typically stored in reference round zarr.
         table_to_relabel: Table name to relabel based on consensus linking. The table rows correspond
             to specified 'Label name', e.g. 'org_ROI_table' or 'nuc_ROI_table'
+        discard_labels_not_linked_across_all_rounds: if True (default), labels that are linked in
+            some but not all rounds are discarded, i.e. only objects linked across all rounds
+            are kept. If False, partially linked labels are kept (e.g. if label is linked between R0 and R1,
+            but missing in R2, the label is still kept).
     """
     # Refactor lines below to make single function for loading?
     # parameter for 'run on reference cycle' true or false; here is True
@@ -79,8 +88,10 @@ def relabel_by_linking_consensus(
     zarr_acquisition = extract_acq_info(zarr_url)
     ref_acquisition = extract_acq_info(r0_zarr_path)
 
-    new_label_name = label_name + "_linked"
-    new_table_name = table_to_relabel + "_linked"
+    if new_label_name is None:
+        new_label_name = label_name + "_linked"
+
+    new_table_name = new_label_name + "_ROI_table"
 
     logger.info(
         f"Running for {zarr_url=}. \n"
@@ -101,11 +112,20 @@ def relabel_by_linking_consensus(
     moving_colname = "R" + str(zarr_acquisition) + "_label"
     fixed_colname = "consensus_label"
 
-    # load list of consensus linked rx IDs that have been linked across all rounds
+    # load list of consensus linked rx IDs that have been linked across rounds
+    if discard_labels_not_linked_across_all_rounds:
+        # drop any row that has NaN in it
+        consensus_pd = consensus_pd.dropna()
+    else:
+        # drop NaN values only of RX round, they would exist if
+        # discard_labels_not_linked_across_all_rounds = False and
+        # given R0 label does not exist in RX so is NaN in RX only
+        consensus_pd = consensus_pd.dropna(subset=[moving_colname])
+
     # convert floats in linking tables to int then str
-    id_rx = consensus_adata[:, [moving_colname]].to_df()  # labels are floats here
+    id_rx = consensus_pd[[moving_colname]].copy()  # labels are floats here
     id_list = id_rx[moving_colname].tolist()
-    # id_list contains only consensus objects
+    # id_list contains only linked RX objects that want to relabel
     id_list = [str(int(x)) for x in id_list]  # convert to list of strings of integers
 
     # convert object labels in original ROI table to strings of integers

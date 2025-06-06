@@ -113,9 +113,8 @@ TASK_LIST = [
         tags=["regionprops", "morphology", "intensity"],
         docs_info="file:task_info/feature_measurements.md",
     ),
-    CompoundTask(
+    ParallelTask(
         name="scMultiplex Expand Labels",
-        executable_init="fractal/init_select_many_rounds.py",
         executable="fractal/expand_labels.py",
         meta={"cpus_per_task": 4, "mem": 16000},
         category="Image Processing",
@@ -147,9 +146,8 @@ TASK_LIST = [
         input_types=dict(z_illum_corrected=False, is_3D=True),
         output_types=dict(z_illum_corrected=True, is_3D=True),
     ),
-    CompoundTask(
+    ParallelTask(
         name="scMultiplex Fuse Touching Labels",
-        executable_init="fractal/init_select_many_rounds.py",
         executable="fractal/fuse_touching_labels.py",
         meta={"cpus_per_task": 4, "mem": 16000},
         category="Image Processing",

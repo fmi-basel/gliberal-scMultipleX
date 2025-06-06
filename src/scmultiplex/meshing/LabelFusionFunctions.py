@@ -106,6 +106,17 @@ def fill_holes_by_slice(seg):
     return seg_filled
 
 
+def fill_holes_by_slice_multi_instance(seg):
+    unique_labels = list(set(seg.ravel()) - {0})  # drop 0 background
+    filled_array = np.zeros_like(seg)
+    for lab in unique_labels:
+        binary_mask = seg == lab
+        filled_mask = fill_holes_by_slice(binary_mask)
+        # Assign filled mask to result with label
+        filled_array[filled_mask] = lab
+    return filled_array
+
+
 def anisotropic_gaussian_blur(seg_binary, sigma, pixmeta, convert_to_8bit=True):
     """
     Perform gaussian blur of binary 3D image with anisotropic sigma. Sigma anisotropy calculated from pixel spacing.
@@ -528,7 +539,7 @@ def select_label(seg, label_str):
     return seg
 
 
-def simple_fuse_labels(label_dask, connectivity):
+def simple_fuse_labels(label_dask, connectivity, fill_holes):
     dtype = label_dask.dtype
     dtype_max = np.iinfo(dtype).max
 
@@ -549,6 +560,9 @@ def simple_fuse_labels(label_dask, connectivity):
         raise ValueError(
             f"Number of identified labels {label_count} exceeds {dtype} maximum of {dtype_max}."
         )
+
+    if fill_holes:
+        fused_numpy = fill_holes_by_slice_multi_instance(fused_numpy)
 
     # Convert back to dask to save on disk with same chunk sizes and dtype as input label map
     fused_dask = da.from_array(fused_numpy, chunks=label_dask.chunksize).astype(dtype)

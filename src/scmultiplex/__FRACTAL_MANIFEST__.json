@@ -90,6 +90,11 @@
             "type": "string",
             "description": "Name of the well ROI table. Input ROI table must have single ROI entry; e.g. `well_ROI_table`"
           },
+          "new_linking_table_name": {
+            "title": "New Linking Table Name",
+            "type": "string",
+            "description": "Optional new table name for linked matches, saved in RX alignment round directory. If left None, default is {label_name}_match_table"
+          },
           "level": {
             "default": 0,
             "title": "Level",
@@ -200,6 +205,11 @@
             "title": "Roi Table",
             "type": "string",
             "description": "Name of the matching table used to calculate consensus across multiplexing rounds. Typically, this matching table is the output of a linking task, e.g. org_match_table or nuc_match_table. This table must be present in all rounds except for reference round."
+          },
+          "new_consensus_table_name": {
+            "title": "New Consensus Table Name",
+            "type": "string",
+            "description": "Optional new table name for consensus matches, saved in reference round directory. If left None, default is {roi_table} + \"_consensus\""
           }
         },
         "required": [
@@ -295,6 +305,11 @@
             "type": "string",
             "description": "Label name to be relabeled; e.g. `org` or `nuc`."
           },
+          "new_label_name": {
+            "title": "New Label Name",
+            "type": "string",
+            "description": "Optionally new name for relabeled label. If left None, default is {label_name}_linked"
+          },
           "consensus_table": {
             "default": "org_match_table_consensus",
             "title": "Consensus Table",
@@ -306,6 +321,12 @@
             "title": "Table To Relabel",
             "type": "string",
             "description": "Table name to relabel based on consensus linking. The table rows correspond to specified 'Label name', e.g. 'org_ROI_table' or 'nuc_ROI_table'"
+          },
+          "discard_labels_not_linked_across_all_rounds": {
+            "default": true,
+            "title": "Discard Labels Not Linked Across All Rounds",
+            "type": "boolean",
+            "description": "if True (default), labels that are linked in some but not all rounds are discarded, i.e. only objects linked across all rounds are kept. If False, partially linked labels are kept (e.g. if label is linked between R0 and R1, but missing in R2, the label is still kept)."
           }
         },
         "required": [
@@ -431,10 +452,15 @@
             "description": "Label name of segmented objects that is parent of label_name_to_register e.g. `org_linked`."
           },
           "roi_table": {
-            "default": "org_ROI_table_linked",
+            "default": "org_linked_ROI_table",
             "title": "Roi Table",
             "type": "string",
             "description": "Name of the ROI table over which the task loops to calculate the registration. e.g. linked consensus object table 'org_ROI_table_linked'"
+          },
+          "new_linking_table_name": {
+            "title": "New Linking Table Name",
+            "type": "string",
+            "description": "Optional new table name for linked matches, saved in RX alignment round directory. Suffix \"_affine\" or \"_ffd\" is added for the respective registration. If left None, default is {label_name_to_register} + \"_match_table_affine\" or \"_match_table_ffd\""
           },
           "level": {
             "default": 0,
@@ -592,6 +618,11 @@
             "title": "Save Mesh",
             "type": "boolean",
             "description": "if True, calculates and saves mesh on disk in the 'meshes' folder within zarr structure. Meshes saved as '.stl', except for the case of multi-object meshed (e.g. multiple nuclei within a parent organoid) that are saved as '.vtp' to preserve label ID information. Filename corresponds to parent object label id, or to label id in the case when group_by = None."
+          },
+          "new_mesh_name": {
+            "title": "New Mesh Name",
+            "type": "string",
+            "description": "Optionally new name for new label map (if multiscale) and mesh subfolder (if save_mesh) that is generated. If left None, default is {label_name}."
           },
           "expandby_factor": {
             "default": 0.6,
@@ -777,17 +808,17 @@
             "type": "string",
             "description": "Label name of segmentation (usually based on 2D MIP) that identifies objects in image."
           },
+          "new_label_name": {
+            "default": "org3d",
+            "title": "New Label Name",
+            "type": "string",
+            "description": "Desired name for new output label. The corresponding ROI table will be saved as {output_label_name}_ROI_table."
+          },
           "roi_table": {
             "default": "org_ROI_table",
             "title": "Roi Table",
             "type": "string",
             "description": "Name of the ROI table that corresponds to label_name. This table is used to iterate over objects and load object regions."
-          },
-          "output_label_name": {
-            "default": "org3d",
-            "title": "Output Label Name",
-            "type": "string",
-            "description": "Desired name for new output label. The corresponding ROI table will be saved as {output_label_name}_ROI_table."
           },
           "channel_1": {
             "$ref": "#/$defs/ChannelInputModel",
@@ -1312,44 +1343,10 @@
         "3D"
       ],
       "docs_info": "### Purpose\n- Expands segmented **labels** in 2D or 3D images **without overlap**.\n- Supports expansion by a fixed pixel distance or dynamically based on **label size**.\n- Optionally masks expanded labels using **parent objects** to prevent spillover.\n- Outputs an expanded label image and preserves non-overlapping object boundaries.\n\n### Outputs\n- A new **expanded label image** saved with an `_expanded` suffix.\n\n### Limitations\n- If masking by parent is enabled, the parent object label image must be provided.\n- Expansion beyond object boundaries may be clipped, depending on the surrounding labels and image dimensions.\n",
-      "executable_non_parallel": "fractal/init_select_many_rounds.py",
       "executable_parallel": "fractal/expand_labels.py",
       "meta_parallel": {
         "cpus_per_task": 4,
         "mem": 16000
-      },
-      "args_schema_non_parallel": {
-        "additionalProperties": false,
-        "properties": {
-          "zarr_urls": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Zarr Urls",
-            "type": "array",
-            "description": "List of paths or urls to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
-          },
-          "zarr_dir": {
-            "title": "Zarr Dir",
-            "type": "string",
-            "description": "path of the directory where the new OME-Zarrs will be created. Not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
-          },
-          "select_acquisitions": {
-            "items": {
-              "type": "integer"
-            },
-            "title": "Select Acquisitions",
-            "type": "array",
-            "description": "List of rounds to which correction should be applied, list of integers."
-          }
-        },
-        "required": [
-          "zarr_urls",
-          "zarr_dir",
-          "select_acquisitions"
-        ],
-        "type": "object",
-        "title": "InitSelectManyRounds"
       },
       "args_schema_parallel": {
         "additionalProperties": false,
@@ -1359,16 +1356,16 @@
             "type": "string",
             "description": "Path or url to the individual OME-Zarr image to be processed."
           },
-          "init_args": {
-            "title": "Init Args",
-            "type": "object",
-            "description": "Init arguments for Fractal server."
-          },
           "label_name_to_expand": {
             "default": "nuc",
             "title": "Label Name To Expand",
             "type": "string",
             "description": "Label name of segmentation to be expanded."
+          },
+          "new_label_name": {
+            "title": "New Label Name",
+            "type": "string",
+            "description": "Optionally new name for expanded label. If left None, default is {label_name_to_expand}_expanded"
           },
           "roi_table": {
             "default": "org_ROI_table_linked",
@@ -1402,11 +1399,16 @@
             "title": "Expand By Factor",
             "type": "number",
             "description": "Only used if calculate_image_based_expansion_distance is True. Multiplier that specifies pixels by which to expand each label. Float in range [0, 1 or higher], e.g. 0.2 means that 20% of mean equivalent diameter of labels in region is used."
+          },
+          "fill_holes": {
+            "default": false,
+            "title": "Fill Holes",
+            "type": "boolean",
+            "description": "if True, the label image prior to expansion has holes filled by iterating over slices. Useful for filling lumens in segmentation."
           }
         },
         "required": [
-          "zarr_url",
-          "init_args"
+          "zarr_url"
         ],
         "type": "object",
         "title": "ExpandLabels"
@@ -1721,44 +1723,10 @@
         "2D"
       ],
       "docs_info": "### Purpose\n- Fuse touching labels in segmentation images, in 2D or 3D. Connected components are identified during labeling\n    based on the connectivity argument. For a more detailed explanation of 1- or 2- connectivity, see documentation\n    of skimage.measure.label() function. When set to None (default), full connectivity (ndim of input array) is used.\n\n- Input is segmentation image with 0 value for background. Anything above 0 is assumed to be a labeled object.\n    Touching labels are labeled in numerically increasing order starting from 1 to n, where n is the number of\n    connected components (objects) identified.\n\n- This task has been tested for fusion of 2D MIP segmentation. Since fusion must occur on the full well numpy\n    array loaded into memory, performance may be poor for large 3D arrays.\n\n### Outputs\n- The fused label image is saved as a new label in zarr, with name {label_name_to_fuse}_fused.\n- The new ROI table for the fused label image is saved as a masking ROI table, with name\n    {label_name_to_fuse}_fused_ROI_table.\n",
-      "executable_non_parallel": "fractal/init_select_many_rounds.py",
       "executable_parallel": "fractal/fuse_touching_labels.py",
       "meta_parallel": {
         "cpus_per_task": 4,
         "mem": 16000
-      },
-      "args_schema_non_parallel": {
-        "additionalProperties": false,
-        "properties": {
-          "zarr_urls": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Zarr Urls",
-            "type": "array",
-            "description": "List of paths or urls to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
-          },
-          "zarr_dir": {
-            "title": "Zarr Dir",
-            "type": "string",
-            "description": "path of the directory where the new OME-Zarrs will be created. Not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
-          },
-          "select_acquisitions": {
-            "items": {
-              "type": "integer"
-            },
-            "title": "Select Acquisitions",
-            "type": "array",
-            "description": "List of rounds to which correction should be applied, list of integers."
-          }
-        },
-        "required": [
-          "zarr_urls",
-          "zarr_dir",
-          "select_acquisitions"
-        ],
-        "type": "object",
-        "title": "InitSelectManyRounds"
       },
       "args_schema_parallel": {
         "additionalProperties": false,
@@ -1768,14 +1736,14 @@
             "type": "string",
             "description": "Missing description"
           },
-          "init_args": {
-            "title": "Init Args",
-            "type": "object",
-            "description": "Missing description"
-          },
           "label_name_to_fuse": {
             "default": "org",
             "title": "Label Name To Fuse",
+            "type": "string",
+            "description": "Missing description"
+          },
+          "new_label_name": {
+            "title": "New Label Name",
             "type": "string",
             "description": "Missing description"
           },
@@ -1783,11 +1751,16 @@
             "title": "Connectivity",
             "type": "integer",
             "description": "Missing description"
+          },
+          "fill_holes": {
+            "default": false,
+            "title": "Fill Holes",
+            "type": "boolean",
+            "description": "Missing description"
           }
         },
         "required": [
-          "zarr_url",
-          "init_args"
+          "zarr_url"
         ],
         "type": "object",
         "title": "FuseTouchingLabels"
