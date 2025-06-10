@@ -16,7 +16,6 @@ import pandas as pd
 import zarr
 from fractal_tasks_core.channels import ChannelInputModel
 from fractal_tasks_core.tables import write_table
-from fractal_tasks_core.tasks.io_models import InitArgsRegistrationConsensus
 from pydantic import validate_call
 
 from scmultiplex.fractal.fractal_helper_functions import (
@@ -40,7 +39,6 @@ def calculate_z_illumination_correction(
     *,
     # Fractal arguments
     zarr_url: str,
-    init_args: InitArgsRegistrationConsensus,
     # Task-specific arguments
     input_channels: list[ChannelInputModel],
     label_name: str = "org",
@@ -94,7 +92,6 @@ def calculate_z_illumination_correction(
     Args:
         zarr_url: Path or url to the individual OME-Zarr image to be processed. This should be the image or multiplexing
             round that contains the uniform staining to be used for illumination correction.
-        init_args: Initialization arguments provided by`init_select_multiplexing_round`.
         input_channels: list of ChannelInputModel objects, where the user specifies the
             channels for calculating correction (with wavelength id or label), within the round selected in the
             init task.
