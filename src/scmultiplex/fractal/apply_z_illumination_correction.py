@@ -11,6 +11,7 @@ from typing import Any
 
 import numpy as np
 import zarr
+from fractal_tasks_core.channels import get_omero_channel_list
 from fractal_tasks_core.pyramids import build_pyramid
 from fractal_tasks_core.tasks._zarr_utils import _copy_tables_from_zarr_url
 from fractal_tasks_core.utils import _split_well_path_image_path
@@ -49,6 +50,7 @@ def apply_z_illumination_correction(
     label_name: str = "org",
     roi_table: str = "org_ROI_table",
     overwrite_input: bool = False,
+    overwrite_output: bool = False,
     output_group_suffix: str = "zillum",
 ) -> dict[str, Any]:
 
@@ -96,7 +98,9 @@ def apply_z_illumination_correction(
         label_name: Label name of segmentation (usually based on 2D MIP, converted to 3D) that identifies objects
             in image.
         roi_table: Name of the ROI table that corresponds to label_name.
-        overwrite_input: Boolean, if True overwrites the original, uncorrected image with the output of this task.
+        overwrite_input: If True overwrites the original, uncorrected image with the output of this task.
+        overwrite_output: If task has been run before and the corrected zarr with same name already exists, if set to
+            True the previous output is overwritten.
         output_group_suffix: If overwrite_input=False, this suffix is added to the new OME-Zarr image that contains
             the z-illumination corrected images.
 
@@ -137,36 +141,61 @@ def apply_z_illumination_correction(
 
     full_z_count = img_array.shape[-3]
 
-    logger.info(f"Detected {img_array.shape[0]} channels in input zarr array.")
+    # identify which channel id's for user-specified channels to process
+    # make dict with key: value as channel_id : ZIlluminationChannelInputModel object
+    channels_to_correct = {}
+    for channel in input_channels:
+        channel_id = get_channel_index_from_inputmodel(zarr_url, channel)
+        channels_to_correct[channel_id] = channel
+
+    logger.info(
+        f"Identified {len(channels_to_correct)} channel(s) to process out of {img_array.shape[0]} channel(s)"
+        f" in input zarr array."
+    )
+
+    ##############
+    # Initialize saving arguments  ###
+    ##############
+
+    well_url, _ = _split_well_path_image_path(zarr_url)
+    output_zarr_url = f"{well_url}/{zarr_url.split('/')[-1]}_{output_group_suffix}"
+    logger.info(f"Output zarr path: {output_zarr_url}")
+
+    # Create zarr for output
+
+    new_zarr = zarr.create(
+        shape=img_array.shape,
+        chunks=img_array.chunksize,
+        dtype=img_array.dtype,
+        store=zarr.storage.FSStore(f"{output_zarr_url}/0"),
+        overwrite=overwrite_output,
+        dimension_separator="/",
+    )
+
+    # Initialize new zarr group and copy over metadata from uncorrected zarr
+    output_image_group = zarr.group(output_zarr_url)
+    output_image_group.attrs.put(img_group.attrs.asdict())
 
     ##############
     # Apply z-correction to each input channel  ###
     ##############
 
+    all_channels = get_omero_channel_list(image_zarr_path=zarr_url)
+    channel_count = 0
     # Loop over channels, apply z-correction, and save to zarr
     # The channels in zarr that are not specified by user for z-illum correction remain unmodified
-    for channel in input_channels:
-
-        if channel.label is not None:
-            channel_name = channel.label
-        elif channel.wavelength_id is not None:
-            channel_name = channel.wavelength_id
-        else:
-            raise ValueError("Channel could not be identified.")
-
-        channel_id = get_channel_index_from_inputmodel(zarr_url, channel)
-
-        correction_table_name = channel.z_correction_table
-        background_intensity = channel.background_intensity
+    # for channel in input_channels:
+    for omero_channel in all_channels:
+        channel_count += 1
+        channel_id = get_channel_index_from_inputmodel(zarr_url, omero_channel)
 
         logger.info(
-            f"Using z-illumination correction table {correction_table_name} for "
-            f"channel {channel_name} with channel index {channel_id}."
+            f"Processing channel id {channel_id} (channel count {channel_count} of {len(all_channels)})."
         )
 
         # Load channel dask array
         ch_dask, _ = load_channel_image(
-            channel,
+            omero_channel,
             img_array,
             zarr_url,
             level,
@@ -179,44 +208,66 @@ def apply_z_illumination_correction(
         # Task fails if input arrays do not match
         check_match_zarr_chunking(ch_dask, label_dask)
 
-        # Load z-illumination correction table for this channel and perform checks
-        correction_adata = load_correction_adata(
-            correction_tables_zarr_url, correction_table_name, full_z_count, label_adata
+        # apply correction only to user-selected channels
+        if channel_id in channels_to_correct:
+            zillum_channel_input_model = channels_to_correct[channel_id]
+            # get name of channel
+            if zillum_channel_input_model.label is not None:
+                channel_name = zillum_channel_input_model.label
+            elif zillum_channel_input_model.wavelength_id is not None:
+                channel_name = zillum_channel_input_model.wavelength_id
+            else:
+                raise ValueError("Channel could not be identified.")
+
+            correction_table_name = zillum_channel_input_model.z_correction_table
+            background_intensity = zillum_channel_input_model.background_intensity
+
+            logger.info(
+                f"Using z-illumination correction table {correction_table_name} for "
+                f"channel {channel_name} with channel index {channel_id}."
+            )
+
+            # Load z-illumination correction table for this channel and perform checks
+            correction_adata = load_correction_adata(
+                correction_tables_zarr_url,
+                correction_table_name,
+                full_z_count,
+                label_adata,
+            )
+
+            # Apply correction
+            ch_dask_to_save = run_apply_correction(
+                ch_dask, label_dask, correction_adata, background_intensity
+            )
+
+            logger.info(f"Built Dask graph for channel {channel_name}.")
+
+        # for non-selected channels, simply write to zarr without processing
+        else:
+            logger.info(
+                "Channel not selected for correction. Copying channel zarr without processing."
+            )
+            ch_dask_to_save = ch_dask
+
+        logger.info("Starting dask compute and saving of zarr to disk.")
+
+        # Save channel dask to disk
+        # This is the command that triggers dask compute
+        ch_dask_to_save[None, ...].to_zarr(
+            url=new_zarr,
+            region=(
+                slice(channel_id, channel_id + 1),
+                slice(None),
+                slice(None),
+                slice(None),
+            ),
+            overwrite=True,
+            dimension_separator="/",
+            return_stored=False,
+            compute=True,
         )
 
-        # Apply correction
-        corrected_image_dask = run_apply_correction(
-            ch_dask, label_dask, correction_adata, background_intensity
-        )
-
-        # Replace channel image in image array with corrected channel
-        img_array[channel_id] = corrected_image_dask
-
-        logger.info(f"Built Dask graph for channel {channel_name}.")
-
-    ##############
-    # Compute and generate zarr on disk ###
-    ##############
-
-    well_url, _ = _split_well_path_image_path(zarr_url)
-    output_zarr_url = f"{well_url}/{zarr_url.split('/')[-1]}_{output_group_suffix}"
-    logger.info(f"Output zarr path: {output_zarr_url}")
-
-    # Initialize new zarr group and copy over metadata from uncorrected zarr
-    output_image_group = zarr.group(output_zarr_url)
-    output_image_group.attrs.put(img_group.attrs.asdict())
-
-    logger.info("Started computation to apply z-illumination correction.")
-
-    img_array.to_zarr(
-        f"{output_zarr_url}/0",
-        overwrite=True,
-        dimension_separator="/",
-        return_stored=False,
-        compute=True,
-    )
-
-    logger.info("Finished computation to apply z-illumination correction.")
+        logger.info(f"Finished saving channel {channel_id} to disk.")
 
     ##############
     # Build pyramid and clean up zarr metadata ###
@@ -231,12 +282,13 @@ def apply_z_illumination_correction(
         aggregation_function=np.mean,
     )
 
-    # Copy labels, plots, and meshes from origin zarr
-    folders_to_copy = ["labels", "plots", "meshes"]
     # Copy tables from origin zarr
     # This Fractal function might not check if tables not in origin exist in zillum zarr, in case
     # when downstream processing of the zillum zarr was already performed?
     _copy_tables_from_zarr_url(zarr_url, output_zarr_url)
+
+    # Copy labels, plots, and meshes from origin zarr
+    folders_to_copy = ["labels", "plots", "meshes"]
 
     for folder in folders_to_copy:
         copy_folder_from_zarrurl(zarr_url, output_zarr_url, folder_name=folder)
