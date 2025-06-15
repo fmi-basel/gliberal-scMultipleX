@@ -40,9 +40,11 @@ from fractal_tasks_core.utils import _split_well_path_image_path
 from zarr.errors import ArrayNotFoundError
 
 from scmultiplex.meshing.MeshFunctions import (
+    downsample_mesh,
     export_stl_polydata,
     export_vtk_polydata,
     labels_to_mesh,
+    upsample_mesh,
 )
 
 logger = logging.getLogger(__name__)
@@ -296,6 +298,7 @@ def save_new_label_and_bbox_df(
 
 def compute_and_save_mesh(
     label_image,
+    label_str,
     pixmeta,
     polynomial_degree,
     passband,
@@ -306,6 +309,8 @@ def compute_and_save_mesh(
     mesh_folder_name,
     object_name,
     save_as_stl,
+    resample_mesh_to_target_point_count,
+    target_point_count,
 ):
     # Make mesh with vtkDiscreteFlyingEdges3D algorithm
     # Set spacing to ome-zarr pixel spacing metadata. Mesh will be in physical units (um)
@@ -326,6 +331,34 @@ def compute_and_save_mesh(
         margin=5,
         show_progress=False,
     )
+
+    number_of_points = mesh_polydata.GetNumberOfPoints()
+
+    logger.info(
+        f"Successfully generated surface mesh for object label {label_str} with {number_of_points} points "
+        f"and {mesh_polydata.GetNumberOfCells()} triangles."
+    )
+
+    if resample_mesh_to_target_point_count:
+        # Decide whether to upsample or downsample
+        if number_of_points < target_point_count:
+            # Upsampling with Loop Subdivision and Quadric Decimation
+            mesh_polydata = upsample_mesh(mesh_polydata, target_point_count)
+            logger.info(
+                f"Upsampled mesh to {mesh_polydata.GetNumberOfPoints()} points "
+                f"and {mesh_polydata.GetNumberOfCells()} triangles."
+            )
+        elif number_of_points > target_point_count:
+            # Downsampling with Quadric Decimation
+            mesh_polydata = downsample_mesh(mesh_polydata, target_point_count)
+            logger.info(
+                f"Downsampled mesh to {mesh_polydata.GetNumberOfPoints()} points "
+                f"and {mesh_polydata.GetNumberOfCells()} triangles."
+            )
+
+        else:
+            logger.info("No resampling needed")
+
     # Save mesh
     save_transform_path = f"{zarr_url}/meshes/{mesh_folder_name}"
     os.makedirs(save_transform_path, exist_ok=True)

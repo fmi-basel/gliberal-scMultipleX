@@ -77,6 +77,8 @@ def surface_mesh_multiscale(
     feature_angle: int = 160,
     target_reduction: float = 0.98,
     smoothing_iterations: int = 1,
+    resample_mesh_to_target_point_count: bool = False,
+    target_point_count: int = 5000,
 ) -> dict[str, Any]:
     """
     Calculate 3D surface mesh of parent object (e.g. tissue, organoid)
@@ -187,6 +189,20 @@ def surface_mesh_multiscale(
             iteration will use parameters (0.005, 165, 0.1), the third (0.0025, 170, 0.1), etc. Maximum feature_angle
             is capped at 180. Note that additional iterations usually do not significantly add to processing time as
             the number of mesh verteces is typically significantly reduced after the first decimation iteration.
+        resample_mesh_to_target_point_count: If True, the mesh is resampled to the target_point_count. All smoothing
+            and decimation is performed as specified above. The smoothened mesh is then upsampled
+            (with Loop Subdivision and Quadric Decimation) or downsampled (with Quadric Decimation), depending on
+            whether the number of points in the smoothened mesh is lower or greater than the target_point_count,
+            respectively. If True, all output meshes will have the same total number of points and triangles per
+            object, though different point densities since object volumes are different. All .stl files also have
+            same size. Note that depending on whether input mesh has an even or odd number of points, resampled output
+            might still have slightly varying point/triangle counts between objects. If False, the original
+            smoothened mesh is returned where the number of points differs between objects (but density per surface
+            area is roughly the same).
+        target_point_count: Integer number of points desired in remeshed object. Note that this is approximate and
+            resampled output might still have slightly varying point/triangle counts between objects (e.g.
+            depending on whether input mesh has an even or odd number of points).
+            Only used if resample_mesh_to_target_point_count is True.
 
 
     """
@@ -475,6 +491,7 @@ def surface_mesh_multiscale(
 
         mesh_polydata = compute_and_save_mesh(
             label_image,
+            label_str,
             label_pixmeta,
             polynomial_degree,
             passband,
@@ -485,9 +502,10 @@ def surface_mesh_multiscale(
             mesh_folder_name,
             object_name,
             save_as_stl,
+            resample_mesh_to_target_point_count,
+            target_point_count,
         )
 
-        logger.info(f"Successfully generated surface mesh for object label {label_str}")
         object_count += 1
 
         if sphericity_check:
