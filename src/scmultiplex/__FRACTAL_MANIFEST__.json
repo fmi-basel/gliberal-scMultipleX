@@ -719,6 +719,12 @@
             "title": "Target Point Count",
             "type": "integer",
             "description": "Integer number of points desired in remeshed object. Note that this is approximate and resampled output might still have slightly varying point/triangle counts between objects (e.g. depending on whether input mesh has an even or odd number of points). Only used if resample_mesh_to_target_point_count is True."
+          },
+          "overwrite_folder": {
+            "default": true,
+            "title": "Overwrite Folder",
+            "type": "boolean",
+            "description": "If True, the output mesh folder, if exists, is cleared. Recommended to set True so that any meshes that already exist in folder but in current run are not processed are removed."
           }
         },
         "required": [

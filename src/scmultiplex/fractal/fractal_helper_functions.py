@@ -634,3 +634,18 @@ def correct_label_column(adata_roi_table, column_name="label"):
                 f" missing in {adata_roi_table.obs.columns=}"
             )
     return adata_roi_table
+
+
+def clear_mesh_folder(mesh_folder_name, zarr_url):
+    folder_path = f"{zarr_url}/meshes/{mesh_folder_name}"
+
+    if os.path.exists(folder_path) and os.path.isdir(folder_path):
+        # Loop through the contents and remove them
+        for filename in os.listdir(folder_path):
+            file_path = os.path.join(folder_path, filename)
+            try:
+                if os.path.isfile(file_path) or os.path.islink(file_path):
+                    os.unlink(file_path)  # remove file or symbolic link
+            except Exception as e:
+                logger.warning(f"Failed to delete {file_path}. Reason: {e}")
+    return

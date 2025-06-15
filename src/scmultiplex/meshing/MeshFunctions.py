@@ -201,16 +201,21 @@ def labels_to_mesh(
                 smoothing_iterations,
             )
 
+            cleaner = vtk.vtkCleanPolyData()
+            cleaner.SetInputData(instance_mesh)
+            cleaner.Update()
+            instance_mesh_cleaned = cleaner.GetOutput()
+
             # add the label id as point data
             scalars = numpy_support.numpy_to_vtk(
-                num_array=np.ones(instance_mesh.GetNumberOfPoints()) * idx,
+                num_array=np.ones(instance_mesh_cleaned.GetNumberOfPoints()) * idx,
                 deep=True,
                 array_type=vtk.VTK_INT,
             )
             scalars.SetName("label_id")
-            instance_mesh.GetPointData().SetScalars(scalars)
+            instance_mesh_cleaned.GetPointData().SetScalars(scalars)
 
-            appendFilter.AddInputData(instance_mesh)
+            appendFilter.AddInputData(instance_mesh_cleaned)
 
     appendFilter.Update()
 
@@ -251,17 +256,10 @@ def downsample_mesh(
     # target_reduction = 0.75 will try to reduce the triangle count by 75%.
     target_reduction = 1.0 - (target_points / current_points)
 
-    # Make a deep copy of the input mesh (vtkQuadricDecimation modifies input)
-    # vtkCleanPolyData is simple way to clean and duplicate a mesh before passing it downstream
-    # remove duplicate points and coincident vertices
-    cleaner = vtk.vtkCleanPolyData()
-    cleaner.SetInputData(mesh)
-    cleaner.Update()
-
     # note that vtkQuadraticDecimation() gives smoother surface results than vtkDecimatePro()
     # vtkDecimatePro() introduces sharp angles on surface
     decimate = vtk.vtkQuadricDecimation()
-    decimate.SetInputData(cleaner.GetOutput())
+    decimate.SetInputData(mesh)
     # restrict reduction to range 0 (no reduction) - 0.9 (90% reduction)
     #  not based on point count directly
     decimate.SetTargetReduction(min(max(target_reduction, 0.0), 0.9))

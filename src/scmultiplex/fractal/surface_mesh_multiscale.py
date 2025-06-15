@@ -33,6 +33,7 @@ from pydantic import validate_call
 
 from scmultiplex.features.FeatureFunctions import mesh_sphericity
 from scmultiplex.fractal.fractal_helper_functions import (
+    clear_mesh_folder,
     compute_and_save_mesh,
     format_roi_table,
     initialize_new_label,
@@ -79,6 +80,7 @@ def surface_mesh_multiscale(
     smoothing_iterations: int = 1,
     resample_mesh_to_target_point_count: bool = False,
     target_point_count: int = 5000,
+    overwrite_folder: bool = True,
 ) -> dict[str, Any]:
     """
     Calculate 3D surface mesh of parent object (e.g. tissue, organoid)
@@ -203,6 +205,8 @@ def surface_mesh_multiscale(
             resampled output might still have slightly varying point/triangle counts between objects (e.g.
             depending on whether input mesh has an even or odd number of points).
             Only used if resample_mesh_to_target_point_count is True.
+        overwrite_folder: If True, the output mesh folder, if exists, is cleared. Recommended to set True so
+            that any meshes that already exist in folder but in current run are not processed are removed.
 
 
     """
@@ -280,6 +284,19 @@ def surface_mesh_multiscale(
 
         # initialize new ROI table
         bbox_dataframe_list = []
+
+    # Clear contents of mesh folder if it already exists
+    if save_mesh and multiscale:
+        # Mesh calculation for a new 3D object calculated from child objects (multiscale)
+        mesh_folder_name = output_label_name
+    elif save_mesh and group_by is not None and multiscale is False:
+        # Mesh calculation for existing child objects that are part of the group_by object
+        mesh_folder_name = f"{label_root}_grouped"
+    elif save_mesh and group_by is None and multiscale is False:
+        mesh_folder_name = f"{label_root}"
+
+    if overwrite_folder:
+        clear_mesh_folder(mesh_folder_name, zarr_url)
 
     ##############
     # Filter nuclei by parent mask ###
@@ -433,6 +450,7 @@ def surface_mesh_multiscale(
         # Calculate and save mesh  ###
         ##############
 
+        # TODO: redundant with mesh_folder_name lines at start of task, can simplify.
         if save_mesh and multiscale:
             # Mesh calculation for a new 3D object calculated from child objects (multiscale)
             label_image = edges_canny
@@ -489,22 +507,26 @@ def surface_mesh_multiscale(
                 )
                 continue
 
-        mesh_polydata = compute_and_save_mesh(
-            label_image,
-            label_str,
-            label_pixmeta,
-            polynomial_degree,
-            passband,
-            feature_angle,
-            target_reduction,
-            smoothing_iterations,
-            zarr_url,
-            mesh_folder_name,
-            object_name,
-            save_as_stl,
-            resample_mesh_to_target_point_count,
-            target_point_count,
-        )
+        try:
+            mesh_polydata = compute_and_save_mesh(
+                label_image,
+                label_str,
+                label_pixmeta,
+                polynomial_degree,
+                passband,
+                feature_angle,
+                target_reduction,
+                smoothing_iterations,
+                zarr_url,
+                mesh_folder_name,
+                object_name,
+                save_as_stl,
+                resample_mesh_to_target_point_count,
+                target_point_count,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to save mesh. Reason: {e}")
+            continue
 
         object_count += 1
 
