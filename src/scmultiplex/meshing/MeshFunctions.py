@@ -138,10 +138,11 @@ def extract_smooth_mesh(
 
         if n == (smoothing_iterations - 1):
             output = decimated.GetOutput()
-            return output
+            return output  # return smoothened vtk.vtkPolyData
         else:
             algorithmoutput = decimated.GetOutputPort()
             continue
+    raise RuntimeError("Mesh extraction failed: smoothing loop did not return output.")
 
 
 def labels_to_mesh(
@@ -214,6 +215,64 @@ def labels_to_mesh(
     appendFilter.Update()
 
     return appendFilter.GetOutput()
+
+
+def upsample_mesh(
+    mesh: vtk.vtkPolyData,
+    target_points: int,
+) -> vtk.vtkPolyData:
+    num_points = mesh.GetNumberOfPoints()
+
+    # Subdivide until exceed the target point count
+    subdivisions = 0
+    estimated = num_points
+    while estimated < target_points:
+        estimated *= 2
+        subdivisions += 1
+
+    subdivide = vtk.vtkLoopSubdivisionFilter()
+    subdivide.SetNumberOfSubdivisions(subdivisions)
+    subdivide.SetInputData(mesh)
+    subdivide.Update()
+
+    dense_mesh = subdivide.GetOutput()
+
+    # if overshoot with upsampling, decimate
+    mesh = downsample_mesh(dense_mesh, target_points)
+
+    return mesh
+
+
+def downsample_mesh(
+    mesh: vtk.vtkPolyData,
+    target_points: int,
+) -> vtk.vtkPolyData:
+    current_points = mesh.GetNumberOfPoints()
+    # target_reduction = 0.75 will try to reduce the triangle count by 75%.
+    target_reduction = 1.0 - (target_points / current_points)
+
+    # Make a deep copy of the input mesh (vtkQuadricDecimation modifies input)
+    # vtkCleanPolyData is simple way to clean and duplicate a mesh before passing it downstream
+    # remove duplicate points and coincident vertices
+    cleaner = vtk.vtkCleanPolyData()
+    cleaner.SetInputData(mesh)
+    cleaner.Update()
+
+    # note that vtkQuadraticDecimation() gives smoother surface results than vtkDecimatePro()
+    # vtkDecimatePro() introduces sharp angles on surface
+    decimate = vtk.vtkQuadricDecimation()
+    decimate.SetInputData(cleaner.GetOutput())
+    # restrict reduction to range 0 (no reduction) - 0.9 (90% reduction)
+    #  not based on point count directly
+    decimate.SetTargetReduction(min(max(target_reduction, 0.0), 0.9))
+    # helps retain the overall shape and silhouette of the object
+    decimate.VolumePreservationOn()
+    # enable the use of attribute-aware decimation, which considers scalar
+    # data (e.g., color, temperature, labels) if present
+    decimate.AttributeErrorMetricOn()
+    decimate.Update()
+
+    return decimate.GetOutput()
 
 
 def add_mesh_points_attribute(mesh, attribute_name, label_mapping):
