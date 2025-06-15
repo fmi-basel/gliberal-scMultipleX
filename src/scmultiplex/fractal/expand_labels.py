@@ -146,6 +146,19 @@ def expand_labels(
 
         # ROIs to iterate over
         instance_key = roi_attrs["instance_key"]  # e.g. "label"
+
+        # NGIO FIX, TEMP
+        # Check that ROI_table.obs has the right column and extract label_value
+        if instance_key not in roi_adata.obs.columns:
+            if roi_adata.obs.index.name == instance_key:
+                # Workaround for new ngio table
+                roi_adata.obs[instance_key] = roi_adata.obs.index
+            else:
+                raise ValueError(
+                    f"In _preprocess_input, {instance_key=} "
+                    f" missing in {roi_adata.obs.columns=}"
+                )
+
         roi_labels = roi_adata.obs_vector(instance_key)
 
     elif table_type == "roi_table":
