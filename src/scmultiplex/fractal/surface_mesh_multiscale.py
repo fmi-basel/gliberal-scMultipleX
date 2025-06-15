@@ -489,22 +489,26 @@ def surface_mesh_multiscale(
                 )
                 continue
 
-        mesh_polydata = compute_and_save_mesh(
-            label_image,
-            label_str,
-            label_pixmeta,
-            polynomial_degree,
-            passband,
-            feature_angle,
-            target_reduction,
-            smoothing_iterations,
-            zarr_url,
-            mesh_folder_name,
-            object_name,
-            save_as_stl,
-            resample_mesh_to_target_point_count,
-            target_point_count,
-        )
+        try:
+            mesh_polydata = compute_and_save_mesh(
+                label_image,
+                label_str,
+                label_pixmeta,
+                polynomial_degree,
+                passband,
+                feature_angle,
+                target_reduction,
+                smoothing_iterations,
+                zarr_url,
+                mesh_folder_name,
+                object_name,
+                save_as_stl,
+                resample_mesh_to_target_point_count,
+                target_point_count,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to save mesh. Reason: {e}")
+            continue
 
         object_count += 1
 
