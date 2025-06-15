@@ -1504,6 +1504,23 @@
             },
             "title": "ChannelInputModel",
             "type": "object"
+          },
+          "InitArgsRegistrationConsensus": {
+            "description": "Registration consensus init args.",
+            "properties": {
+              "zarr_url_list": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Zarr Url List",
+                "type": "array"
+              }
+            },
+            "required": [
+              "zarr_url_list"
+            ],
+            "title": "InitArgsRegistrationConsensus",
+            "type": "object"
           }
         },
         "additionalProperties": false,
@@ -1512,6 +1529,11 @@
             "title": "Zarr Url",
             "type": "string",
             "description": "Path or url to the individual OME-Zarr image to be processed. This should be the image or multiplexing round that contains the uniform staining to be used for illumination correction."
+          },
+          "init_args": {
+            "$ref": "#/$defs/InitArgsRegistrationConsensus",
+            "title": "Init Args",
+            "description": "Initialization arguments provided by `init_select_multiplexing_round`."
           },
           "input_channels": {
             "items": {
@@ -1548,6 +1570,7 @@
         },
         "required": [
           "zarr_url",
+          "init_args",
           "input_channels"
         ],
         "type": "object",
