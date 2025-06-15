@@ -44,6 +44,7 @@ def calculate_z_illumination_correction(
     label_name: str = "org",
     roi_table: str = "org_ROI_table",
     percentile: int = 90,
+    low_bound_for_correction: float = 0.1,
 ) -> dict[str, Any]:
 
     """
@@ -101,6 +102,11 @@ def calculate_z_illumination_correction(
             80-90. Higher values (e.g. 99) are more sensitive to individual high-intensity in image, making the
             intensity vs. z curve less smooth. Lower values may pick up intensity of background or empty space in
             the image.
+        low_bound_for_correction: Float in range 0 to 1. Correction values below this value are clipped to this
+            value and are thus not allowed to go below it.
+            This ensures that overcorrection does not occur, e.g. if edges of object are not detected correctly.
+            Recommended to set to ~ 0.1 - 0.05 (i.e. not more than 10-20x correction factor), otherwise
+            when applied to image data the pixel values can become saturated.
     """
 
     logger.info(
@@ -220,6 +226,7 @@ def calculate_z_illumination_correction(
                 full_z_count,
                 label_str,
                 filepath,
+                low_bound_for_correction,
                 percentile=percentile,
             )
 
@@ -239,7 +246,9 @@ def calculate_z_illumination_correction(
             # Raise warnings if any values of anndata X matrix are less than or equal to a low_threshold value, or
             # greater than a high_threshold value.
             check_zillum_correction_table(
-                correction_table, low_threshold=0.05, high_threshold=1.0
+                correction_table,
+                low_threshold=low_bound_for_correction,
+                high_threshold=1.0,
             )
         else:
             # Create empty anndata table
