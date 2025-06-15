@@ -448,7 +448,13 @@ def convert_xy_to_dict(x, y):
 
 
 def calculate_correction(
-    img, roi_start_z, full_z_count, label_str, filepath, percentile=80
+    img,
+    roi_start_z,
+    full_z_count,
+    label_str,
+    filepath,
+    low_correction_threshold,
+    percentile=80,
 ):
     x, y = compute_norm_percentile_over_z(img, percentile=percentile)
     dy_dx = np.gradient(y, x)  # numerical derivative
@@ -493,7 +499,11 @@ def calculate_correction(
     y_pred = evaluate_model(sel_model, sel_res, x_fit)
 
     x_full, y_full = extend_eval(y_pred, x_fit, roi_start_z, full_z_count)
-
+    # any values below the low correction threshold are set to that value
+    # this prevents over-correction if edges of object were not detected correctly
+    y_full[
+        y_full < low_correction_threshold
+    ] = low_correction_threshold  # modify in place
     row = convert_xy_to_dict(x_full, y_full)
     row.update({"label": label_str})
 
@@ -532,7 +542,7 @@ def check_zillum_correction_table(adata, low_threshold, high_threshold):
     This checks whether z-illumination matrix normalization and fits have run as expected.
     """
 
-    low_indices = np.where(np.any(adata.X <= low_threshold, axis=1))[0]
+    low_indices = np.where(np.any(adata.X < low_threshold, axis=1))[0]
     hi_indices = np.where(np.any(adata.X > high_threshold, axis=1))[0]
 
     # if any rows have values below threshold, raise a warning.

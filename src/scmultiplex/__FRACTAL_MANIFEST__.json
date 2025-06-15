@@ -1538,6 +1538,12 @@
             "title": "Percentile",
             "type": "integer",
             "description": "Integer value of percentile used to calculate intensity value of each z-slice. Recommended range is 80-90. Higher values (e.g. 99) are more sensitive to individual high-intensity in image, making the intensity vs. z curve less smooth. Lower values may pick up intensity of background or empty space in the image."
+          },
+          "low_bound_for_correction": {
+            "default": 0.1,
+            "title": "Low Bound For Correction",
+            "type": "number",
+            "description": "Float in range 0 to 1. Correction values below this value are clipped to this value and are thus not allowed to go below it. This ensures that overcorrection does not occur, e.g. if edges of object are not detected correctly. Recommended to set to ~ 0.1 - 0.05 (i.e. not more than 10-20x correction factor), otherwise when applied to image data the pixel values can become saturated."
           }
         },
         "required": [
