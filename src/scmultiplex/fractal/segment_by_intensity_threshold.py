@@ -269,6 +269,19 @@ def segment_by_intensity_threshold(
 
     # Get labels to iterate over
     instance_key = roi_attrs["instance_key"]  # e.g. "label"
+
+    # NGIO FIX, TEMP
+    # Check that ROI_table.obs has the right column and extract label_value
+    if instance_key not in roi_adata.obs.columns:
+        if roi_adata.obs.index.name == instance_key:
+            # Workaround for new ngio table
+            roi_adata.obs[instance_key] = roi_adata.obs.index
+        else:
+            raise ValueError(
+                f"In input ROI table, {instance_key=} "
+                f" missing in {roi_adata.obs.columns=}"
+            )
+
     roi_labels = roi_adata.obs_vector(instance_key)
     total_label_count = len(roi_labels)
     compute = True
@@ -279,12 +292,11 @@ def segment_by_intensity_threshold(
     )
 
     # For each object in input ROI table...
-    for row in roi_adata.obs_names:
-        row_int = int(row)
-        label_str = roi_labels[row_int]
+    for i, obsname in enumerate(roi_adata.obs_names):
+        label_str = roi_labels[i]
 
         seg, ch1_raw = load_seg_and_raw_region(
-            label_dask, ch1_dask_raw, roi_idlist, ch1_idlist_raw, row_int, compute
+            label_dask, ch1_dask_raw, roi_idlist, ch1_idlist_raw, i, compute
         )
 
         if seg.shape != ch1_raw.shape:
@@ -306,7 +318,7 @@ def segment_by_intensity_threshold(
             # Load channel 2 raw image for object
             ch2_raw = load_region(
                 data_zyx=ch2_dask_raw,
-                region=convert_indices_to_regions(ch2_idlist_raw[row_int]),
+                region=convert_indices_to_regions(ch2_idlist_raw[i]),
                 compute=compute,
             )
 
@@ -429,11 +441,11 @@ def segment_by_intensity_threshold(
                 array_on_disk,
                 zarr_url,
                 out_label_name,
-                convert_indices_to_regions(roi_idlist[row_int]),
+                convert_indices_to_regions(roi_idlist[i]),
                 label_pixmeta,
                 compute,
                 roi_idlist,
-                row_int,
+                i,
             )
 
             bbox_df_list.append(bbox_df)
