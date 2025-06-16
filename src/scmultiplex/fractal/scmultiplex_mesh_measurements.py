@@ -24,7 +24,7 @@ from vtkmodules.util import numpy_support
 from scmultiplex.aics_shparam import shtools
 from scmultiplex.aics_shparam.shparam import calculate_spherical_harmonics
 from scmultiplex.features.MeshExtraction import get_mesh_measurements
-from scmultiplex.fractal.fractal_helper_functions import format_roi_table
+from scmultiplex.fractal.fractal_helper_functions import format_roi_table, get_zattrs
 from scmultiplex.meshing.MeshFunctions import (
     export_stl_polydata,
     export_vtk_polydata,
@@ -110,7 +110,22 @@ def scmultiplex_mesh_measurements(
 
     # Read ROIs of objects
     adata = ad.read_zarr(f"{zarr_url}/tables/{roi_table}")
-    labels = adata.obs_vector("label")
+    roi_attrs = get_zattrs(f"{zarr_url}/tables/{roi_table}")
+    instance_key = roi_attrs["instance_key"]  # e.g. "label"
+
+    # NGIO FIX, TEMP
+    # Check that ROI_table.obs has the right column and extract label_value
+    if instance_key not in adata.obs.columns:
+        if adata.obs.index.name == instance_key:
+            # Workaround for new ngio table
+            adata.obs[instance_key] = adata.obs.index
+        else:
+            raise ValueError(
+                f"In input ROI table, {instance_key=} "
+                f" missing in {adata.obs.columns=}"
+            )
+
+    labels = adata.obs_vector("instance_key")
 
     if len(labels) == 0:
         logger.warning("Well contains no objects")
@@ -121,9 +136,8 @@ def scmultiplex_mesh_measurements(
     # TODO with NGIO refactor, consider not looping over ROI table but directly over mesh names. This will
     #  generalize task to not require a corresponding ROI table in case meshes were generated outside of Fractal
     # for every object in ROI table...
-    for row in adata.obs_names:
-        row_int = int(row)
-        org_label = labels[row_int]
+    for i, obsname in enumerate(adata.obs_names):
+        org_label = labels[i]
 
         if not isinstance(org_label, str):
             raise TypeError("Label index must be string. Check ROI table obs naming.")
