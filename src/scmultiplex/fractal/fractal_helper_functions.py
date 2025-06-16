@@ -570,7 +570,7 @@ def copy_folder_from_zarrurl(origin_zarr_url, output_zarr_url, folder_name):
             output_folder_files = {
                 f for f in os.listdir(output_folder_path) if not f.startswith(".")
             }
-            if output_folder_files != origin_folder_files:
+            if output_folder_files > origin_folder_files:
                 raise ValueError(
                     f"Output zarr contains {folder_name} files not present in origin. Are you "
                     f"sure you want to overwrite? \n"

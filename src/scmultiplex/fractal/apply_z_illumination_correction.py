@@ -176,6 +176,12 @@ def apply_z_illumination_correction(
     output_image_group = zarr.group(output_zarr_url)
     output_image_group.attrs.put(img_group.attrs.asdict())
 
+    # Copy labels, plots, and meshes from origin zarr
+    folders_to_copy = ["labels", "plots", "meshes"]
+
+    for folder in folders_to_copy:
+        copy_folder_from_zarrurl(zarr_url, output_zarr_url, folder_name=folder)
+
     ##############
     # Apply z-correction to each input channel  ###
     ##############
@@ -286,12 +292,6 @@ def apply_z_illumination_correction(
     # This Fractal function might not check if tables not in origin exist in zillum zarr, in case
     # when downstream processing of the zillum zarr was already performed?
     _copy_tables_from_zarr_url(zarr_url, output_zarr_url)
-
-    # Copy labels, plots, and meshes from origin zarr
-    folders_to_copy = ["labels", "plots", "meshes"]
-
-    for folder in folders_to_copy:
-        copy_folder_from_zarrurl(zarr_url, output_zarr_url, folder_name=folder)
 
     if overwrite_input:
         logger.info("Replacing input zarr with the z-illumination corrected zarr.")
