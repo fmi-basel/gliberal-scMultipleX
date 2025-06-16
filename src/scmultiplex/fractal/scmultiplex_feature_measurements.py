@@ -219,6 +219,17 @@ def scmultiplex_feature_measurements(  # noqa: C901
             pad_with_zeros=True,
         )
 
+        # NGIO FIX, TEMP
+        # Check that ROI_table.obs has the right column and extract label_value
+        if "label" not in ROI_table.obs.columns:
+            if ROI_table.obs.index.name == "label":
+                # Workaround for new ngio table
+                ROI_table.obs["label"] = ROI_table.obs.index
+            else:
+                raise ValueError(
+                    f"Unrecognized obs index name in ROI table {ROI_table.obs.index.name=}."
+                )
+
     # Loop over ROIs to make measurements
     df_well = pd.DataFrame()
     df_info_well = pd.DataFrame()
