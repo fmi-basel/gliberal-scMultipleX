@@ -548,7 +548,7 @@ def update_fractal_well_metadata(zarr_url, output_zarr_url):
     return image_list_updates
 
 
-def copy_folder_from_zarrurl(origin_zarr_url, output_zarr_url, folder_name):
+def copy_folder_from_zarrurl(origin_zarr_url, output_zarr_url, folder_name, overwrite):
     """
     Temp fix before ngio, literally copy over folder of os.
     Folder_name is string, e.g 'labels', or 'plots'
@@ -561,27 +561,43 @@ def copy_folder_from_zarrurl(origin_zarr_url, output_zarr_url, folder_name):
         # make labels directory in destination path
         try:
             shutil.copytree(origin_folder_path, output_folder_path)
+            logger.info(f"Copied entire folder '{folder_name}' to output Zarr.")
         # if folder directory already exists in the target zarr, check content before copying
         except FileExistsError:
-            # get all files in labels directory
-            origin_folder_files = {
-                f for f in os.listdir(origin_folder_path) if not f.startswith(".")
-            }
-            output_folder_files = {
-                f for f in os.listdir(output_folder_path) if not f.startswith(".")
-            }
-            if output_folder_files != origin_folder_files:
-                raise ValueError(
-                    f"Output zarr contains {folder_name} files not present in origin. Are you "
-                    f"sure you want to overwrite? \n"
-                    f"Output folder files: {output_folder_files} \n"
-                    f"Original folder files: {origin_folder_files}"
+            if not overwrite:
+                logger.warning(
+                    f"Folder '{folder_name}' already exists in output and {overwrite=}. Skipping copy."
                 )
-            else:
-                logger.info(
-                    f"Folder {folder_name} already present in output zarr directory, "
-                    f"skipping copying from origin. "
-                )
+                return
+
+            logger.info(
+                f"Folder '{folder_name}' exists in output. Overwriting contents..."
+            )
+
+            # Copy each file/subdirectory individually
+            for item in os.listdir(origin_folder_path):
+                if item.startswith("."):
+                    continue  # Skip hidden files
+
+                origin_item = os.path.join(origin_folder_path, item)
+
+                if not os.path.isdir(origin_item):
+                    logger.warning(
+                        f"Skipping {folder_name}/{item} as it is not a directory."
+                    )
+                    continue
+
+                target_item = os.path.join(output_folder_path, item)
+
+                if os.path.exists(target_item):
+                    # If already exists, delete it first, then copy from origin
+                    shutil.rmtree(target_item)
+                    shutil.copytree(origin_item, target_item)
+                    logger.info(f"...Replaced {item} with one from origin.")
+                else:
+                    # If does not exist simply copy the folder
+                    shutil.copytree(origin_item, target_item)
+                    logger.info(f"...Copied {item} from origin without replacement.")
     else:
         logger.info(
             f"Folder name {folder_name} does not exist in origin zarr, skipping copying"
