@@ -1870,6 +1870,58 @@
         "title": "Convert3dToMip"
       },
       "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+    },
+    {
+      "name": "Build Label Image",
+      "category": "Image Processing",
+      "tags": [
+        "Mixed modality"
+      ],
+      "docs_info": "### Purpose\n- Clean up incomplete label image on disk\n- Build pyramid structure on disk for label image\n- Make masking ROI table based on label image\n- This is useful if a segmentation task was run but failed with OoM error at pyramid building step.\n- Works on both 2D and 3D zarr arrays\n\n### Outputs\n- Pyramid structure for label image (optional), matching chunking and number of levels of parent zarr array\n- Masking ROI table (optional)\n\n### Limitations\n- Only works for label images, not image arrays\n",
+      "executable_parallel": "fractal/build_label_image.py",
+      "meta_parallel": {
+        "cpus_per_task": 4,
+        "mem": 36000
+      },
+      "args_schema_parallel": {
+        "additionalProperties": false,
+        "properties": {
+          "zarr_url": {
+            "title": "Zarr Url",
+            "type": "string",
+            "description": "Path or url to the individual OME-Zarr image to be processed."
+          },
+          "label_name": {
+            "title": "Label Name",
+            "type": "string",
+            "description": "Label name of segmentation to be processed."
+          },
+          "build_zarr_pyramid": {
+            "default": true,
+            "title": "Build Zarr Pyramid",
+            "type": "boolean",
+            "description": "If True, build pyramid for input label_name."
+          },
+          "compute_masking_roi_table": {
+            "default": true,
+            "title": "Compute Masking Roi Table",
+            "type": "boolean",
+            "description": "If True, compute masking ROI table and save."
+          },
+          "new_table_name": {
+            "title": "New Table Name",
+            "type": "string",
+            "description": "Optional name for ROI table. If left None, default is {label_name}_ROI_table."
+          }
+        },
+        "required": [
+          "zarr_url",
+          "label_name"
+        ],
+        "type": "object",
+        "title": "BuildLabelImage"
+      },
+      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
     }
   ],
   "has_args_schemas": true,

@@ -166,4 +166,12 @@ TASK_LIST = [
         ],
         docs_info="file:task_info/convert_3d_to_mip.md",
     ),
+    ParallelTask(
+        name="Build Label Image",
+        executable="fractal/build_label_image.py",
+        meta={"cpus_per_task": 4, "mem": 36000},
+        category="Image Processing",
+        tags=["Mixed modality"],
+        docs_info="file:task_info/build_label_image.md",
+    ),
 ]
