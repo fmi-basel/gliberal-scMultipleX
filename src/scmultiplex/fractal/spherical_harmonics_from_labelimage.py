@@ -30,7 +30,7 @@ from fractal_tasks_core.tasks.io_models import InitArgsRegistrationConsensus
 from pydantic import validate_call
 
 from scmultiplex.aics_shparam import shparam, shtools
-from scmultiplex.fractal.fractal_helper_functions import format_roi_table
+from scmultiplex.fractal.fractal_helper_functions import format_roi_table, get_zattrs
 from scmultiplex.meshing.MeshFunctions import export_stl_polydata
 
 logger = logging.getLogger(__name__)
@@ -93,6 +93,7 @@ def spherical_harmonics_from_labelimage(
 
     # Read ROIs of objects
     adata = ad.read_zarr(f"{zarr_url}/tables/{roi_table}")
+    roi_attrs = get_zattrs(f"{zarr_url}/tables/{roi_table}")
 
     # Read Zarr metadata
     ngffmeta = load_NgffImageMeta(f"{zarr_url}/labels/{label_name}")
@@ -109,7 +110,23 @@ def spherical_harmonics_from_labelimage(
 
     check_valid_ROI_indices(idlist, roi_table)
 
-    labels = adata.obs_vector("label")
+    # Get labels to iterate over
+    instance_key = roi_attrs["instance_key"]  # e.g. "label"
+
+    # NGIO FIX, TEMP
+    # Check that ROI_table.obs has the right column and extract label_value
+    if instance_key not in adata.obs.columns:
+        if adata.obs.index.name == instance_key:
+            # Workaround for new ngio table
+            adata.obs[instance_key] = adata.obs.index
+        else:
+            raise ValueError(
+                f"In input ROI table, {instance_key=} "
+                f" missing in {adata.obs.columns=}"
+            )
+
+    labels = adata.obs_vector(instance_key)
+
     # initialize variables
     compute = True  # convert to numpy array from dask
 
@@ -118,10 +135,9 @@ def spherical_harmonics_from_labelimage(
 
     df_coeffs = []
     # for every object in ROI table...
-    for row in adata.obs_names:
-        row_int = int(row)
-        org_label = labels[row_int]
-        region = convert_indices_to_regions(idlist[row_int])
+    for i, obsname in enumerate(adata.obs_names):
+        org_label = labels[i]
+        region = convert_indices_to_regions(idlist[i])
 
         # load label image for object
         seg = load_region(
