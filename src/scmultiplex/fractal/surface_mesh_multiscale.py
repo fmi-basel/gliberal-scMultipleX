@@ -36,6 +36,7 @@ from scmultiplex.fractal.fractal_helper_functions import (
     clear_mesh_folder,
     compute_and_save_mesh,
     format_roi_table,
+    get_zattrs,
     initialize_new_label,
     save_new_label_and_bbox_df,
 )
@@ -238,6 +239,7 @@ def surface_mesh_multiscale(
 
     # Read ROIs of objects
     roi_adata = ad.read_zarr(f"{zarr_url}/tables/{roi_table}")
+    roi_attrs = get_zattrs(f"{zarr_url}/tables/{roi_table}")
 
     # Read Zarr metadata
     label_ngffmeta = load_NgffImageMeta(f"{zarr_url}/labels/{label_name}")
@@ -322,7 +324,21 @@ def surface_mesh_multiscale(
         check_valid_ROI_indices(groupby_idlist, roi_table)
 
     # Get labels to iterate over
-    roi_labels = roi_adata.obs_vector("label")
+    instance_key = roi_attrs["instance_key"]  # e.g. "label"
+
+    # NGIO FIX, TEMP
+    # Check that ROI_table.obs has the right column and extract label_value
+    if instance_key not in roi_adata.obs.columns:
+        if roi_adata.obs.index.name == instance_key:
+            # Workaround for new ngio table
+            roi_adata.obs[instance_key] = roi_adata.obs.index
+        else:
+            raise ValueError(
+                f"In input ROI table, {instance_key=} "
+                f" missing in {roi_adata.obs.columns=}"
+            )
+
+    roi_labels = roi_adata.obs_vector(instance_key)
     total_label_count = len(roi_labels)
     compute = True
     sphericity_flag = 0
@@ -333,10 +349,9 @@ def surface_mesh_multiscale(
     )
 
     # For each object in input ROI table...
-    for row in roi_adata.obs_names:
-        row_int = int(row)
-        label_str = roi_labels[row_int]
-        region = convert_indices_to_regions(roi_idlist[row_int])
+    for i, obsname in enumerate(roi_adata.obs_names):
+        label_str = roi_labels[i]
+        region = convert_indices_to_regions(roi_idlist[i])
 
         # Load label image of label_name object as numpy array
         seg = load_region(
@@ -348,7 +363,7 @@ def surface_mesh_multiscale(
         if group_by is not None:
             # Mask objects by parent group_by object
             seg, parent_mask = mask_by_parent_object(
-                seg, groupby_dask, groupby_idlist, row_int, label_str
+                seg, groupby_dask, groupby_idlist, i, label_str
             )
             # Only proceed if labelmap is not empty
             if np.amax(seg) == 0:
@@ -566,7 +581,7 @@ def surface_mesh_multiscale(
                 label_pixmeta,
                 compute,
                 roi_idlist,
-                row_int,
+                i,
             )
             bbox_dataframe_list.append(bbox_df)
 

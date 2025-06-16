@@ -146,6 +146,19 @@ def expand_labels(
 
         # ROIs to iterate over
         instance_key = roi_attrs["instance_key"]  # e.g. "label"
+
+        # NGIO FIX, TEMP
+        # Check that ROI_table.obs has the right column and extract label_value
+        if instance_key not in roi_adata.obs.columns:
+            if roi_adata.obs.index.name == instance_key:
+                # Workaround for new ngio table
+                roi_adata.obs[instance_key] = roi_adata.obs.index
+            else:
+                raise ValueError(
+                    f"In _preprocess_input, {instance_key=} "
+                    f" missing in {roi_adata.obs.columns=}"
+                )
+
         roi_labels = roi_adata.obs_vector(instance_key)
 
     elif table_type == "roi_table":
@@ -222,9 +235,8 @@ def expand_labels(
     for i, obsname in enumerate(roi_adata.obs_names):
 
         if table_type == "masking_roi_table":
-            row_int = int(obsname)
-            label_str = roi_labels[row_int]
-            region = convert_indices_to_regions(roi_idlist[row_int])
+            label_str = roi_labels[i]
+            region = convert_indices_to_regions(roi_idlist[i])
 
         elif table_type == "roi_table":
             label_str = obsname
@@ -240,7 +252,7 @@ def expand_labels(
         if table_type == "masking_roi_table":
             # Mask objects by parent group_by object
             seg, parent_mask = mask_by_parent_object(
-                seg, mask_dask, mask_idlist, row_int, label_str
+                seg, mask_dask, mask_idlist, i, label_str
             )
 
         ##############
