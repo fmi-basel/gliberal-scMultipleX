@@ -125,7 +125,7 @@ def scmultiplex_mesh_measurements(
                 f" missing in {adata.obs.columns=}"
             )
 
-    labels = adata.obs_vector("instance_key")
+    labels = adata.obs_vector(instance_key)
 
     if len(labels) == 0:
         logger.warning("Well contains no objects")
