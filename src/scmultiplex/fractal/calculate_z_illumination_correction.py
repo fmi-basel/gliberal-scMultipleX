@@ -21,6 +21,7 @@ from pydantic import validate_call
 
 from scmultiplex.fractal.fractal_helper_functions import (
     format_roi_table,
+    get_zattrs,
     load_channel_image,
     load_image_array,
     load_label_rois,
@@ -169,9 +170,23 @@ def calculate_z_illumination_correction(
         ##############
         # Iterate over objects and perform segmentation  ###
         ##############
+        roi_attrs = get_zattrs(f"{zarr_url}/tables/{roi_table}")
+        instance_key = roi_attrs["instance_key"]  # e.g. "label"
+
+        # NGIO FIX, TEMP
+        # Check that ROI_table.obs has the right column and extract label_value
+        if instance_key not in label_adata.obs.columns:
+            if label_adata.obs.index.name == instance_key:
+                # Workaround for new ngio table
+                label_adata.obs[instance_key] = label_adata.obs.index
+            else:
+                raise ValueError(
+                    f"In _preprocess_input, {instance_key=} "
+                    f" missing in {label_adata.obs.columns=}"
+                )
 
         # Get labels to iterate over
-        roi_labels = label_adata.obs_vector("label")
+        roi_labels = label_adata.obs_vector(instance_key)
         total_label_count = len(roi_labels)
         compute = True
         object_count = 0
@@ -196,12 +211,11 @@ def calculate_z_illumination_correction(
         df_correction = []
 
         # For each object in input ROI table...
-        for row in label_adata.obs_names:
-            row_int = int(row)
-            label_str = roi_labels[row_int]
+        for i, obsname in enumerate(label_adata.obs_names):
+            label_str = roi_labels[i]
 
             seg_numpy, raw_numpy = load_seg_and_raw_region(
-                label_dask, ch_dask, label_idlist, ch_idlist, row_int, compute
+                label_dask, ch_dask, label_idlist, ch_idlist, i, compute
             )
 
             if seg_numpy.shape != raw_numpy.shape:
@@ -220,7 +234,7 @@ def calculate_z_illumination_correction(
 
             logger.info(f"Processing object {label_str}.")
 
-            roi_start_z = label_idlist[row_int][0]
+            roi_start_z = label_idlist[i][0]
 
             # calculate z-illumination dropoff
             row = calculate_correction(
