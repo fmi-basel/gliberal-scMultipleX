@@ -180,7 +180,9 @@ def apply_z_illumination_correction(
     folders_to_copy = ["labels", "plots", "meshes"]
 
     for folder in folders_to_copy:
-        copy_folder_from_zarrurl(zarr_url, output_zarr_url, folder_name=folder)
+        copy_folder_from_zarrurl(
+            zarr_url, output_zarr_url, folder_name=folder, overwrite=overwrite_output
+        )
 
     ##############
     # Apply z-correction to each input channel  ###
