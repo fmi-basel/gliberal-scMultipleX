@@ -385,27 +385,26 @@ def surface_mesh_multiscale(
         ##############
         # Perform label fusion and edge detection  ###
         ##############
+        if filter_children_by_volume:
+            (
+                seg,
+                segids_toremove,
+                removed_size_mean,
+                size_mean,
+                volume_cutoff,
+            ) = filter_by_volume(seg, child_volume_filter_threshold)
+
+            if len(segids_toremove) > 0:
+                logger.info(
+                    f"Volume filtering removed {len(segids_toremove)} cell(s) from object {label_str} "
+                    f"that have a volume below the calculated {np.round(volume_cutoff,1)} pixel threshold"
+                    f"\n Removed labels have a mean volume of {np.round(removed_size_mean,1)} and are the "
+                    f"label id(s): "
+                    f"\n {segids_toremove}"
+                )
 
         if multiscale:
             xy_padwidth = int(sigma_factor)
-            if filter_children_by_volume:
-                (
-                    seg,
-                    segids_toremove,
-                    removed_size_mean,
-                    size_mean,
-                    volume_cutoff,
-                ) = filter_by_volume(seg, child_volume_filter_threshold)
-
-                if len(segids_toremove) > 0:
-                    logger.info(
-                        f"Volume filtering removed {len(segids_toremove)} cell(s) from object {label_str} "
-                        f"that have a volume below the calculated {np.round(volume_cutoff,1)} pixel threshold"
-                        f"\n Removed labels have a mean volume of {np.round(removed_size_mean,1)} and are the "
-                        f"label id(s): "
-                        f"\n {segids_toremove}"
-                    )
-
             # Generate new 3D label image
             (
                 edges_canny,
