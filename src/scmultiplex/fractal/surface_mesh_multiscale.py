@@ -499,16 +499,17 @@ def surface_mesh_multiscale(
             logger.warning(f"Label image is empty. Skipping object {label_str}!")
             continue
 
-        # Select largest component
-        label_image, roi_count = select_largest_component(label_image)
-        if roi_count > 1:
-            logger.warning(
-                f"Object {label_str} contains more than 1 component. "
-                f"Largest component selected as label mask."
-            )
+        # Select largest component, only for single-object meshes
+        if group_by is None:
+            label_image, roi_count = select_largest_component(label_image)
+            if roi_count > 1:
+                logger.warning(
+                    f"Object {label_str} contains more than 1 component. "
+                    f"Largest component selected as label mask."
+                )
 
         # Fill holes, e.g. lumen
-        if fill_holes:
+        if fill_holes and group_by is None:
             # fill holes in label image
             label_image = fill_holes_by_slice(label_image)
 
