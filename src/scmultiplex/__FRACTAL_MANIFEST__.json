@@ -1991,6 +1991,70 @@
         "title": "AnnotateMeshByChildFeatures"
       },
       "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+    },
+    {
+      "name": "Cleanup 3D Child Labels",
+      "category": "Image Processing",
+      "tags": [
+        "3D"
+      ],
+      "docs_info": "### Purpose\n- Clean up debris in label images\n- Remove labels that are smaller than specified volume threshold\n\n### Outputs\n- New label image and corresponding ROI table for cleaned objects\n\n### Limitations\n- Only performs volume-based filtering for now\n",
+      "executable_parallel": "fractal/cleanup_3d_child_labels.py",
+      "meta_parallel": {
+        "cpus_per_task": 4,
+        "mem": 12000
+      },
+      "args_schema_parallel": {
+        "additionalProperties": false,
+        "properties": {
+          "zarr_url": {
+            "title": "Zarr Url",
+            "type": "string",
+            "description": "Path or url to the individual OME-Zarr image to be processed. Refers to the zarr_url of the reference acquisition. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "child_label_name": {
+            "default": "nuc",
+            "title": "Child Label Name",
+            "type": "string",
+            "description": "Label name child objects (e.g. nuclei) to be cleaned."
+          },
+          "parent_label_name": {
+            "title": "Parent Label Name",
+            "type": "string",
+            "description": "Label name of segmented objects that are parents of child_label_name. child_label_name objects will be masked and grouped by this object. For example, when parent_label_name = 'org', the nuclear segmentation is masked by the organoid parent and all nuclei belonging to the parent are loaded as a label image."
+          },
+          "parent_roi_table": {
+            "default": "org_ROI_table_linked",
+            "title": "Parent Roi Table",
+            "type": "string",
+            "description": "Name of the ROI table used to iterate over objects and load object regions. This is the ROI table that corresponds to the parent_label_name objects."
+          },
+          "new_child_label_name": {
+            "title": "New Child Label Name",
+            "type": "string",
+            "description": "New label name for cleaned child objects. If left None, default is {child_label_name}_cleaned."
+          },
+          "filter_children_by_volume": {
+            "default": true,
+            "title": "Filter Children By Volume",
+            "type": "boolean",
+            "description": "if True, performing volume filtering of children to remove objects smaller than specified volume_filter_threshold."
+          },
+          "child_volume_filter_threshold": {
+            "default": 0.05,
+            "title": "Child Volume Filter Threshold",
+            "type": "number",
+            "description": "Multiplier that specifies cutoff for volumes below which nuclei are filtered out, float in range [0,1], e.g. 0.05 means that 5% of median of nuclear volume distribution in a given object is used as cutoff. Default 0.05."
+          }
+        },
+        "required": [
+          "zarr_url",
+          "parent_label_name"
+        ],
+        "type": "object",
+        "title": "Cleanup3dChildLabels"
+      },
+      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
     }
   ],
   "has_args_schemas": true,

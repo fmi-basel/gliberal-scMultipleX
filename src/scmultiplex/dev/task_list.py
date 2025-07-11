@@ -182,4 +182,12 @@ TASK_LIST = [
         tags=["3D", "mesh"],
         docs_info="file:task_info/annotate_mesh_by_child_features.md",
     ),
+    ParallelTask(
+        name="Cleanup 3D Child Labels",
+        executable="fractal/cleanup_3d_child_labels.py",
+        meta={"cpus_per_task": 4, "mem": 12000},
+        category="Image Processing",
+        tags=["3D"],
+        docs_info="file:task_info/cleanup_3d_child_labels.md",
+    ),
 ]
