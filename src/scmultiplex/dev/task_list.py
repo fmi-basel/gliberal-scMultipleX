@@ -174,4 +174,12 @@ TASK_LIST = [
         tags=["Mixed modality"],
         docs_info="file:task_info/build_label_image.md",
     ),
+    ParallelTask(
+        name="Annotate Mesh by Child Features",
+        executable="fractal/annotate_mesh_by_child_features.py",
+        meta={"cpus_per_task": 4, "mem": 12000},
+        category="Image Processing",
+        tags=["3D", "mesh"],
+        docs_info="file:task_info/annotate_mesh_by_child_features.md",
+    ),
 ]
