@@ -188,3 +188,11 @@ def remove_xy_pad(nparray, pad_width):
         raise ValueError("Expecting 3-dimensional image as input")
 
     return nparray[:, pad_width:-pad_width, pad_width:-pad_width]
+
+
+def min_nonzero_label(label_img):
+    """
+    Find lowest label in segmentation image that is not 0 background label
+    """
+    nonzero_vals = label_img[label_img > 0]
+    return np.min(nonzero_vals) if nonzero_vals.size > 0 else None

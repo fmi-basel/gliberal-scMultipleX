@@ -32,7 +32,7 @@ from scmultiplex.fractal.fractal_helper_functions import (
     get_zattrs,
     initialize_new_label,
 )
-from scmultiplex.meshing.FilterFunctions import mask_by_parent_object
+from scmultiplex.meshing.FilterFunctions import mask_by_parent_object, min_nonzero_label
 from scmultiplex.meshing.LabelFusionFunctions import filter_by_volume
 
 ngio_logger.setLevel("ERROR")
@@ -52,6 +52,7 @@ def cleanup_3d_child_labels(
     new_child_label_name: Optional[str] = None,
     filter_children_by_volume: bool = True,
     child_volume_filter_threshold: float = 0.05,
+    repair_uint16_clipped_labels: bool = False,
 ) -> dict[str, Any]:
     """
 
@@ -76,6 +77,9 @@ def cleanup_3d_child_labels(
         child_volume_filter_threshold: Multiplier that specifies cutoff for volumes below which nuclei are filtered out,
             float in range [0,1], e.g. 0.05 means that 5% of median of nuclear volume distribution in a given
             object is used as cutoff. Default 0.05.
+        repair_uint16_clipped_labels: If child labels were clipped to uint16 during segmentation and
+            there were more than 2^16 labels, the label id's above 65535 get clipped. If True, these clipped
+            values get remapped to monotonically increasing values 65536, 65537, etc.
 
     """
     logger.info(
@@ -183,6 +187,11 @@ def cleanup_3d_child_labels(
         f"Starting iteration over {total_label_count} detected objects in ROI table."
     )
 
+    last_max_value = 0
+    hit_uint16_max = False
+    detected_clipped_values = False
+    start_label = 65536
+
     # For each object in input ROI table...
     for i, obsname in enumerate(roi_adata.obs_names):
 
@@ -210,7 +219,74 @@ def cleanup_3d_child_labels(
             continue
 
         ##############
-        # Perform label fusion and edge detection  ###
+        # Repair uint16 clipped labels  ###
+        ##############
+        if repair_uint16_clipped_labels:
+
+            max_label = np.amax(seg)
+            min_label = min_nonzero_label(seg)
+
+            if max_label >= 65535:
+                hit_uint16_max = True  # stays True for all subsequence objects
+
+            if min_label < last_max_value:
+                # if true, this means labels are no longer monotonically increasing
+                detected_clipped_values = True  # stays True for all subsequence objects
+
+            if hit_uint16_max and detected_clipped_values:
+                logger.warning(f"Detected clipped label values in object {label_str}.")
+                # relabel child labels for all subsequent objects
+                relabeled_image = seg.copy()
+
+                used_labels = np.unique(seg)  # sorted in numerically increasing order
+                used_labels = used_labels[used_labels != 0]  # drop 0 background
+
+                if max_label == 65535:
+                    # this is the first object after clipping, and it has a mix of both high and low labels
+                    # enumerate ensures monotonically increasing order
+                    # Create mapping: old_label (key) → new_label (value)
+                    # e.g. 1 -> 65536, 2->65537, etc
+                    # Skip labels between last_max_value and max_label, as they were already used before clipping
+                    mapping = {
+                        old_label: new_label
+                        for new_label, old_label in enumerate(
+                            [
+                                lab
+                                for lab in used_labels
+                                if not (last_max_value < lab <= max_label)
+                            ],
+                            start=start_label,
+                        )
+                    }
+                else:
+                    # for all subsequent objects, relabel all values
+                    # Create mapping: old_label (key) → new_label (value)
+                    # e.g. 1 -> 65536, 2->65537, etc
+                    mapping = {
+                        old_label: new_label
+                        for new_label, old_label in enumerate(
+                            used_labels, start=start_label
+                        )
+                    }
+
+                # Vectorized relabeling, only relabel the values that are in the mapping dictionary
+                for old_label, new_label in mapping.items():
+                    relabeled_image[seg == old_label] = new_label
+
+                start_label = (
+                    max(mapping.values()) + 1
+                )  # starting value for next object continues from current
+
+                # don't bother updating last_max_value, this is not irrelevant
+
+                seg = relabeled_image  # update seg with relabeled image
+
+            else:
+                # object is still in uint16 range, simply update the last_max_value and do not relabel
+                last_max_value = max_label
+
+        ##############
+        # Perform volume filtering  ###
         ##############
         if filter_children_by_volume:
             (
@@ -263,6 +339,15 @@ def cleanup_3d_child_labels(
     ome_zarr_container.add_table(output_roi_table_name, masking_table, overwrite=True)
 
     logger.info(f"Saved new masking ROI table as {output_roi_table_name}")
+
+    new_saved_table = ad.read_zarr(f"{zarr_url}/tables/{output_roi_table_name}")
+    labels = np.array(new_saved_table.obs.index)
+    unique_labels, counts = np.unique(labels, return_counts=True)
+    duplicates = unique_labels[counts > 1]
+
+    if duplicates.size > 0:
+        logger.error(f"Detected duplicated ROI labels: {duplicates}")
+        raise ValueError(f"ROI table contains duplicate labels: {duplicates}")
 
     logger.info(
         f"End cleanup_3d_child_labels task for {zarr_url}/labels/{child_label_name}"

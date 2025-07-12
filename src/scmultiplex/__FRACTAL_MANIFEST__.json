@@ -2045,6 +2045,12 @@
             "title": "Child Volume Filter Threshold",
             "type": "number",
             "description": "Multiplier that specifies cutoff for volumes below which nuclei are filtered out, float in range [0,1], e.g. 0.05 means that 5% of median of nuclear volume distribution in a given object is used as cutoff. Default 0.05."
+          },
+          "repair_uint16_clipped_labels": {
+            "default": false,
+            "title": "Repair Uint16 Clipped Labels",
+            "type": "boolean",
+            "description": "If child labels were clipped to uint16 during segmentation and there were more than 2^16 labels, the label id's above 65535 get clipped. If True, these clipped values get remapped to monotonically increasing values 65536, 65537, etc."
           }
         },
         "required": [
