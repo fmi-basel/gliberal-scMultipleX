@@ -138,6 +138,10 @@ def annotate_mesh_by_child_features(
         feat_df = pd.DataFrame(feat_adata.X[mask], columns=feat_adata.var_names)
         feat_df[instance_key] = feat_adata.obs.loc[mask, instance_key].values
 
+        if feat_df.empty:
+            logger.warning(f"No child objects found in object {org_label}. Skipping.")
+            continue
+
         # get mesh points
         vtk_points = polydata.GetPoints()
         points_array = numpy_support.vtk_to_numpy(
