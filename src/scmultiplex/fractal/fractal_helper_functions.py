@@ -665,3 +665,72 @@ def clear_mesh_folder(mesh_folder_name, zarr_url):
             except Exception as e:
                 logger.warning(f"Failed to delete {file_path}. Reason: {e}")
     return
+
+
+# from https://github.com/fractal-analytics-platform/fractal-tasks-core/blob/main/fractal_tasks_core/tasks/_registration_utils.py
+def calculate_physical_shifts(
+    shifts: np.array,
+    level: int,
+    coarsening_xy: int,
+    full_res_pxl_sizes_zyx: list[float],
+) -> list[float]:
+    """
+    Calculates shifts in physical units based on pixel shifts
+
+    Args:
+        shifts: array of shifts, zyx or yx
+        level: resolution level
+        coarsening_xy: coarsening factor between levels
+        full_res_pxl_sizes_zyx: pixel sizes in physical units as zyx
+
+    Returns:
+        shifts in physical units as zyx
+    """
+
+    curr_pixel_size = np.array(full_res_pxl_sizes_zyx) * coarsening_xy**level
+    if len(shifts) == 3:
+        shifts_physical = shifts * curr_pixel_size
+    elif len(shifts) == 2:
+        shifts_physical = [
+            0,
+            shifts[0] * curr_pixel_size[1],
+            shifts[1] * curr_pixel_size[2],
+        ]
+    else:
+        raise ValueError(f"Wrong input for calculate_physical_shifts ({shifts=})")
+    return shifts_physical
+
+
+# from https://github.com/fractal-analytics-platform/fractal-tasks-core/blob/main/fractal_tasks_core/tasks/_registration_utils.py
+def get_ROI_table_with_translation(
+    ROI_table: ad.AnnData,
+    new_shifts: dict[str, list[float]],
+) -> ad.AnnData:
+    """
+    Adds translation columns to a ROI table
+
+    Args:
+        ROI_table: Fractal ROI table
+        new_shifts: zyx list of shifts
+
+    Returns:
+        Fractal ROI table with 3 additional columns for calculated translations
+    """
+
+    shift_table = pd.DataFrame(new_shifts).T
+    shift_table.columns = ["translation_z", "translation_y", "translation_x"]
+    shift_table = shift_table.rename_axis("FieldIndex")
+    new_roi_table = ROI_table.to_df().merge(
+        shift_table, left_index=True, right_index=True
+    )
+    if len(new_roi_table) != len(ROI_table):
+        raise ValueError(
+            "New ROI table with registration info has a "
+            f"different length ({len(new_roi_table)=}) "
+            f"from the original ROI table ({len(ROI_table)=})"
+        )
+
+    adata = ad.AnnData(X=new_roi_table.astype(np.float32))
+    adata.obs_names = new_roi_table.index
+    adata.var_names = list(map(str, new_roi_table.columns))
+    return adata

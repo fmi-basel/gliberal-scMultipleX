@@ -28,7 +28,12 @@ from fractal_tasks_core.tables import write_table
 from fractal_tasks_core.tasks.io_models import InitArgsRegistration
 from pydantic import validate_call
 
-from scmultiplex.fractal.fractal_helper_functions import extract_acq_info
+from scmultiplex.fractal.fractal_helper_functions import (
+    calculate_physical_shifts,
+    extract_acq_info,
+    get_ROI_table_with_translation,
+    get_zattrs,
+)
 from scmultiplex.linking.OrganoidLinkingFunctions import (
     apply_shift,
     calculate_matching,
@@ -59,7 +64,9 @@ def calculate_object_linking(
     1. Load the object segmentation images for each well (paired reference and alignment round)
     2. Calculate the shift transformation for the image pair
     3. Apply shifts to image pair and identify matching object labels given an iou cutoff threshold
-    3. Store the identified matches as a linking table in alignment round directory
+    4. Store the identified matches as a linking table in alignment round directory
+    5. Update input ROI table to store shifts for use in subsequent tasks. Shifts stored in physical
+        coordinates in column names translation_x, _y, _z in ROI table.
 
     Parallelization level: image
 
@@ -114,6 +121,7 @@ def calculate_object_linking(
     # Read ROIs
     r0_adata = ad.read_zarr(f"{r0_zarr_path}/tables/{roi_table}")
     rx_adata = ad.read_zarr(f"{zarr_url}/tables/{roi_table}")
+    rx_adata_attrs = get_zattrs(f"{zarr_url}/tables/{roi_table}")
     logger.info(f"Found {len(rx_adata)} ROIs in {roi_table=} to be processed.")
 
     # Create list of indices for 3D ROIs spanning the entire Z direction
@@ -227,6 +235,32 @@ def calculate_object_linking(
         link_df_adata,
         overwrite=True,
         table_attrs=dict(type="linking_table", fractal_table_version="1"),
+    )
+
+    # write new well_ROI_table; remains unmodified except add
+    # shifts to roi columns as translation_x, translation_y and translation_z
+    roi_name = rx_adata.obs.index[0]
+    shifts = np.insert(shifts, 0, 0)  # insert 0 at index 0; convert to zyx from yx
+    # convert shifts from pixels to physical coordinates
+    new_shifts = {
+        roi_name: calculate_physical_shifts(
+            shifts,
+            level=level,
+            coarsening_xy=rx_xycoars,
+            full_res_pxl_sizes_zyx=rx_pixmeta,
+        )
+    }
+
+    # Write physical shifts to disk (as part of the ROI table)
+    logger.info(f"Updating the {roi_table=} with translation columns")
+    image_group = zarr.group(zarr_url)
+    new_ROI_table = get_ROI_table_with_translation(rx_adata, new_shifts)
+    write_table(
+        image_group,
+        roi_table,
+        new_ROI_table,
+        overwrite=True,
+        table_attrs=rx_adata_attrs,
     )
 
 
