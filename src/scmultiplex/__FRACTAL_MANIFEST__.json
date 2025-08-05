@@ -1922,6 +1922,145 @@
         "title": "BuildLabelImage"
       },
       "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+    },
+    {
+      "name": "Annotate Mesh by Child Features",
+      "category": "Image Processing",
+      "tags": [
+        "3D",
+        "mesh"
+      ],
+      "docs_info": "### Purpose\n- Annotate parent mesh (.stl) vertices (points) by child features\n- This allows visualization of single-cell features on tissue-scale mesh\n- For visualization in Paraview\n\n### Outputs\n- Saves .vtp mesh with embedded point annotations.\n\n### Limitations\n- Assumes feature extraction table and mesh have same physical unit spacing and scaling.\n- Each point of mesh is assigned to closest child object by euclidean distance to centroid.\n",
+      "executable_parallel": "fractal/annotate_mesh_by_child_features.py",
+      "meta_parallel": {
+        "cpus_per_task": 4,
+        "mem": 12000
+      },
+      "args_schema_parallel": {
+        "additionalProperties": false,
+        "properties": {
+          "zarr_url": {
+            "title": "Zarr Url",
+            "type": "string",
+            "description": "Path or url to the individual OME-Zarr image to be processed. Refers to the zarr_url of the reference acquisition. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "parent_mesh_name": {
+            "title": "Parent Mesh Name",
+            "type": "string",
+            "description": "Mesh folder name on which annotation is performed. Must contain .stl format meshes whose filename corresponds to label name in ROI table."
+          },
+          "parent_roi_table": {
+            "title": "Parent Roi Table",
+            "type": "string",
+            "description": "Name of the ROI table that corresponds to labels of meshed objects, only used for indexing objects in for loop."
+          },
+          "child_feature_table": {
+            "title": "Child Feature Table",
+            "type": "string",
+            "description": "Name of the feature table extracted from child objects. Assumes that it contains columns called ['x_pos_pix', 'y_pos_pix', 'z_pos_pix_scaled'] for the x,y,z centroids of each object. Assumes that these centroid units and scaling matches the mesh point units and scaling."
+          },
+          "annotate_by_features": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Annotate By Features",
+            "type": "array",
+            "description": "List of strings. Each string is a column name of the child feature table and will be added to the .vtp mesh as a point annotation. Input should exactly match naming in child_feature_table columns. instance_key of child feature (e.g. \"label\") is added as column internally, so can be used as annotation feature as well."
+          },
+          "parent_of_child_colname": {
+            "default": "ROI_label",
+            "title": "Parent Of Child Colname",
+            "type": "string",
+            "description": "Name of column for parent label id's of child objects, e.g. the organoid id of the parent organoid. This column is assumed to be within obs of the child_feature_table. Usually this is defined in the feature extraction task."
+          },
+          "new_mesh_name": {
+            "title": "New Mesh Name",
+            "type": "string",
+            "description": "Name of the new mesh folder where annotated .vtp meshes are saved."
+          }
+        },
+        "required": [
+          "zarr_url",
+          "parent_mesh_name",
+          "parent_roi_table",
+          "child_feature_table",
+          "annotate_by_features",
+          "new_mesh_name"
+        ],
+        "type": "object",
+        "title": "AnnotateMeshByChildFeatures"
+      },
+      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+    },
+    {
+      "name": "Cleanup 3D Child Labels",
+      "category": "Image Processing",
+      "tags": [
+        "3D"
+      ],
+      "docs_info": "### Purpose\n- Clean up debris in label images\n- Remove labels that are smaller than specified volume threshold\n\n### Outputs\n- New label image and corresponding ROI table for cleaned objects\n\n### Limitations\n- Only performs volume-based filtering for now\n",
+      "executable_parallel": "fractal/cleanup_3d_child_labels.py",
+      "meta_parallel": {
+        "cpus_per_task": 4,
+        "mem": 12000
+      },
+      "args_schema_parallel": {
+        "additionalProperties": false,
+        "properties": {
+          "zarr_url": {
+            "title": "Zarr Url",
+            "type": "string",
+            "description": "Path or url to the individual OME-Zarr image to be processed. Refers to the zarr_url of the reference acquisition. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "child_label_name": {
+            "default": "nuc",
+            "title": "Child Label Name",
+            "type": "string",
+            "description": "Label name child objects (e.g. nuclei) to be cleaned."
+          },
+          "parent_label_name": {
+            "title": "Parent Label Name",
+            "type": "string",
+            "description": "Label name of segmented objects that are parents of child_label_name. child_label_name objects will be masked and grouped by this object. For example, when parent_label_name = 'org', the nuclear segmentation is masked by the organoid parent and all nuclei belonging to the parent are loaded as a label image."
+          },
+          "parent_roi_table": {
+            "default": "org_ROI_table_linked",
+            "title": "Parent Roi Table",
+            "type": "string",
+            "description": "Name of the ROI table used to iterate over objects and load object regions. This is the ROI table that corresponds to the parent_label_name objects."
+          },
+          "new_child_label_name": {
+            "title": "New Child Label Name",
+            "type": "string",
+            "description": "New label name for cleaned child objects. If left None, default is {child_label_name}_cleaned."
+          },
+          "filter_children_by_volume": {
+            "default": true,
+            "title": "Filter Children By Volume",
+            "type": "boolean",
+            "description": "if True, performing volume filtering of children to remove objects smaller than specified volume_filter_threshold."
+          },
+          "child_volume_filter_threshold": {
+            "default": 0.05,
+            "title": "Child Volume Filter Threshold",
+            "type": "number",
+            "description": "Multiplier that specifies cutoff for volumes below which nuclei are filtered out, float in range [0,1], e.g. 0.05 means that 5% of median of nuclear volume distribution in a given object is used as cutoff. Default 0.05."
+          },
+          "repair_uint16_clipped_labels": {
+            "default": false,
+            "title": "Repair Uint16 Clipped Labels",
+            "type": "boolean",
+            "description": "If child labels were clipped to uint16 during segmentation and there were more than 2^16 labels, the label id's above 65535 get clipped. If True, these clipped values get remapped to monotonically increasing values 65536, 65537, etc."
+          }
+        },
+        "required": [
+          "zarr_url",
+          "parent_label_name"
+        ],
+        "type": "object",
+        "title": "Cleanup3dChildLabels"
+      },
+      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
     }
   ],
   "has_args_schemas": true,

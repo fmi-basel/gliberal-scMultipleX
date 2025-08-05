@@ -385,27 +385,26 @@ def surface_mesh_multiscale(
         ##############
         # Perform label fusion and edge detection  ###
         ##############
+        if filter_children_by_volume:
+            (
+                seg,
+                segids_toremove,
+                removed_size_mean,
+                size_mean,
+                volume_cutoff,
+            ) = filter_by_volume(seg, child_volume_filter_threshold)
+
+            if len(segids_toremove) > 0:
+                logger.info(
+                    f"Volume filtering removed {len(segids_toremove)} cell(s) from object {label_str} "
+                    f"that have a volume below the calculated {np.round(volume_cutoff,1)} pixel threshold"
+                    f"\n Removed labels have a mean volume of {np.round(removed_size_mean,1)} and are the "
+                    f"label id(s): "
+                    f"\n {segids_toremove}"
+                )
 
         if multiscale:
             xy_padwidth = int(sigma_factor)
-            if filter_children_by_volume:
-                (
-                    seg,
-                    segids_toremove,
-                    removed_size_mean,
-                    size_mean,
-                    volume_cutoff,
-                ) = filter_by_volume(seg, child_volume_filter_threshold)
-
-                if len(segids_toremove) > 0:
-                    logger.info(
-                        f"Volume filtering removed {len(segids_toremove)} cell(s) from object {label_str} "
-                        f"that have a volume below the calculated {np.round(volume_cutoff,1)} pixel threshold"
-                        f"\n Removed labels have a mean volume of {np.round(removed_size_mean,1)} and are the "
-                        f"label id(s): "
-                        f"\n {segids_toremove}"
-                    )
-
             # Generate new 3D label image
             (
                 edges_canny,
@@ -499,16 +498,17 @@ def surface_mesh_multiscale(
             logger.warning(f"Label image is empty. Skipping object {label_str}!")
             continue
 
-        # Select largest component
-        label_image, roi_count = select_largest_component(label_image)
-        if roi_count > 1:
-            logger.warning(
-                f"Object {label_str} contains more than 1 component. "
-                f"Largest component selected as label mask."
-            )
+        # Select largest component, only for single-object meshes
+        if group_by is None:
+            label_image, roi_count = select_largest_component(label_image)
+            if roi_count > 1:
+                logger.warning(
+                    f"Object {label_str} contains more than 1 component. "
+                    f"Largest component selected as label mask."
+                )
 
         # Fill holes, e.g. lumen
-        if fill_holes:
+        if fill_holes and group_by is None:
             # fill holes in label image
             label_image = fill_holes_by_slice(label_image)
 
