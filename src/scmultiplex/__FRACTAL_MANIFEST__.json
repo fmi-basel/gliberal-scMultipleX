@@ -1764,29 +1764,29 @@
           "zarr_url": {
             "title": "Zarr Url",
             "type": "string",
-            "description": "Missing description"
+            "description": "Path or url to the individual OME-Zarr image to be processed."
           },
           "label_name_to_fuse": {
             "default": "org",
             "title": "Label Name To Fuse",
             "type": "string",
-            "description": "Missing description"
+            "description": "Label name of segmentation to be fused."
           },
           "new_label_name": {
             "title": "New Label Name",
             "type": "string",
-            "description": "Missing description"
+            "description": "Optionally new name for expanded label. If left None, default is {label_name_to_fuse}_fused"
           },
           "connectivity": {
             "title": "Connectivity",
             "type": "integer",
-            "description": "Missing description"
+            "description": "Maximum number of orthogonal hops to consider a pixel/voxel as a neighbor. Accepted values are ranging from 1 to input.ndim. If None, a full connectivity of input.ndim is used."
           },
           "fill_holes": {
             "default": false,
             "title": "Fill Holes",
             "type": "boolean",
-            "description": "Missing description"
+            "description": "if True, the label image after fusion has holes filled by iterating over slices. Useful for filling any gaps between fused labels."
           }
         },
         "required": [
