@@ -189,6 +189,10 @@ def labels_to_mesh(
                 slice(max(0, sl.start - margin), sl.stop + margin) for sl in loc
             )
             crop = (labels[loc] == idx).astype(np.uint8)
+            # TODO: here, add func that calculates origin of parent object.
+            # pass this in as argument to offset the nuclear origin by this amount
+            # add origin_offset argument
+            # this ensures that nuclei match center coordinate of parent
             origin = tuple(sl.start * s for sl, s in zip(loc, spacing))
             imageVTK = numpy_img_to_vtk(crop, spacing, origin, deep_copy=False)
             instance_mesh = extract_smooth_mesh(

@@ -56,7 +56,7 @@ def fuse_touching_labels(
         new_label_name: Optionally new name for expanded label.
             If left None, default is {label_name_to_fuse}_fused
         connectivity: Maximum number of orthogonal hops to consider a pixel/voxel as a neighbor. Accepted values
-        are ranging from 1 to input.ndim. If None, a full connectivity of input.ndim is used.
+            are ranging from 1 to input.ndim. If None, a full connectivity of input.ndim is used.
         fill_holes: if True, the label image after fusion has holes filled by iterating
             over slices. Useful for filling any gaps between fused labels.
     """
