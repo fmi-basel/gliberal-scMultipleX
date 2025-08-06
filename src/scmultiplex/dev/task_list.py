@@ -190,4 +190,15 @@ TASK_LIST = [
         tags=["3D"],
         docs_info="file:task_info/cleanup_3d_child_labels.md",
     ),
+    CompoundTask(
+        name="scMultiplex Shift by Shift",
+        executable_init="fractal/_image_based_registration_hcs_init.py",
+        executable="fractal/shift_by_shift.py",
+        meta_init={"cpus_per_task": 1, "mem": 1000},
+        meta={"cpus_per_task": 4, "mem": 16000},
+        category="Registration",
+        modality="HCS",
+        tags=["multiplexing", "2D", "3D"],
+        docs_info="file:task_info/shift_by_shift.md",
+    ),
 ]
