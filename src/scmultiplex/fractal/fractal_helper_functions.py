@@ -11,10 +11,11 @@ import os as os
 import shutil
 from functools import reduce
 from pathlib import Path
-from typing import Sequence
+from typing import Sequence, Tuple
 
 import anndata as ad
 import dask.array as da
+import ngio
 import numpy as np
 import pandas as pd
 import zarr
@@ -294,6 +295,81 @@ def save_new_label_and_bbox_df(
     )
 
     return bbox_df
+
+
+def roi_to_pixel_slices(
+    roi: ngio.Roi, spacing: np.ndarray
+) -> Tuple[slice, slice, slice]:
+    """
+    Convert Roi (with x,y,z and lengths in um) to pixel slices.
+
+    Args:
+        roi: object with attributes roi.x, roi.y, roi.z, roi.x_length, roi.y_length, roi.z_length (all in um)
+        spacing: numpy array of shape (3,), with elements [um/pix for z, y, x]
+
+    Returns:
+        Tuple of slices: (z_slice, y_slice, x_slice) in pixels
+    """
+    # Convert start positions (um -> pix)
+    start_idx = np.array([roi.z, roi.y, roi.x]) / spacing  # order: z, y, x
+    start_idx = np.round(start_idx).astype(int)
+    # Convert lengths (um -> pix)
+    length_pix = np.array([roi.z_length, roi.y_length, roi.x_length]) / spacing
+    length_pix = np.round(length_pix).astype(int)
+    # Compute stop position (in pix)
+    stop_idx = start_idx + length_pix
+
+    # Build slices
+    z_slice = slice(start_idx[0], stop_idx[0])
+    y_slice = slice(start_idx[1], stop_idx[1])
+    x_slice = slice(start_idx[2], stop_idx[2])
+
+    return (z_slice, y_slice, x_slice)
+
+
+def save_new_multichannel_image_with_overlap(
+    new_npimg: np.ndarray,
+    image_url: str,
+    region: Tuple[slice, ...],
+    apply_to_all_channels: bool = True,
+):
+    """
+    Write multichannel numpy array to zarr in specific ROI region.
+    To be used within for loop over ROIs.
+    Load on-disk region and combine with new array using element-wise max to handle potential overlapping regions
+    that were already written to disk from previous ROIs.
+    Apply to all channels
+    """
+    if apply_to_all_channels:
+        assert len(region) == 3  # region should have z,y,x coordinates
+        # add empty channel dimension to region; this loads all channels
+        region = (slice(None),) + region
+
+    # Load dask from disk, will contain rois of the previously processed objects within for loop
+    image_url_level0 = os.path.join(image_url, "0")
+    image_array = zarr.open_array(image_url_level0)
+
+    # Load region of current object from disk, will include any previously processed neighboring objects
+    region_on_disk = image_array[region]
+
+    # Check that dimensions of rois match
+    if region_on_disk.shape != new_npimg.shape:
+        raise ValueError(
+            f"Shape of new image {new_npimg.shape} must match region {region_on_disk.shape}. "
+        )
+
+    # Combine new image with the region that is already on disk using element-wise max
+    result = np.fmax(new_npimg, region_on_disk)
+
+    # Store 0-th level of region on disk
+    # TODO: Is on-disk chunking preserved here?
+    da.array(result).to_zarr(
+        url=image_array,
+        region=region,
+        overwrite=True,
+        compute=True,
+    )
+    return
 
 
 def compute_and_save_mesh(
@@ -654,6 +730,22 @@ def correct_label_column(adata_roi_table, column_name="label"):
 
 def clear_mesh_folder(mesh_folder_name, zarr_url):
     folder_path = f"{zarr_url}/meshes/{mesh_folder_name}"
+
+    if os.path.exists(folder_path) and os.path.isdir(folder_path):
+        # Loop through the contents and remove them
+        for filename in os.listdir(folder_path):
+            file_path = os.path.join(folder_path, filename)
+            try:
+                if os.path.isfile(file_path) or os.path.islink(file_path):
+                    os.unlink(file_path)  # remove file or symbolic link
+            except Exception as e:
+                logger.warning(f"Failed to delete {file_path}. Reason: {e}")
+    return
+
+
+# TODO: combine with clear_mesh_folder to make general function
+def clear_registration_folder(registration_folder_name, zarr_url):
+    folder_path = f"{zarr_url}/registration/{registration_folder_name}"
 
     if os.path.exists(folder_path) and os.path.isdir(folder_path):
         # Loop through the contents and remove them

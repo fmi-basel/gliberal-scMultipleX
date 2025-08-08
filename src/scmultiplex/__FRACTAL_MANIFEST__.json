@@ -2182,6 +2182,271 @@
         "title": "ShiftByShift"
       },
       "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+    },
+    {
+      "name": "scMultiplex Calculate Warpfield Registration",
+      "category": "Registration",
+      "modality": "HCS",
+      "tags": [
+        "multiplexing",
+        "3D"
+      ],
+      "docs_info": "### Purpose\n- Calculate warpfield warp map between reference/moving object pairs in multiplexing rounds\n- GPU-based 3D non-rigid volumetric registration\n- See https://github.com/danionella/warpfield/tree/main\n\n### Outputs\n- Warmap for each moving object, saved in 'registration' folder as .npz file\n\n### Limitations\n- Uses masking ROI tables to load object pairs between reference/moving round\n- Assumes objects have been linked across rounds to have same label id and shape (no padding supported)\n",
+      "executable_non_parallel": "fractal/_image_based_registration_hcs_init.py",
+      "executable_parallel": "fractal/calculate_warpfield_registration.py",
+      "meta_non_parallel": {
+        "cpus_per_task": 1,
+        "mem": 1000
+      },
+      "meta_parallel": {
+        "cpus_per_task": 4,
+        "mem": 16000,
+        "needs_gpu": true
+      },
+      "args_schema_non_parallel": {
+        "additionalProperties": false,
+        "properties": {
+          "zarr_urls": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Zarr Urls",
+            "type": "array",
+            "description": "List of paths or urls to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "zarr_dir": {
+            "title": "Zarr Dir",
+            "type": "string",
+            "description": "path of the directory where the new OME-Zarrs will be created. Not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "reference_acquisition": {
+            "default": 0,
+            "title": "Reference Acquisition",
+            "type": "integer",
+            "description": "Which acquisition to register against. Needs to match the acquisition metadata in the OME-Zarr image."
+          }
+        },
+        "required": [
+          "zarr_urls",
+          "zarr_dir"
+        ],
+        "type": "object",
+        "title": "ImageBasedRegistrationHcsInit"
+      },
+      "args_schema_parallel": {
+        "$defs": {
+          "ChannelInputModel": {
+            "description": "A channel which is specified by either `wavelength_id` or `label`.",
+            "properties": {
+              "wavelength_id": {
+                "title": "Wavelength Id",
+                "type": "string",
+                "description": "Unique ID for the channel wavelength, e.g. `A01_C01`. Can only be specified if label is not set."
+              },
+              "label": {
+                "title": "Label",
+                "type": "string",
+                "description": "Name of the channel. Can only be specified if wavelength_id is not set."
+              }
+            },
+            "title": "ChannelInputModel",
+            "type": "object"
+          },
+          "InitArgsRegistration": {
+            "description": "Registration init args.",
+            "properties": {
+              "reference_zarr_url": {
+                "title": "Reference Zarr Url",
+                "type": "string"
+              }
+            },
+            "required": [
+              "reference_zarr_url"
+            ],
+            "title": "InitArgsRegistration",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "zarr_url": {
+            "title": "Zarr Url",
+            "type": "string",
+            "description": "Path or url to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "init_args": {
+            "$ref": "#/$defs/InitArgsRegistration",
+            "title": "Init Args",
+            "description": "Intialization arguments provided by `_image_based_registration_hcs_init`. They contain the reference_zarr_url that is used for registration. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "registration_channel": {
+            "$ref": "#/$defs/ChannelInputModel",
+            "title": "Registration Channel",
+            "description": "Image channel to be used for registration. Must be present in both reference and moving rounds."
+          },
+          "roi_table_name": {
+            "title": "Roi Table Name",
+            "type": "string",
+            "description": "Name of masking ROI table to be used for loading region pairs between rounds. The table must be present in both reference and moving rounds and correspond to segmented objects that have been linked (e.g. with Calculate Object Linking and Shift by Shift tasks). Each ref/mov object pair is expected to have matching label value and shape (bounding box dimension)."
+          },
+          "path_to_warpfield_recipe": {
+            "title": "Path To Warpfield Recipe",
+            "type": "string",
+            "description": "Absolute path to warpfield recipe file. If None, default.yml is used."
+          },
+          "warpfield_pre_filter_clip_thresh": {
+            "title": "Warpfield Pre Filter Clip Thresh",
+            "type": "integer",
+            "description": "Optional modifier of warpfield recipe. Pixel value threshold for clipping each volume. The default value in default.yml is 0. Higher values remove DC background."
+          },
+          "registration_name": {
+            "default": "warpfield",
+            "title": "Registration Name",
+            "type": "string",
+            "description": "Name of folder that contains warp map .npz files per moving object. Created as subfolder of 'registration' folder."
+          },
+          "overwrite_folder": {
+            "default": false,
+            "title": "Overwrite Folder",
+            "type": "boolean",
+            "description": "If True, clear existing subfolder {registration_name} in 'registration' folder to allow re-run of registration with same name."
+          }
+        },
+        "required": [
+          "zarr_url",
+          "init_args",
+          "registration_channel",
+          "roi_table_name"
+        ],
+        "type": "object",
+        "title": "CalculateWarpfieldRegistration"
+      },
+      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+    },
+    {
+      "name": "scMultiplex Apply Warpfield Registration",
+      "category": "Registration",
+      "modality": "HCS",
+      "tags": [
+        "multiplexing",
+        "3D"
+      ],
+      "docs_info": "### Purpose\n- Apply warp map (output of calculate_warpfield_registration) to all channels of moving image.\n\n### Outputs\n- New registered 3D OME-Zarr image that is aligned to reference round\n- This image has same dimensions and placement of linked object regions as reference round\n- Label images and ROI tables are optionally copied to this new image\n\n### Limitations\n- Uses masking ROI tables to load object pairs between reference/moving round\n- Assumes objects have been linked across rounds to have same label id and shape (no padding supported)\n",
+      "executable_non_parallel": "fractal/_image_based_registration_hcs_init.py",
+      "executable_parallel": "fractal/apply_warpfield_registration.py",
+      "meta_non_parallel": {
+        "cpus_per_task": 1,
+        "mem": 1000
+      },
+      "meta_parallel": {
+        "cpus_per_task": 4,
+        "mem": 16000,
+        "needs_gpu": true
+      },
+      "args_schema_non_parallel": {
+        "additionalProperties": false,
+        "properties": {
+          "zarr_urls": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Zarr Urls",
+            "type": "array",
+            "description": "List of paths or urls to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "zarr_dir": {
+            "title": "Zarr Dir",
+            "type": "string",
+            "description": "path of the directory where the new OME-Zarrs will be created. Not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "reference_acquisition": {
+            "default": 0,
+            "title": "Reference Acquisition",
+            "type": "integer",
+            "description": "Which acquisition to register against. Needs to match the acquisition metadata in the OME-Zarr image."
+          }
+        },
+        "required": [
+          "zarr_urls",
+          "zarr_dir"
+        ],
+        "type": "object",
+        "title": "ImageBasedRegistrationHcsInit"
+      },
+      "args_schema_parallel": {
+        "$defs": {
+          "InitArgsRegistration": {
+            "description": "Registration init args.",
+            "properties": {
+              "reference_zarr_url": {
+                "title": "Reference Zarr Url",
+                "type": "string"
+              }
+            },
+            "required": [
+              "reference_zarr_url"
+            ],
+            "title": "InitArgsRegistration",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "zarr_url": {
+            "title": "Zarr Url",
+            "type": "string",
+            "description": "Path or url to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "init_args": {
+            "$ref": "#/$defs/InitArgsRegistration",
+            "title": "Init Args",
+            "description": "Intialization arguments provided by `_image_based_registration_hcs_init`. They contain the reference_zarr_url that is used for registration. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "roi_table_name": {
+            "title": "Roi Table Name",
+            "type": "string",
+            "description": "Name of masking ROI table to be used for ROI loading. Typically, this is the same roi table used in the calculate_warpfield_registration task to load region pairs between rounds. Label ids and shape must correspond to the saved warp maps."
+          },
+          "registration_name": {
+            "default": "warpfield",
+            "title": "Registration Name",
+            "type": "string",
+            "description": "Name of folder that contains warp map .npz files per moving object. It is a subfolder of 'registration' folder, generated by the calculate_warpfield_registration task."
+          },
+          "output_image_suffix": {
+            "default": "registered",
+            "title": "Output Image Suffix",
+            "type": "string",
+            "description": "This suffix is added to the new OME-Zarr image that contains the registered corrected images. Fractal image list updated accordingly."
+          },
+          "mask_output_by_parent": {
+            "default": false,
+            "title": "Mask Output By Parent",
+            "type": "boolean",
+            "description": "If True, the registered image is masked by parent object label map after warpfield correction is applied. This ensures that there are no overlapping regions when writing ROIs to disk but may clip object at edges. If False, the new region is merged with the on-disk region by taking the element-wise maximum value. In cases of poor registration quality, this may cause shadowing (duplicated objects) and edge artifacts between regions."
+          },
+          "copy_labels_and_tables": {
+            "default": false,
+            "title": "Copy Labels And Tables",
+            "type": "boolean",
+            "description": "If True, all labels and tables are copied to the new moving OME-Zarr image from the reference zarr."
+          },
+          "overwrite": {
+            "default": false,
+            "title": "Overwrite",
+            "type": "boolean",
+            "description": "If True, overwrite existing OME-Zarr image (including all labels and tables)."
+          }
+        },
+        "required": [
+          "zarr_url",
+          "init_args",
+          "roi_table_name"
+        ],
+        "type": "object",
+        "title": "ApplyWarpfieldRegistration"
+      },
+      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
     }
   ],
   "has_args_schemas": true,
