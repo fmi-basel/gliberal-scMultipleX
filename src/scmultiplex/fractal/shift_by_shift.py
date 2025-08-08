@@ -201,6 +201,15 @@ def shift_by_shift(
     moving_ome_zarr.add_table(new_table_name, masking_table, overwrite=True)
     logger.info(f"Saved new masking ROI table as {new_table_name}")
 
+    # Write a ROI table with same name for the reference image
+    # This essentially duplicates the ROI table for the "label_name" image, just renaming it to "_shifted"
+    # This way all multiplex rounds have same registered ROI table name
+    # Label image name in reference round remains unchanged
+    # Redundant because gets written for ref round multiple times, for every ref/mov pair. But no
+    # race conditions possible because this table is not read in this task.
+    ref_masking_table = reference_ome_zarr.build_masking_roi_table(label_name)
+    reference_ome_zarr.add_table(new_table_name, ref_masking_table, overwrite=True)
+
     logger.info(f"End shift_by_shift task for {zarr_url=}")
 
     return {}
