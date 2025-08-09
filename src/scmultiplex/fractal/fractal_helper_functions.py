@@ -67,6 +67,16 @@ def get_zattrs(zarr_url):
         return zarr_img.attrs.asdict()
 
 
+def copy_omero_zattrs_from_source_to_target(source_zarr_url, target_zarr_url):
+    source_zarr_img = zarr.open(source_zarr_url, mode="r")
+    source_zattrs = source_zarr_img.attrs.asdict()
+    target_zarr_img = zarr.open(target_zarr_url, mode="r+")
+    target_zattrs = target_zarr_img.attrs.asdict()
+    target_zattrs["omero"] = source_zattrs["omero"]
+    target_zarr_img.attrs.update(target_zattrs)
+    return
+
+
 def convert_indices_to_origin_zyx(
     index: list[int],
 ) -> tuple[int, int, int]:

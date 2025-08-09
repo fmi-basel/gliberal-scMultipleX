@@ -21,6 +21,7 @@ from pydantic import validate_call
 
 # Local application imports
 from scmultiplex.fractal.fractal_helper_functions import (
+    copy_omero_zattrs_from_source_to_target,
     roi_to_pixel_slices,
     save_new_multichannel_image_with_overlap,
 )
@@ -147,6 +148,11 @@ def apply_warpfield_registration(
         copy_labels=copy_labels_and_tables,
         copy_tables=copy_labels_and_tables,
         overwrite=overwrite,
+    )
+
+    # Copy over omero channel metadata from moving image (e.g. 1) to new moving image (e.g. 1_registered)
+    copy_omero_zattrs_from_source_to_target(
+        source_zarr_url=zarr_url, target_zarr_url=new_moving_zarr_url
     )
 
     # Apply warpfield correction; load moving ROIs based on reference indices
