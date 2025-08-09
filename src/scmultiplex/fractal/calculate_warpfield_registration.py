@@ -9,6 +9,7 @@
 Calculate warpfield registration for multiplexed object pairs and save warp map as npz file.
 """
 
+import copy
 import logging
 import os
 from pathlib import Path
@@ -137,8 +138,19 @@ def calculate_warpfield_registration(
     if warpfield_pre_filter_clip_thresh is not None:
         recipe.pre_filter.clip_thresh = warpfield_pre_filter_clip_thresh
 
+    # Log warpfield recipe
+    print_recipe = (
+        f"Applying recipe...\n"
+        f"\nPrefilter:\n{recipe.pre_filter}\n\n"
+        + "\n\n".join(f"Level {i}:\n{level}" for i, level in enumerate(recipe.levels))
+    )
+    logger.info(print_recipe)
+
     # Calculate warpfield correction
     for roi in reference_roi_table.rois():
+        # Deep copy recipe to isolate any modifications per iteration
+        recipe_copy = copy.deepcopy(recipe)
+
         label_string = roi.name
         label_int = int(label_string)
         logger.info(f"Processing ROI label {label_string}")
@@ -156,19 +168,43 @@ def calculate_warpfield_registration(
         reference_np = reference_np.squeeze(axis=0)  # Remove the channel dimension
         moving_np = moving_np.squeeze(axis=0)
 
-        if reference_np.shape != moving_np.shape:
+        moving_shape = moving_np.shape
+
+        if reference_np.shape != moving_shape:
             raise ValueError(
                 f"Reference ROI shape {reference_np.shape} does not match moving ROI "
-                f"shape {moving_np.shape}. Check input ROI table or pre-process ROIs to have "
+                f"shape {moving_shape}. Check input ROI table or pre-process ROIs to have "
                 f"matching shapes for each region pair."
             )
 
         logger.info(
-            f"Loaded matching ROI pairs with ref shape: {reference_np.shape}, mov shapes: {moving_np.shape}"
+            f"Loaded matching ROI pairs with ref shape: {reference_np.shape}, mov shapes: {moving_shape}"
         )
 
+        # Check that blocksize is not larger than image shape. If it is, reduce blocksize to match shape.
+        # Otherwise get ValueError: C2R/R2C PlanNd for F-order arrays is not supported
+        # Loop over each registration level
+        for i, level in enumerate(recipe_copy.levels):
+            blocksize = list(level.block_size)
+            original_blocksize = blocksize.copy()
+
+            # Adjust blocksize only where it's too large
+            for dim, (s, b) in enumerate(zip(list(moving_shape), blocksize)):
+                if s < b:
+                    blocksize[dim] = s
+
+            # Only apply change if blocksize was modified
+            if blocksize != original_blocksize:
+                logger.warning(
+                    f"Blocksize {original_blocksize} too large for ROI of shape {moving_shape}. "
+                    f"Decreased blocksize of level {i} to {blocksize}."
+                )
+                recipe_copy.levels[i].block_size = blocksize
+
         # Perform warpfield registration
-        _, warp_map, _ = warpfield.register_volumes(reference_np, moving_np, recipe)
+        _, warp_map, _ = warpfield.register_volumes(
+            reference_np, moving_np, recipe_copy
+        )
 
         # Save computed warp map as numpy .npz file
         filename = f"{label_string}.npz"
