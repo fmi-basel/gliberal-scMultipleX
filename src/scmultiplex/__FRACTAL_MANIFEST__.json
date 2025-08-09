@@ -2141,42 +2141,42 @@
             "title": "Init Args",
             "description": "Intialization arguments provided by `_image_based_registration_hcs_init`. They contain the reference_zarr_url that is used for registration. (standard argument for Fractal tasks, managed by Fractal server)."
           },
-          "label_name": {
-            "title": "Label Name",
+          "label_name_to_shift": {
+            "title": "Label Name To Shift",
             "type": "string",
-            "description": "Label name to be relabeled; e.g. `org` or `nuc`."
+            "description": "Label name of reference round to be copied and shifted."
           },
-          "new_label_name": {
-            "title": "New Label Name",
+          "new_shifted_label_name": {
+            "title": "New Shifted Label Name",
             "type": "string",
-            "description": "Optionally new name for relabeled label. If left None, default is {label_name}_linked"
+            "description": "Optionally new name for shifted label. If left None, default is {label_name}_shifted"
           },
           "translation_table_name": {
             "default": "well_ROI_table",
             "title": "Translation Table Name",
             "type": "string",
-            "description": "ROI table name that contains the x,y,z translation information as columns \"translation_z\", \"translation_y\", \"translation_x\" in physical units. These are the shifts that should be applied to the moving image to match it to the reference round."
+            "description": "ROI table name that contains the x,y,z translation information as columns \"translation_z\", \"translation_y\", \"translation_x\" in physical units. These are the shifts that should be applied to the moving image to match it to the reference round. If shifts are generated with the scMultiplex calculate object linking task, shifts are stored in the 'well_ROI_table'."
           },
           "zarr_suffix_to_add": {
             "title": "Zarr Suffix To Add",
             "type": "string",
-            "description": "Suffix that needs to be added to input OME-Zarr name to generate the path to the registered OME-Zarr. If the registered OME-Zarr is \"/path/to/my_plate_mip.zarr/B/03/0\" and the input OME-Zarr is located in \"/path/to/my_plate.zarr/B/03/0\", the correct suffix is \"_mip\"."
+            "description": "Optional suffix that needs to be added to input OME-Zarr name to generate the path to the registered OME-Zarr. If the registered OME-Zarr is \"/path/to/my_plate_mip.zarr/B/03/0\" and the input OME-Zarr is located in \"/path/to/my_plate.zarr/B/03/0\", the correct suffix is \"_mip\"."
           },
           "image_suffix_to_remove": {
             "title": "Image Suffix To Remove",
             "type": "string",
-            "description": "If the image name between reference & registered zarrs don't match, this is the suffix that should be removed from the reference image. If the reference image is in \"/path/to/my_plate.zarr/B/03/ 0_registered\" and the registered image is in \"/path/to/my_plate_mip.zarr/ B/03/0\", the value should be \"_registered\""
+            "description": "If the image name between reference & registered zarrs don't match, this is the optional suffix that should be removed from the reference image. If the reference image is in \"/path/to/my_plate.zarr/B/03/ 0_registered\" and the registered image is in \"/path/to/my_plate_mip.zarr/ B/03/0\", the value should be \"_registered\""
           },
           "image_suffix_to_add": {
             "title": "Image Suffix To Add",
             "type": "string",
-            "description": "If the image name between reference & registered zarrs don't match, this is the suffix that should be added to the reference image. If the reference image is in \"/path/to/my_plate.zarr/B/03/0\" and the registered image is in \"/path/to/my_plate_mip.zarr/B/03/0_illum_corr\", the value should be \"_illum_corr\"."
+            "description": "If the image name between reference & registered zarrs don't match, this is the optional suffix that should be added to the reference image. If the reference image is in \"/path/to/my_plate.zarr/B/03/0\" and the registered image is in \"/path/to/my_plate_mip.zarr/B/03/0_illum_corr\", the value should be \"_illum_corr\"."
           }
         },
         "required": [
           "zarr_url",
           "init_args",
-          "label_name"
+          "label_name_to_shift"
         ],
         "type": "object",
         "title": "ShiftByShift"

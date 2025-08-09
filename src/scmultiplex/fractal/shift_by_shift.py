@@ -10,6 +10,7 @@ Copy label image from reference round to moving round and shift by pre-calculate
 """
 
 import logging
+import time
 from typing import Optional
 
 import ngio
@@ -40,7 +41,7 @@ def shift_by_shift(
     label_name_to_shift: str,
     new_shifted_label_name: Optional[str] = None,
     translation_table_name: str = "well_ROI_table",
-    zarr_suffix_to_add: Optional[str] = "_mip",
+    zarr_suffix_to_add: Optional[str] = None,
     image_suffix_to_remove: Optional[str] = None,
     image_suffix_to_add: Optional[str] = None,
 ):
@@ -209,7 +210,21 @@ def shift_by_shift(
     # Redundant because gets written for ref round multiple times, for every ref/mov pair. But no
     # race conditions possible because this table is not read in this task.
     ref_masking_table = reference_ome_zarr.build_masking_roi_table(label_name_to_shift)
-    reference_ome_zarr.add_table(new_table_name, ref_masking_table, overwrite=True)
+
+    max_retries = 10
+    wait_seconds = 2
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            reference_ome_zarr.add_table(
+                new_table_name, ref_masking_table, overwrite=True
+            )
+            break  # success, exit loop
+        except (FileNotFoundError, OSError) as e:
+            logging.warning(f"[Attempt {attempt}] Failed to write table due to: {e}")
+            if attempt == max_retries:
+                raise  # raise error
+            time.sleep(wait_seconds)
 
     logger.info(f"End shift_by_shift task for {zarr_url=}")
 
