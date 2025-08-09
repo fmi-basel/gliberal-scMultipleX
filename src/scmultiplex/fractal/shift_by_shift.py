@@ -37,10 +37,10 @@ def shift_by_shift(
     zarr_url: str,
     init_args: InitArgsRegistration,
     # Task-specific arguments
-    label_name: str,
-    new_label_name: Optional[str] = None,
+    label_name_to_shift: str,
+    new_shifted_label_name: Optional[str] = None,
     translation_table_name: str = "well_ROI_table",
-    zarr_suffix_to_add: Optional[str] = None,
+    zarr_suffix_to_add: Optional[str] = "_mip",
     image_suffix_to_remove: Optional[str] = None,
     image_suffix_to_add: Optional[str] = None,
 ):
@@ -61,24 +61,25 @@ def shift_by_shift(
             `_image_based_registration_hcs_init`. They contain the
             reference_zarr_url that is used for registration.
             (standard argument for Fractal tasks, managed by Fractal server).
-        label_name: Label name to be relabeled; e.g. `org` or `nuc`.
-        new_label_name: Optionally new name for relabeled label.
-            If left None, default is {label_name}_linked
+        label_name_to_shift: Label name of reference round to be copied and shifted.
+        new_shifted_label_name: Optionally new name for shifted label.
+            If left None, default is {label_name}_shifted
         translation_table_name: ROI table name that contains the x,y,z translation information
             as columns "translation_z", "translation_y", "translation_x" in physical units. These
             are the shifts that should be applied to the moving image to match it to the reference
-            round.
-        zarr_suffix_to_add: Suffix that needs to be added to input OME-Zarr name to
+            round. If shifts are generated with the scMultiplex calculate object linking task, shifts
+            are stored in the 'well_ROI_table'.
+        zarr_suffix_to_add: Optional suffix that needs to be added to input OME-Zarr name to
             generate the path to the registered OME-Zarr. If the registered OME-Zarr is
             "/path/to/my_plate_mip.zarr/B/03/0" and the input OME-Zarr is located
             in "/path/to/my_plate.zarr/B/03/0", the correct suffix is "_mip".
         image_suffix_to_remove: If the image name between reference & registered zarrs don't
-            match, this is the suffix that should be removed from the reference image.
+            match, this is the optional suffix that should be removed from the reference image.
             If the reference image is in "/path/to/my_plate.zarr/B/03/
             0_registered" and the registered image is in "/path/to/my_plate_mip.zarr/
             B/03/0", the value should be "_registered"
         image_suffix_to_add: If the image name between reference & registered zarrs don't
-            match, this is the suffix that should be added to the reference image.
+            match, this is the optional suffix that should be added to the reference image.
             If the reference image is in "/path/to/my_plate.zarr/B/03/0" and the
             registered image is in "/path/to/my_plate_mip.zarr/B/03/0_illum_corr", the
             value should be "_illum_corr".
@@ -92,7 +93,7 @@ def shift_by_shift(
     moving_ome_zarr = open_ome_zarr_container(zarr_url)
 
     # Load label image to copy
-    reference_img = reference_ome_zarr.get_label(label_name)
+    reference_img = reference_ome_zarr.get_label(label_name_to_shift)
 
     # Load moving image (target)
     moving_img = moving_ome_zarr.get_image()
@@ -183,21 +184,21 @@ def shift_by_shift(
     shifted_img_array = resize_array_to_shape(shifted_img_array, moving_shape)
 
     # Save final shifted and resized label image in moving round zarr
-    if new_label_name is None:
-        new_label_name = label_name + "_shifted"
+    if new_shifted_label_name is None:
+        new_shifted_label_name = label_name_to_shift + "_shifted"
 
     new_label_container = moving_ome_zarr.derive_label(
-        name=new_label_name, overwrite=True
+        name=new_shifted_label_name, overwrite=True
     )
     new_label_container.set_array(shifted_img_array)
 
     # Build pyramids for label image
     new_label_container.consolidate()
-    logger.info(f"Built a pyramid for the {new_label_name} label image")
+    logger.info(f"Built a pyramid for the {new_shifted_label_name} label image")
 
     # Make ROI table from new label image
-    masking_table = moving_ome_zarr.build_masking_roi_table(new_label_name)
-    new_table_name = f"{new_label_name}_ROI_table"
+    masking_table = moving_ome_zarr.build_masking_roi_table(new_shifted_label_name)
+    new_table_name = f"{new_shifted_label_name}_ROI_table"
     moving_ome_zarr.add_table(new_table_name, masking_table, overwrite=True)
     logger.info(f"Saved new masking ROI table as {new_table_name}")
 
@@ -207,7 +208,7 @@ def shift_by_shift(
     # Label image name in reference round remains unchanged
     # Redundant because gets written for ref round multiple times, for every ref/mov pair. But no
     # race conditions possible because this table is not read in this task.
-    ref_masking_table = reference_ome_zarr.build_masking_roi_table(label_name)
+    ref_masking_table = reference_ome_zarr.build_masking_roi_table(label_name_to_shift)
     reference_ome_zarr.add_table(new_table_name, ref_masking_table, overwrite=True)
 
     logger.info(f"End shift_by_shift task for {zarr_url=}")
