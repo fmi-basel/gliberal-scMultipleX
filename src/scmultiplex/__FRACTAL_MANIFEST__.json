@@ -1375,7 +1375,6 @@
             "description": "Path or url to the individual OME-Zarr image to be processed."
           },
           "label_name_to_expand": {
-            "default": "nuc",
             "title": "Label Name To Expand",
             "type": "string",
             "description": "Label name of segmentation to be expanded."
@@ -1423,10 +1422,17 @@
             "title": "Fill Holes",
             "type": "boolean",
             "description": "if True, the label image prior to expansion has holes filled by iterating over slices. Useful for filling lumens in segmentation."
+          },
+          "expand_in_z": {
+            "default": false,
+            "title": "Expand In Z",
+            "type": "boolean",
+            "description": "if True, uses different 3d expansion function to expand isotropically in z,y,x. Use with caution - anisotropic voxel spacing is not supported."
           }
         },
         "required": [
-          "zarr_url"
+          "zarr_url",
+          "label_name_to_expand"
         ],
         "type": "object",
         "title": "ExpandLabels"

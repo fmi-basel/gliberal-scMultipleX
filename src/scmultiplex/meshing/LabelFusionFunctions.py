@@ -9,7 +9,7 @@
 import dask.array as da
 import numpy as np
 import pandas as pd
-from scipy.ndimage import binary_erosion, binary_fill_holes
+from scipy.ndimage import binary_erosion, binary_fill_holes, distance_transform_edt
 from skimage.draw import polygon
 from skimage.exposure import rescale_intensity
 from skimage.filters import gaussian, threshold_otsu
@@ -64,6 +64,30 @@ def expand_2d_labels(seg, expandby_pix):
         raise ValueError("Input segmentation must be 2d or 3d array.")
 
     return seg_expanded
+
+
+def expand_3d_labels(label_image: np.ndarray, distance: int):
+    """
+    Expand labels in a 3D segmentation using Euclidean distance.
+
+    Args:
+        label_image (np.ndarray): 3D segmentation label image.
+        distance (int): Distance (in pixels) to expand labels.
+
+    Returns:
+        np.ndarray: Expanded 3D label image.
+    """
+    # Get distance transform and the indices of nearest non-zero pixels
+    distances, indices = distance_transform_edt(label_image == 0, return_indices=True)
+
+    expanded = np.zeros_like(label_image)
+
+    # Expand labels where distance is within threshold
+    # Create a mask where distances are within the expansion threshold
+    mask = distances <= distance
+    # Use indexing to map the nearest label values
+    expanded[mask] = label_image[tuple(idx[mask] for idx in indices)]
+    return expanded
 
 
 def fuse_labels(seg, expandby_factor):
@@ -402,7 +426,9 @@ def run_label_fusion(
     )
 
 
-def run_expansion(seg, expandby, expansion_distance_image_based=False):
+def run_expansion(
+    seg, expandby, expansion_distance_image_based=False, expand_in_z=False
+):
     """
     Main function for running label expansion, used in Expand Labels task.
     """
@@ -411,7 +437,10 @@ def run_expansion(seg, expandby, expansion_distance_image_based=False):
     else:
         expandby_pix = expandby
 
-    seg_expanded = expand_2d_labels(seg, expandby_pix)
+    if expand_in_z:
+        seg_expanded = expand_3d_labels(seg, expandby_pix)
+    else:
+        seg_expanded = expand_2d_labels(seg, expandby_pix)
     return seg_expanded, expandby_pix
 
 
