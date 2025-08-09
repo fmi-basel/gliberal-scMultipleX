@@ -2191,6 +2191,9 @@
     },
     {
       "name": "scMultiplex Calculate Warpfield Registration",
+      "input_types": {
+        "is_3D": true
+      },
       "category": "Registration",
       "modality": "HCS",
       "tags": [
@@ -2331,6 +2334,14 @@
     },
     {
       "name": "scMultiplex Apply Warpfield Registration",
+      "input_types": {
+        "registered": false,
+        "is_3D": true
+      },
+      "output_types": {
+        "registered": true,
+        "is_3D": true
+      },
       "category": "Registration",
       "modality": "HCS",
       "tags": [

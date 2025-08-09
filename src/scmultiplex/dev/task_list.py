@@ -211,6 +211,7 @@ TASK_LIST = [
         modality="HCS",
         tags=["multiplexing", "3D"],
         docs_info="file:task_info/calculate_warpfield_registration.md",
+        input_types=dict(is_3D=True),
     ),
     CompoundTask(
         name="scMultiplex Apply Warpfield Registration",
@@ -222,5 +223,7 @@ TASK_LIST = [
         modality="HCS",
         tags=["multiplexing", "3D"],
         docs_info="file:task_info/apply_warpfield_registration.md",
+        input_types=dict(registered=False, is_3D=True),
+        output_types=dict(registered=True, is_3D=True),
     ),
 ]
