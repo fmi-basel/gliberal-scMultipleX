@@ -75,7 +75,7 @@ def apply_warpfield_registration(
 
     """
     try:
-        from warpfield import WarpMap
+        import warpfield
     except ImportError as e:
         raise ImportError(
             "The `apply_warpfield_registration` task requires GPU. "
@@ -174,7 +174,7 @@ def apply_warpfield_registration(
         npz_data = np.load(warp_map_save_path)
 
         # Reconstruct the WarpMap
-        warp_map = WarpMap(
+        warp_map = warpfield.register.WarpMap(
             mov_shape=tuple(npz_data["mov_shape"]),
             ref_shape=tuple(npz_data["ref_shape"]),
             block_size=npz_data["block_size"],
