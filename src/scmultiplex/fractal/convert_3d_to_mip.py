@@ -65,7 +65,7 @@ def convert_3d_to_mip(
     """
     logger.info("Starting 3D to 2D MIP conversion")
     # Normalize zarr_url
-    zarr_url = zarr_url.rstrip("/")  # this is now the 3D zarr (used to be the 2D!)
+    zarr_url = zarr_url.rstrip("/")
     # 0) Preparation
     zarr_2D_url = zarr_url.replace(
         ".zarr",
@@ -73,7 +73,7 @@ def convert_3d_to_mip(
     )  # this is now the 2D zarr (used to be 3D!)
     # Handle changes to image name
     if image_suffix_3D_to_remove:
-        zarr_2D_url = zarr_url.rstrip(image_suffix_3D_to_remove)
+        zarr_2D_url = zarr_2D_url.rstrip(image_suffix_3D_to_remove)
     if image_suffix_2D_to_add:
         zarr_2D_url += image_suffix_2D_to_add
 
