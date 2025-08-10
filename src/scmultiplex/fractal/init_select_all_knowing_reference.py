@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 @validate_call
-def _image_based_registration_hcs_allrounds_init(
+def init_select_all_knowing_reference(
     *,
     # Fractal parameters
     zarr_urls: list[str],
@@ -34,7 +34,7 @@ def _image_based_registration_hcs_allrounds_init(
     """
     Initialized calculate registration task
 
-    Same as _image_based_registration_hcs_init.py only does not exclude reference round in zarr_url list;
+    Same as init_select_multiplexing_pairs.py only does not exclude reference round in zarr_url list;
     all rounds are processed.
 
     Args:
@@ -51,7 +51,7 @@ def _image_based_registration_hcs_allrounds_init(
         task_output: Dictionary for Fractal server that contains a
             parallelization list.
     """
-    logger.info(f"Running `image_based_registration_hcs_init` for {zarr_urls=}")
+    logger.info(f"Running init_select_all_knowing_reference for {zarr_urls=}")
     image_groups = create_well_acquisition_dict(zarr_urls)
 
     # Create the parallelization list
@@ -82,6 +82,6 @@ if __name__ == "__main__":
     from fractal_tasks_core.tasks._utils import run_fractal_task
 
     run_fractal_task(
-        task_function=_image_based_registration_hcs_allrounds_init,
+        task_function=init_select_all_knowing_reference,
         logger_name=logger.name,
     )

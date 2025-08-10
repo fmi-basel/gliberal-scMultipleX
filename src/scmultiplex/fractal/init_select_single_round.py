@@ -15,17 +15,14 @@ Select single desired multiplexing round for processing
 """
 import logging
 
+from fractal_tasks_core.utils import create_well_acquisition_dict
 from pydantic import validate_call
-
-from fractal_tasks_core.utils import (
-    create_well_acquisition_dict,
-)
 
 logger = logging.getLogger(__name__)
 
 
 @validate_call
-def init_select_multiplexing_round(
+def init_select_single_round(
     *,
     # Fractal parameters
     zarr_urls: list[str],
@@ -48,9 +45,7 @@ def init_select_multiplexing_round(
         selected_acquisition: Which multiplexing round to select for processing. Uses the
             OME-NGFF HCS well metadata acquisition keys to find the round.
     """
-    logger.info(
-        f"Running `init_select_multiplexing_round` for {zarr_urls=}"
-    )
+    logger.info(f"Running `init_select_single_round` for {zarr_urls=}")
     image_groups = create_well_acquisition_dict(zarr_urls)
 
     # Create the parallelization list
@@ -86,6 +81,6 @@ if __name__ == "__main__":
     from fractal_tasks_core.tasks._utils import run_fractal_task
 
     run_fractal_task(
-        task_function=init_select_multiplexing_round,
+        task_function=init_select_single_round,
         logger_name=logger.name,
     )

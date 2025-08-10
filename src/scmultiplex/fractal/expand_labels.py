@@ -39,7 +39,7 @@ def expand_labels(
     # Fractal arguments
     zarr_url: str,
     # Task-specific arguments
-    label_name_to_expand: str = "nuc",
+    label_name_to_expand: str,
     new_label_name: Optional[str] = None,
     roi_table: str = "org_ROI_table_linked",
     masking_label_map: Union[str, None] = None,
@@ -48,6 +48,7 @@ def expand_labels(
     calculate_image_based_expansion_distance: bool = False,
     expand_by_factor: Union[float, None] = None,
     fill_holes: bool = False,
+    expand_in_z: bool = False,
 ) -> None:
     """
     Expand labels in 2D or 3D segmentation images in XY. For 3D images, expansion is performed on each 2D
@@ -91,6 +92,8 @@ def expand_labels(
             [0, 1 or higher], e.g. 0.2 means that 20% of mean equivalent diameter of labels in region is used.
         fill_holes: if True, the label image prior to expansion has holes filled by iterating
             over slices. Useful for filling lumens in segmentation.
+        expand_in_z: if True, uses different 3d expansion function to expand isotropically in z,y,x. Use with caution -
+            anisotropic voxel spacing is not supported.
     """
 
     logger.info(
@@ -273,6 +276,7 @@ def expand_labels(
             seg,
             expandby,
             expansion_distance_image_based=calculate_image_based_expansion_distance,
+            expand_in_z=expand_in_z,
         )
 
         if mask_output and table_type == "masking_roi_table":

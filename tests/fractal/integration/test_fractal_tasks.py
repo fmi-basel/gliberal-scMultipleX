@@ -6,19 +6,19 @@ import numpy as np
 from fractal_tasks_core.channels import ChannelInputModel
 from numpy.testing import assert_almost_equal
 
-from scmultiplex.fractal._image_based_registration_hcs_allrounds_init import (
-    _image_based_registration_hcs_allrounds_init,
-)
-from scmultiplex.fractal._image_based_registration_hcs_init import (
-    _image_based_registration_hcs_init,
-)
-from scmultiplex.fractal._init_group_by_well_for_multiplexing import (
-    _init_group_by_well_for_multiplexing,
-)
 from scmultiplex.fractal.calculate_linking_consensus import calculate_linking_consensus
 from scmultiplex.fractal.calculate_object_linking import calculate_object_linking
 from scmultiplex.fractal.calculate_platymatch_registration import (
     calculate_platymatch_registration,
+)
+from scmultiplex.fractal.init_select_all_knowing_reference import (
+    init_select_all_knowing_reference,
+)
+from scmultiplex.fractal.init_select_multiplexing_pairs import (
+    init_select_multiplexing_pairs,
+)
+from scmultiplex.fractal.init_select_reference_knowing_all import (
+    init_select_reference_knowing_all,
 )
 from scmultiplex.fractal.relabel_by_linking_consensus import (
     relabel_by_linking_consensus,
@@ -119,7 +119,7 @@ def select_zarr_urls(name, linking_zenodo_zarrs):
 
 def test_calculate_object_linking(linking_zenodo_zarrs, name=name_mip):
     zarr_urls = select_zarr_urls(name, linking_zenodo_zarrs)
-    parallelization_list = _image_based_registration_hcs_init(
+    parallelization_list = init_select_multiplexing_pairs(
         zarr_urls=zarr_urls,
         zarr_dir="",
         reference_acquisition=0,
@@ -148,7 +148,7 @@ def test_calculate_object_linking(linking_zenodo_zarrs, name=name_mip):
 
 def test_calculate_linking_consensus(linking_zenodo_zarrs, name=name_mip):
     zarr_urls = select_zarr_urls(name, linking_zenodo_zarrs)
-    parallelization_list = _init_group_by_well_for_multiplexing(
+    parallelization_list = init_select_reference_knowing_all(
         zarr_urls=zarr_urls,
         zarr_dir="",
         reference_acquisition=0,
@@ -174,7 +174,7 @@ def test_calculate_linking_consensus(linking_zenodo_zarrs, name=name_mip):
 
 def test_relabel_by_linking_consensus(linking_zenodo_zarrs, name=name_mip):
     zarr_urls = select_zarr_urls(name, linking_zenodo_zarrs)
-    parallelization_list = _image_based_registration_hcs_allrounds_init(
+    parallelization_list = init_select_all_knowing_reference(
         zarr_urls=zarr_urls,
         zarr_dir="",
         reference_acquisition=0,
@@ -205,7 +205,7 @@ def test_relabel_by_linking_consensus(linking_zenodo_zarrs, name=name_mip):
 
 def test_calculate_platymatch_registration(linking_zenodo_zarrs, name=name_3d):
     zarr_urls = select_zarr_urls(name, linking_zenodo_zarrs)
-    parallelization_list = _image_based_registration_hcs_init(
+    parallelization_list = init_select_multiplexing_pairs(
         zarr_urls=zarr_urls,
         zarr_dir="",
         reference_acquisition=0,
@@ -255,7 +255,7 @@ def test_calculate_platymatch_registration(linking_zenodo_zarrs, name=name_3d):
 
 def test_surface_mesh_multiscale(linking_zenodo_zarrs, name=name_3d):
     zarr_urls = select_zarr_urls(name, linking_zenodo_zarrs)
-    parallelization_list = _init_group_by_well_for_multiplexing(
+    parallelization_list = init_select_reference_knowing_all(
         zarr_urls=zarr_urls,
         zarr_dir="",
         reference_acquisition=0,
@@ -295,7 +295,7 @@ def test_surface_mesh_multiscale(linking_zenodo_zarrs, name=name_3d):
 
 def test_surface_mesh_grouped(linking_zenodo_zarrs, name=name_3d):
     zarr_urls = select_zarr_urls(name, linking_zenodo_zarrs)
-    parallelization_list = _init_group_by_well_for_multiplexing(
+    parallelization_list = init_select_reference_knowing_all(
         zarr_urls=zarr_urls,
         zarr_dir="",
         reference_acquisition=0,
@@ -332,7 +332,7 @@ def test_surface_mesh_grouped(linking_zenodo_zarrs, name=name_3d):
 
 def test_surface_mesh_per_object(linking_zenodo_zarrs, name=name_3d):
     zarr_urls = select_zarr_urls(name, linking_zenodo_zarrs)
-    parallelization_list = _init_group_by_well_for_multiplexing(
+    parallelization_list = init_select_reference_knowing_all(
         zarr_urls=zarr_urls,
         zarr_dir="",
         reference_acquisition=0,
@@ -371,7 +371,7 @@ def test_surface_mesh_per_object(linking_zenodo_zarrs, name=name_3d):
 
 def test_sphr_harmonics_from_labelimage(linking_zenodo_zarrs, name=name_3d):
     zarr_urls = select_zarr_urls(name, linking_zenodo_zarrs)
-    parallelization_list = _init_group_by_well_for_multiplexing(
+    parallelization_list = init_select_reference_knowing_all(
         zarr_urls=zarr_urls,
         zarr_dir="",
         reference_acquisition=0,
@@ -410,7 +410,7 @@ def test_sphr_harmonics_from_labelimage(linking_zenodo_zarrs, name=name_3d):
 
 def test_scmultiplex_mesh_measurements(linking_zenodo_zarrs, name=name_3d):
     zarr_urls = select_zarr_urls(name, linking_zenodo_zarrs)
-    parallelization_list = _init_group_by_well_for_multiplexing(
+    parallelization_list = init_select_reference_knowing_all(
         zarr_urls=zarr_urls,
         zarr_dir="",
         reference_acquisition=0,

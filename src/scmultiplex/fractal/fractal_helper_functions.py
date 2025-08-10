@@ -8,13 +8,15 @@
 #
 import logging
 import os as os
+import re
 import shutil
 from functools import reduce
 from pathlib import Path
-from typing import Sequence
+from typing import Sequence, Tuple
 
 import anndata as ad
 import dask.array as da
+import ngio
 import numpy as np
 import pandas as pd
 import zarr
@@ -64,6 +66,16 @@ def read_table_and_attrs(zarr_url, roi_table):
 def get_zattrs(zarr_url):
     with zarr.open(zarr_url, mode="r") as zarr_img:
         return zarr_img.attrs.asdict()
+
+
+def copy_omero_zattrs_from_source_to_target(source_zarr_url, target_zarr_url):
+    source_zarr_img = zarr.open(source_zarr_url, mode="r")
+    source_zattrs = source_zarr_img.attrs.asdict()
+    target_zarr_img = zarr.open(target_zarr_url, mode="r+")
+    target_zattrs = target_zarr_img.attrs.asdict()
+    target_zattrs["omero"] = source_zattrs["omero"]
+    target_zarr_img.attrs.update(target_zattrs)
+    return
 
 
 def convert_indices_to_origin_zyx(
@@ -294,6 +306,81 @@ def save_new_label_and_bbox_df(
     )
 
     return bbox_df
+
+
+def roi_to_pixel_slices(
+    roi: ngio.Roi, spacing: np.ndarray
+) -> Tuple[slice, slice, slice]:
+    """
+    Convert Roi (with x,y,z and lengths in um) to pixel slices.
+
+    Args:
+        roi: object with attributes roi.x, roi.y, roi.z, roi.x_length, roi.y_length, roi.z_length (all in um)
+        spacing: numpy array of shape (3,), with elements [um/pix for z, y, x]
+
+    Returns:
+        Tuple of slices: (z_slice, y_slice, x_slice) in pixels
+    """
+    # Convert start positions (um -> pix)
+    start_idx = np.array([roi.z, roi.y, roi.x]) / spacing  # order: z, y, x
+    start_idx = np.round(start_idx).astype(int)
+    # Convert lengths (um -> pix)
+    length_pix = np.array([roi.z_length, roi.y_length, roi.x_length]) / spacing
+    length_pix = np.round(length_pix).astype(int)
+    # Compute stop position (in pix)
+    stop_idx = start_idx + length_pix
+
+    # Build slices
+    z_slice = slice(start_idx[0], stop_idx[0])
+    y_slice = slice(start_idx[1], stop_idx[1])
+    x_slice = slice(start_idx[2], stop_idx[2])
+
+    return (z_slice, y_slice, x_slice)
+
+
+def save_new_multichannel_image_with_overlap(
+    new_npimg: np.ndarray,
+    image_url: str,
+    region: Tuple[slice, ...],
+    apply_to_all_channels: bool = True,
+):
+    """
+    Write multichannel numpy array to zarr in specific ROI region.
+    To be used within for loop over ROIs.
+    Load on-disk region and combine with new array using element-wise max to handle potential overlapping regions
+    that were already written to disk from previous ROIs.
+    Apply to all channels
+    """
+    if apply_to_all_channels:
+        assert len(region) == 3  # region should have z,y,x coordinates
+        # add empty channel dimension to region; this loads all channels
+        region = (slice(None),) + region
+
+    # Load dask from disk, will contain rois of the previously processed objects within for loop
+    image_url_level0 = os.path.join(image_url, "0")
+    image_array = zarr.open_array(image_url_level0)
+
+    # Load region of current object from disk, will include any previously processed neighboring objects
+    region_on_disk = image_array[region]
+
+    # Check that dimensions of rois match
+    if region_on_disk.shape != new_npimg.shape:
+        raise ValueError(
+            f"Shape of new image {new_npimg.shape} must match region {region_on_disk.shape}. "
+        )
+
+    # Combine new image with the region that is already on disk using element-wise max
+    result = np.fmax(new_npimg, region_on_disk)
+
+    # Store 0-th level of region on disk
+    # TODO: Is on-disk chunking preserved here?
+    da.array(result).to_zarr(
+        url=image_array,
+        region=region,
+        overwrite=True,
+        compute=True,
+    )
+    return
 
 
 def compute_and_save_mesh(
@@ -665,3 +752,92 @@ def clear_mesh_folder(mesh_folder_name, zarr_url):
             except Exception as e:
                 logger.warning(f"Failed to delete {file_path}. Reason: {e}")
     return
+
+
+# TODO: combine with clear_mesh_folder to make general function
+def clear_registration_folder(registration_folder_name, zarr_url):
+    folder_path = f"{zarr_url}/registration/{registration_folder_name}"
+
+    if os.path.exists(folder_path) and os.path.isdir(folder_path):
+        # Loop through the contents and remove them
+        for filename in os.listdir(folder_path):
+            file_path = os.path.join(folder_path, filename)
+            try:
+                if os.path.isfile(file_path) or os.path.islink(file_path):
+                    os.unlink(file_path)  # remove file or symbolic link
+            except Exception as e:
+                logger.warning(f"Failed to delete {file_path}. Reason: {e}")
+    return
+
+
+# from https://github.com/fractal-analytics-platform/fractal-tasks-core/blob/main/fractal_tasks_core/tasks/_registration_utils.py
+def calculate_physical_shifts(
+    shifts: np.array,
+    level: int,
+    coarsening_xy: int,
+    full_res_pxl_sizes_zyx: list[float],
+) -> list[float]:
+    """
+    Calculates shifts in physical units based on pixel shifts
+
+    Args:
+        shifts: array of shifts, zyx or yx
+        level: resolution level
+        coarsening_xy: coarsening factor between levels
+        full_res_pxl_sizes_zyx: pixel sizes in physical units as zyx
+
+    Returns:
+        shifts in physical units as zyx
+    """
+
+    curr_pixel_size = np.array(full_res_pxl_sizes_zyx) * coarsening_xy**level
+    if len(shifts) == 3:
+        shifts_physical = shifts * curr_pixel_size
+    elif len(shifts) == 2:
+        shifts_physical = [
+            0,
+            shifts[0] * curr_pixel_size[1],
+            shifts[1] * curr_pixel_size[2],
+        ]
+    else:
+        raise ValueError(f"Wrong input for calculate_physical_shifts ({shifts=})")
+    return shifts_physical
+
+
+# from https://github.com/fractal-analytics-platform/fractal-tasks-core/blob/main/fractal_tasks_core/tasks/_registration_utils.py
+def get_ROI_table_with_translation(
+    ROI_table: ad.AnnData,
+    new_shifts: dict[str, list[float]],
+) -> ad.AnnData:
+    """
+    Adds translation columns to a ROI table
+
+    Args:
+        ROI_table: Fractal ROI table
+        new_shifts: zyx list of shifts
+
+    Returns:
+        Fractal ROI table with 3 additional columns for calculated translations
+    """
+
+    shift_table = pd.DataFrame(new_shifts).T
+    shift_table.columns = ["translation_z", "translation_y", "translation_x"]
+    shift_table = shift_table.rename_axis("FieldIndex")
+    new_roi_table = ROI_table.to_df().merge(
+        shift_table, left_index=True, right_index=True
+    )
+    if len(new_roi_table) != len(ROI_table):
+        raise ValueError(
+            "New ROI table with registration info has a "
+            f"different length ({len(new_roi_table)=}) "
+            f"from the original ROI table ({len(ROI_table)=})"
+        )
+
+    adata = ad.AnnData(X=new_roi_table.astype(np.float32))
+    adata.obs_names = new_roi_table.index
+    adata.var_names = list(map(str, new_roi_table.columns))
+    return adata
+
+
+def remove_roi_table_suffix(name: str) -> str:
+    return re.sub(r"_ROI_table", "", name)

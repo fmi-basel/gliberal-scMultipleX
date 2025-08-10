@@ -7,6 +7,7 @@
 #                                                                            #
 ##############################################################################
 
+import dask.array as da
 import numpy as np
 import pandas as pd
 from scipy.ndimage import shift
@@ -137,3 +138,98 @@ def calculate_matching(img0, imgX, iou_cutoff):
     df_filt = df[df["iou"] > iou_cutoff]
 
     return stat, df, df_filt
+
+
+def shift_array_3d_dask(arr, shift):
+    """
+    Shift a 3D Dask array along (z, y, x) axes.
+    Pads with zeros and crops to original shape.
+
+    # To trigger computation, use like this:
+    # shifted = shift_array_3d_dask(arr, (0, 10, -20))
+    # result = shifted.compute() # trigger compute
+
+    Parameters:
+        arr (dask.array): Input 3D Dask array.
+        shift (tuple): (dz, dy, dx) shift values.
+
+    Returns:
+        dask.array: Shifted array with same shape.
+    """
+    assert arr.ndim == 3, "Only 3D arrays supported"
+    assert len(shift) == 3
+
+    orig_shape = arr.shape
+
+    # Compute pad at beginning or end of array
+    pad_width = []
+
+    # Compute cropping slices to get back to original shape
+    slices = []
+    for axis, s in enumerate(shift):
+        if s > 0:
+            pad = (s, 0)  # pad at start
+            slices.append(slice(0, orig_shape[axis]))
+        elif s < 0:
+            pad = (0, -s)  # pad at end
+            slices.append(slice(-s, -s + orig_shape[axis]))
+        else:
+            pad = (0, 0)
+            slices.append(slice(0, orig_shape[axis]))
+        pad_width.append(pad)
+
+    # Pad with zeros (no compute)
+    padded = da.pad(arr, pad_width=pad_width, mode="constant", constant_values=0)
+
+    # Crop to retain same shape as input array (no computed)
+    shifted = padded[tuple(slices)]
+
+    return shifted
+
+
+def resize_array_to_shape(arr, target_shape):
+    """
+    Resize a 3D array to match target_shape.
+    Pads or crops at the far (high-index) end only.
+
+    Parameters:
+        arr (dask.array or np.ndarray): Input 3D array.
+        target_shape (tuple): Desired shape (z, y, x).
+
+    Returns:
+        dask.array or np.ndarray: Resized array.
+    """
+    assert len(target_shape) == 3, "Target shape must be 3D"
+    assert arr.ndim == 3, "Only 3D arrays supported"
+
+    curr_shape = arr.shape
+    slices = []
+    pad_width = []
+
+    # loop over each dimension
+    for i, s in enumerate(curr_shape):
+        diff = target_shape[i] - curr_shape[i]
+        if diff < 0:
+            # Crop from the far end
+            slices.append(slice(0, target_shape[i]))
+            pad_width.append((0, 0))
+        else:
+            # Pad at the far end
+            slices.append(slice(0, curr_shape[i]))
+            pad_width.append((0, diff))
+
+    # Crop first (in case of oversize)
+    arr_cropped = arr[tuple(slices)]
+
+    # Then pad if needed
+    if any(p > 0 for _, p in pad_width):
+        arr_resized = da.pad(
+            arr_cropped, pad_width=pad_width, mode="constant", constant_values=0
+        )
+    else:
+        arr_resized = arr_cropped
+
+    if arr_resized.shape != target_shape:
+        raise ValueError("Final image does not have the expected shape.")
+
+    return arr_resized
