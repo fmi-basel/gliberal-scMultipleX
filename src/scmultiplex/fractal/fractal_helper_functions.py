@@ -8,6 +8,7 @@
 #
 import logging
 import os as os
+import re
 import shutil
 from functools import reduce
 from pathlib import Path
@@ -836,3 +837,7 @@ def get_ROI_table_with_translation(
     adata.obs_names = new_roi_table.index
     adata.var_names = list(map(str, new_roi_table.columns))
     return adata
+
+
+def remove_roi_table_suffix(name: str) -> str:
+    return re.sub(r"_ROI_table", "", name)

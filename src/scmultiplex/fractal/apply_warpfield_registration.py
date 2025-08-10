@@ -220,21 +220,6 @@ def apply_warpfield_registration(
 
         logger.info(f"Wrote region {label_string} to level-0 zarr image.")
 
-    # # Copy over the table used for this registration (e.g. linked object ROIs) and the well ROI table.
-    # tables_to_copy = [roi_table_name, "well_ROI_table"]
-    #
-    # for table_name in tables_to_copy:
-    #     table = reference_ome_zarr.get_table(table_name)
-    #     new_moving_ome_zarr.add_table(table_name, table, overwrite=overwrite)
-    #
-    # label_image = reference_ome_zarr.get_label(name=reference_label_name)
-    # new_label = new_moving_ome_zarr.derive_label(reference_label_name, overwrite=True)
-    # new_label.set_array(label_image)
-    #
-    # # new_moving_image = new_moving_ome_zarr.get_image()
-    # # new_moving_image.set_array(label_image) # does not work
-    # logger.info(f"Copied tables {tables_to_copy} from {reference_zarr_url} to {new_moving_zarr_url}.")
-
     # Build pyramids
     new_moving_image = new_moving_ome_zarr.get_image()
     new_moving_image.consolidate()

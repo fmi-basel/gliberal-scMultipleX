@@ -2464,6 +2464,192 @@
         "title": "ApplyWarpfieldRegistration"
       },
       "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+    },
+    {
+      "name": "scMultiplex Post Registration Cleanup",
+      "input_types": {
+        "is_3D": true
+      },
+      "output_types": {
+        "registered": true,
+        "is_3D": true
+      },
+      "category": "Registration",
+      "modality": "HCS",
+      "tags": [
+        "multiplexing",
+        "3D"
+      ],
+      "docs_info": "### Purpose\n- Series of cleanups after running Warpfield registration.\n- Since only moving rounds are registered to a reference, the reference itself needs to be registered (Cleanup 1)\n- Then tables, labels (Cleanup 2) and misc folders (Cleanup 3) can be moved from unregistered rounds to the registered one. \n\n### Outputs\n- Cleanup 1: must be run separately from Cleanup 2 & 3. Submit only unregistered reference zarr on Fractal server.\n        Image data (all channels) from selected ROIs are copied from this reference, e.g. \"0_fused\" to a new reference\n        image e.g. \"0_fused_registered\". Inputs should mirror Apply Warpfield Registration task inputs.\n- Cleanup 2: tables and labels from the e.g. \"0_fused\" unregistered reference round can be copied to the\n        subsequent registered moving rounds e.g. \"0_fused_registered\", \"1_fused_registered\", etc.\n        Submit all registered rounds to Fractal server.\n- Cleanup 3: misc folders e.g. [\"plots\", \"registration\"] can be copied from the unregistered rounds\n        e.g. \"0_fused\", \"1_fused\", etc, to the corresponding registered round e.g.\n        \"0_fused_registered\", \"1_fused_registered\", etc. Submit all registered rounds to Fractal server.\n\n### Limitations\n- Assumes 3D image, not tested for 2D",
+      "executable_non_parallel": "fractal/init_select_all_knowing_reference.py",
+      "executable_parallel": "fractal/post_registration_cleanup.py",
+      "meta_non_parallel": {
+        "cpus_per_task": 1,
+        "mem": 1000
+      },
+      "meta_parallel": {
+        "cpus_per_task": 4,
+        "mem": 16000
+      },
+      "args_schema_non_parallel": {
+        "additionalProperties": false,
+        "properties": {
+          "zarr_urls": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Zarr Urls",
+            "type": "array",
+            "description": "List of paths or urls to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "zarr_dir": {
+            "title": "Zarr Dir",
+            "type": "string",
+            "description": "path of the directory where the new OME-Zarrs will be created. Not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "reference_acquisition": {
+            "default": 0,
+            "title": "Reference Acquisition",
+            "type": "integer",
+            "description": "Which acquisition to register against. Needs to match the acquisition metadata in the OME-Zarr image."
+          }
+        },
+        "required": [
+          "zarr_urls",
+          "zarr_dir"
+        ],
+        "type": "object",
+        "title": "InitSelectAllKnowingReference"
+      },
+      "args_schema_parallel": {
+        "$defs": {
+          "InitArgsRegistration": {
+            "description": "Registration init args.",
+            "properties": {
+              "reference_zarr_url": {
+                "title": "Reference Zarr Url",
+                "type": "string"
+              }
+            },
+            "required": [
+              "reference_zarr_url"
+            ],
+            "title": "InitArgsRegistration",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "zarr_url": {
+            "title": "Zarr Url",
+            "type": "string",
+            "description": "Path or url to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "init_args": {
+            "$ref": "#/$defs/InitArgsRegistration",
+            "title": "Init Args",
+            "description": "Intialization arguments provided by `init_select_all_knowing_reference`. They contain the reference_zarr_url information. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "cleanup_1_register_reference_round": {
+            "default": false,
+            "title": "Cleanup 1 Register Reference Round",
+            "type": "boolean",
+            "description": "If True, the reference round is selected from the submitted zarr urls and is copied to a new image with the _{output_image_suffix} appended. E.g. Image data (all channels) of selected ROIs are copied from \"0_fused\" to a new \"0_fused_registered\" round."
+          },
+          "roi_table_name": {
+            "title": "Roi Table Name",
+            "type": "string",
+            "description": "Name of masking ROI table to be used for ROI loading. Typically, this is the same roi table used in the apply_warpfield_registration task to load region pairs between rounds. This roi table is used to select ROIs that are copied over to new registered reference zarr."
+          },
+          "output_image_suffix": {
+            "title": "Output Image Suffix",
+            "type": "string",
+            "description": "This suffix is added to the new OME-Zarr image that contains the registered corrected images, e.g. 'registered'. Fractal image list updated accordingly. Typically matches apply_warpfield_registration input."
+          },
+          "mask_output_by_parent": {
+            "default": false,
+            "title": "Mask Output By Parent",
+            "type": "boolean",
+            "description": "If True, the reference ROI is masked by parent object label map (from 'roi_table_name'). Typically matches apply_warpfield_registration input."
+          },
+          "copy_labels_and_tables": {
+            "default": false,
+            "title": "Copy Labels And Tables",
+            "type": "boolean",
+            "description": "If True, all labels and tables are copied to the new registered reference OME-Zarr image from the reference zarr. Typically matches apply_warpfield_registration input."
+          },
+          "overwrite_entire_container": {
+            "default": false,
+            "title": "Overwrite Entire Container",
+            "type": "boolean",
+            "description": "If True, overwrite existing OME-Zarr image (including clearing all existing labels and tables!), i.e. the new OME-Zarr image with _output_image_suffix."
+          },
+          "cleanup_2_copy_labels_and_tables_from_unregistered_reference": {
+            "default": false,
+            "title": "Cleanup 2 Copy Labels And Tables From Unregistered Reference",
+            "type": "boolean",
+            "description": "If True, copy over specified tables and corresponding labels from the provided 'unregistered_reference_zarr_image_name' to all submitted rounds. E.g. tables and labels from the \"0_fused\" round can be copied to the rounds \"0_fused_registered\", \"1_fused_registered\", etc"
+          },
+          "unregistered_reference_zarr_image_name": {
+            "title": "Unregistered Reference Zarr Image Name",
+            "type": "string",
+            "description": "Name of source OME-Zarr image (unregistered reference round) from which data should be copied, e.g. '0_fused_zillum'."
+          },
+          "roi_table_names_to_copy": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Roi Table Names To Copy",
+            "type": "array",
+            "description": "List of ROI table names present in unregistered_reference_zarr_image_name to copy over. The corresponding label of masking ROI tables are also copied over."
+          },
+          "standardize_label_name": {
+            "default": false,
+            "title": "Standardize Label Name",
+            "type": "boolean",
+            "description": "If True, rename label to match the ROI table. The string \"_ROI_table\" is removed from table name to generate label name. E.g. if ROI table is called \"org_linked_ROI_table\", the label will be names \"org_linked\" for all rounds. If False, the label is saved using the name given in ROI table .zattrs metadata."
+          },
+          "overwrite_labels_and_tables": {
+            "default": false,
+            "title": "Overwrite Labels And Tables",
+            "type": "boolean",
+            "description": "If True, overwrite labels and tables with same name in registered zarr image."
+          },
+          "cleanup_3_copy_folders_from_matching_unregistered_round": {
+            "default": false,
+            "title": "Cleanup 3 Copy Folders From Matching Unregistered Round",
+            "type": "boolean",
+            "description": "If True, copy specified folder from matching unregistered image. E.g. [\"plots\", \"registration\"] folders can be copied from the \"1_fused\" round to the \"1_fused_registered\" round. If only the reference round (e.g. \"0_fused_registered\") is submitted via the Fractal web interface, it is also possible to copy [\"meshes\"] from e.g. \"0_fused\" to the \"0_fused_registered\" round."
+          },
+          "folders_to_copy": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Folders To Copy",
+            "type": "array",
+            "description": "List of folder names to copy over, e.g. [\"registration\"]"
+          },
+          "image_suffix_to_remove": {
+            "default": "_registered",
+            "title": "Image Suffix To Remove",
+            "type": "string",
+            "description": "Image suffix to remove from submitted registered image to generate the unregistered zarr, e.g. to copy folders from \"1_fused\" to \"1_fused_registered\", the suffix is \"_registered\""
+          },
+          "overwrite_folders": {
+            "default": false,
+            "title": "Overwrite Folders",
+            "type": "boolean",
+            "description": "If True, overwrite folders with same name in registered zarr image"
+          }
+        },
+        "required": [
+          "zarr_url",
+          "init_args"
+        ],
+        "type": "object",
+        "title": "PostRegistrationCleanup"
+      },
+      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
     }
   ],
   "has_args_schemas": true,
