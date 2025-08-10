@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 @validate_call
-def _image_based_registration_hcs_init(
+def init_select_multiplexing_pairs(
     *,
     # Fractal parameters
     zarr_urls: list[str],
@@ -72,6 +72,6 @@ if __name__ == "__main__":
     from fractal_tasks_core.tasks._utils import run_fractal_task
 
     run_fractal_task(
-        task_function=_image_based_registration_hcs_init,
+        task_function=init_select_multiplexing_pairs,
         logger_name=logger.name,
     )

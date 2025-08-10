@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 @validate_call
-def _init_group_by_well_for_multiplexing(
+def init_select_reference_knowing_all(
     *,
     # Fractal parameters
     zarr_urls: list[str],
@@ -32,9 +32,8 @@ def _init_group_by_well_for_multiplexing(
     reference_acquisition: int = 0,
 ) -> dict[str, list[str]]:
     """
-    Finds images for all acquisitions per well.
-
-    Returns the parallelization_list to run `find_registration_consensus`.
+    Task runs once, only for reference round (single zarr_url is returned)
+    All rounds are given as init_args, which can be used in task logic to read from them
 
     Args:
         zarr_urls: List of paths or urls to the individual OME-Zarr image to
@@ -61,6 +60,6 @@ if __name__ == "__main__":
     from fractal_tasks_core.tasks._utils import run_fractal_task
 
     run_fractal_task(
-        task_function=_init_group_by_well_for_multiplexing,
+        task_function=init_select_reference_knowing_all,
         logger_name=logger.name,
     )

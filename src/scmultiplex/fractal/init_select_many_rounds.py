@@ -45,7 +45,7 @@ def init_select_many_rounds(
             (standard argument for Fractal tasks, managed by Fractal server).
         select_acquisitions: List of rounds to which correction should be applied, list of integers.
     """
-    logger.info(f"Running `init_select_illumination_round` for {zarr_urls=}")
+    logger.info(f"Running `init_select_many_rounds` for {zarr_urls=}")
     image_groups = create_well_acquisition_dict(zarr_urls)
 
     # Create the parallelization list

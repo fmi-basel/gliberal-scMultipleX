@@ -19,7 +19,7 @@ from fractal_tasks_core.dev.task_models import CompoundTask, ParallelTask
 TASK_LIST = [
     CompoundTask(
         name="scMultiplex Calculate Object Linking",
-        executable_init="fractal/_image_based_registration_hcs_init.py",
+        executable_init="fractal/init_select_multiplexing_pairs.py",
         executable="fractal/calculate_object_linking.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
         meta={"cpus_per_task": 4, "mem": 16000},
@@ -30,7 +30,7 @@ TASK_LIST = [
     ),
     CompoundTask(
         name="scMultiplex Calculate Linking Consensus",
-        executable_init="fractal/_init_group_by_well_for_multiplexing.py",
+        executable_init="fractal/init_select_reference_knowing_all.py",
         executable="fractal/calculate_linking_consensus.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
         meta={"cpus_per_task": 4, "mem": 16000},
@@ -41,7 +41,7 @@ TASK_LIST = [
     ),
     CompoundTask(
         name="scMultiplex Relabel by Linking Consensus",
-        executable_init="fractal/_image_based_registration_hcs_allrounds_init.py",
+        executable_init="fractal/init_select_all_knowing_reference.py",
         executable="fractal/relabel_by_linking_consensus.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
         meta={"cpus_per_task": 4, "mem": 64000},
@@ -52,7 +52,7 @@ TASK_LIST = [
     ),
     CompoundTask(
         name="scMultiplex Calculate Platymatch Registration",
-        executable_init="fractal/_image_based_registration_hcs_init.py",
+        executable_init="fractal/init_select_multiplexing_pairs.py",
         executable="fractal/calculate_platymatch_registration.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
         meta={"cpus_per_task": 4, "mem": 16000},
@@ -63,7 +63,7 @@ TASK_LIST = [
     ),
     CompoundTask(
         name="scMultiplex Surface Mesh Multiscale",
-        executable_init="fractal/_init_group_by_well_for_multiplexing.py",
+        executable_init="fractal/init_select_reference_knowing_all.py",
         executable="fractal/surface_mesh_multiscale.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
         meta={"cpus_per_task": 4, "mem": 16000},
@@ -85,7 +85,7 @@ TASK_LIST = [
     ),
     CompoundTask(
         name="scMultiplex Spherical Harmonics from Label Image",
-        executable_init="fractal/_init_group_by_well_for_multiplexing.py",
+        executable_init="fractal/init_select_reference_knowing_all.py",
         executable="fractal/spherical_harmonics_from_labelimage.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
         meta={"cpus_per_task": 4, "mem": 16000},
@@ -96,7 +96,7 @@ TASK_LIST = [
     ),
     CompoundTask(
         name="scMultiplex Mesh Measurements",
-        executable_init="fractal/_init_group_by_well_for_multiplexing.py",
+        executable_init="fractal/init_select_reference_knowing_all.py",
         executable="fractal/scmultiplex_mesh_measurements.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
         meta={"cpus_per_task": 4, "mem": 16000},
@@ -123,7 +123,7 @@ TASK_LIST = [
     ),
     CompoundTask(
         name="scMultiplex Calculate Z-Illumination Correction",
-        executable_init="fractal/init_select_multiplexing_round.py",
+        executable_init="fractal/init_select_single_round.py",
         executable="fractal/calculate_z_illumination_correction.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
         meta={"cpus_per_task": 4, "mem": 16000},
@@ -192,7 +192,7 @@ TASK_LIST = [
     ),
     CompoundTask(
         name="scMultiplex Shift by Shift",
-        executable_init="fractal/_image_based_registration_hcs_init.py",
+        executable_init="fractal/init_select_multiplexing_pairs.py",
         executable="fractal/shift_by_shift.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
         meta={"cpus_per_task": 4, "mem": 16000},
@@ -203,7 +203,7 @@ TASK_LIST = [
     ),
     CompoundTask(
         name="scMultiplex Calculate Warpfield Registration",
-        executable_init="fractal/_image_based_registration_hcs_init.py",
+        executable_init="fractal/init_select_multiplexing_pairs.py",
         executable="fractal/calculate_warpfield_registration.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
         meta={"cpus_per_task": 4, "mem": 16000, "needs_gpu": True},
@@ -215,7 +215,7 @@ TASK_LIST = [
     ),
     CompoundTask(
         name="scMultiplex Apply Warpfield Registration",
-        executable_init="fractal/_image_based_registration_hcs_init.py",
+        executable_init="fractal/init_select_multiplexing_pairs.py",
         executable="fractal/apply_warpfield_registration.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
         meta={"cpus_per_task": 4, "mem": 16000, "needs_gpu": True},
