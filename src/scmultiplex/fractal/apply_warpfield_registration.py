@@ -26,6 +26,7 @@ from scmultiplex.fractal.fractal_helper_functions import (
     save_new_multichannel_image_with_overlap,
 )
 from scmultiplex.meshing.LabelFusionFunctions import select_label
+from scmultiplex.utils.ngio_utils import update_well_zattrs_with_new_image
 
 # Configure logging
 ngio_logger.setLevel("ERROR")
@@ -128,18 +129,11 @@ def apply_warpfield_registration(
     spacing = np.array([pixel_size.z, pixel_size.y, pixel_size.x])
 
     # Update well metadata (.zattrs) to add new image, only if does not already exist
-    well = plate_ome_zarr.get_well(row=row, column=column)
-    if new_image_name not in well.paths():
-        plate_ome_zarr.add_image(
-            row=row,
-            column=column,
-            image_path=new_image_name,
-            acquisition_id=moving_acquisition_id,
-        )
-    else:
-        logger.info(
-            f"Image with name {new_image_name} already exists in well metadata."
-        )
+    update_well_zattrs_with_new_image(
+        zarr_url=zarr_url,
+        new_image_name=new_image_name,
+        acquisition_id=moving_acquisition_id,
+    )
 
     # Derive the new moving image (e.g. 1_registered) from the reference image (e.g. 0)
     # TODO: select which labels and tables should be copied over
