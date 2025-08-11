@@ -82,6 +82,8 @@ def calculate_warpfield_registration(
             "The `calculate_warpfield_registration` task requires GPU. "
         ) from e
 
+    logger.info(f"Running 'calculate_warpfield_registration' task for {zarr_url=}.")
+
     # Set OME-Zarr paths
     reference_zarr_url = init_args.reference_zarr_url
 
