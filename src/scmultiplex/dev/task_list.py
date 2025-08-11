@@ -202,6 +202,17 @@ TASK_LIST = [
         docs_info="file:task_info/shift_by_shift.md",
     ),
     CompoundTask(
+        name="scMultiplex Shift by Rigid Shift",
+        executable_init="fractal/init_select_multiplexing_pairs.py",
+        executable="fractal/shift_by_rigid_shift.py",
+        meta_init={"cpus_per_task": 1, "mem": 1000},
+        meta={"cpus_per_task": 4, "mem": 16000},
+        category="Registration",
+        modality="HCS",
+        tags=["multiplexing", "2D", "3D"],
+        docs_info="file:task_info/shift_by_rigid_shift.md",
+    ),
+    CompoundTask(
         name="scMultiplex Calculate Warpfield Registration",
         executable_init="fractal/init_select_multiplexing_pairs.py",
         executable="fractal/calculate_warpfield_registration.py",

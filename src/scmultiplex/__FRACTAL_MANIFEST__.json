@@ -2190,6 +2190,126 @@
       "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
     },
     {
+      "name": "scMultiplex Shift by Rigid Shift",
+      "category": "Registration",
+      "modality": "HCS",
+      "tags": [
+        "multiplexing",
+        "2D",
+        "3D"
+      ],
+      "docs_info": "### Purpose\n- Copy and shift 2D or 3D label image from reference round to moving round(s)\n- Shift using on the fly rigid transformation of the linked 2D MIP image\n- Allows user to propogate segmentation run only on reference round to subsequent rounds, using rough registration\n- Useful for copying over organoid-level segmentation prior to more high-res registration on single-cell level\n- Can be more accurate than shift_by_shift task since takes into account rotation.\n\n### Outputs\n- A new **label image** saved as a label in moving rounds with '_shifted' suffix\n- A new corresponding **masking ROI table** saved as `{new_label_name}_ROI_table` in the moving rounds\n\n### Limitations\n- Applies x,y,z translation and rotation (rigid transformation; no scaling or nonrigid warping)\n- Objects in 2D MIP image must be consensus linked, so that there is equal object number with matching IDs between rounds.\n",
+      "executable_non_parallel": "fractal/init_select_multiplexing_pairs.py",
+      "executable_parallel": "fractal/shift_by_rigid_shift.py",
+      "meta_non_parallel": {
+        "cpus_per_task": 1,
+        "mem": 1000
+      },
+      "meta_parallel": {
+        "cpus_per_task": 4,
+        "mem": 16000
+      },
+      "args_schema_non_parallel": {
+        "additionalProperties": false,
+        "properties": {
+          "zarr_urls": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Zarr Urls",
+            "type": "array",
+            "description": "List of paths or urls to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "zarr_dir": {
+            "title": "Zarr Dir",
+            "type": "string",
+            "description": "path of the directory where the new OME-Zarrs will be created. Not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "reference_acquisition": {
+            "default": 0,
+            "title": "Reference Acquisition",
+            "type": "integer",
+            "description": "Which acquisition to register against. Needs to match the acquisition metadata in the OME-Zarr image."
+          }
+        },
+        "required": [
+          "zarr_urls",
+          "zarr_dir"
+        ],
+        "type": "object",
+        "title": "InitSelectMultiplexingPairs"
+      },
+      "args_schema_parallel": {
+        "$defs": {
+          "InitArgsRegistration": {
+            "description": "Registration init args.",
+            "properties": {
+              "reference_zarr_url": {
+                "title": "Reference Zarr Url",
+                "type": "string"
+              }
+            },
+            "required": [
+              "reference_zarr_url"
+            ],
+            "title": "InitArgsRegistration",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "zarr_url": {
+            "title": "Zarr Url",
+            "type": "string",
+            "description": "Path or url to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "init_args": {
+            "$ref": "#/$defs/InitArgsRegistration",
+            "title": "Init Args",
+            "description": "Intialization arguments provided by `_image_based_registration_hcs_init`. They contain the reference_zarr_url that is used for registration. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "label_name_to_shift": {
+            "title": "Label Name To Shift",
+            "type": "string",
+            "description": "Label name of 3D reference round to be copied and shifted."
+          },
+          "new_shifted_label_name": {
+            "title": "New Shifted Label Name",
+            "type": "string",
+            "description": "Optionally new name for shifted label. If left None, default is {label_name}_shifted"
+          },
+          "label_name_for_2D_rigid_transform": {
+            "title": "Label Name For 2D Rigid Transform",
+            "type": "string",
+            "description": "Label name for the linked segmentation in the 2D MIP zarr to be used for rigid transformation using skimage.transform.EuclideanTransform."
+          },
+          "zarr_suffix_to_add": {
+            "title": "Zarr Suffix To Add",
+            "type": "string",
+            "description": "Optional suffix that needs to be added to input OME-Zarr name to generate the path to the registered OME-Zarr. If the registered OME-Zarr is \"/path/to/my_plate_mip.zarr/B/03/0\" and the input OME-Zarr is located in \"/path/to/my_plate.zarr/B/03/0\", the correct suffix is \"_mip\"."
+          },
+          "image_suffix_to_remove": {
+            "title": "Image Suffix To Remove",
+            "type": "string",
+            "description": "If the image name between reference & registered zarrs don't match, this is the optional suffix that should be removed from the reference image. If the reference image is in \"/path/to/my_plate.zarr/B/03/ 0_registered\" and the registered image is in \"/path/to/my_plate_mip.zarr/ B/03/0\", the value should be \"_registered\""
+          },
+          "image_suffix_to_add": {
+            "title": "Image Suffix To Add",
+            "type": "string",
+            "description": "If the image name between reference & registered zarrs don't match, this is the optional suffix that should be added to the reference image. If the reference image is in \"/path/to/my_plate.zarr/B/03/0\" and the registered image is in \"/path/to/my_plate_mip.zarr/B/03/0_illum_corr\", the value should be \"_illum_corr\"."
+          }
+        },
+        "required": [
+          "zarr_url",
+          "init_args",
+          "label_name_to_shift"
+        ],
+        "type": "object",
+        "title": "ShiftByRigidShift"
+      },
+      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+    },
+    {
       "name": "scMultiplex Calculate Warpfield Registration",
       "input_types": {
         "is_3D": true

@@ -7,11 +7,15 @@
 #                                                                            #
 ##############################################################################
 
+from typing import Tuple
+
 import dask.array as da
 import numpy as np
 import pandas as pd
-from scipy.ndimage import shift
+from scipy.ndimage import affine_transform, shift
+from skimage.measure import regionprops_table
 from skimage.registration import phase_cross_correlation
+from skimage.transform import EuclideanTransform
 
 from scmultiplex.linking.matching import matching
 
@@ -233,3 +237,120 @@ def resize_array_to_shape(arr, target_shape):
         raise ValueError("Final image does not have the expected shape.")
 
     return arr_resized
+
+
+def get_sorted_label_centroids(img: np.ndarray) -> np.ndarray:
+    """
+    Compute and return centroids of labeled regions in a 2D label image,
+    sorted by increasing label value.
+
+    Parameters
+    ----------
+    img : np.ndarray
+        A 2D NumPy array containing integer label values. Each unique
+        non-zero value is treated as a separate labeled region.
+
+    Returns
+    -------
+    sorted_centroids : np.ndarray of shape (N, 2)
+        A NumPy array of (x, y) coordinates (i.e., (col, row)) representing
+        the centroids of the labeled regions, sorted in ascending order of their labels.
+        Each row corresponds to one region.
+    """
+    props_table = regionprops_table(img, properties=("label", "centroid"))
+
+    labels = props_table["label"]
+    centroid_y = props_table["centroid-0"]  # row
+    centroid_x = props_table["centroid-1"]  # col
+
+    # Stack into (x, y) format
+    centroids = np.stack([centroid_x, centroid_y], axis=1)
+
+    # Sort by label
+    sort_idx = np.argsort(labels)
+    sorted_centroids = centroids[sort_idx]
+    return sorted_centroids
+
+
+def get_euclidean_metrics(tform: EuclideanTransform) -> Tuple[float, np.ndarray]:
+    """
+    Extract the rotation angle (in degrees) and translation vector from
+    a 2D EuclideanTransform.
+
+    A Euclidean transform includes:
+    - Rotation (around the origin)
+    - Translation (shift in x and y)
+    - No scaling or shearing
+
+    Parameters
+    ----------
+    tform : EuclideanTransform
+        A skimage.transform.EuclideanTransform object representing a 2D transform.
+        The transform matrix is expected to be in homogeneous (3x3) form.
+
+    Returns
+    -------
+    angle_deg : float
+        The rotation angle in degrees. Positive values indicate counter-clockwise rotation.
+
+    translation : np.ndarray of shape (2,)
+        The translation vector [tx, ty], representing shifts along the x and y axes (in pixels).
+    """
+
+    # Rotation matrix (top-left 2x2)
+    R = tform.params[:2, :2]
+
+    # Rotation angle
+    angle_rad = np.arctan2(R[0, 1], R[0, 0])
+    angle_deg = np.degrees(angle_rad)
+
+    # Translation vector (last column, first two rows)
+    translation = tform.params[:2, 2]
+
+    return angle_deg, translation
+
+
+def transform_euclidean_metric_to_scipy(
+    tform: EuclideanTransform,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Convert a EuclideanTransform object from skimage into a format compatible with
+    scipy.ndimage.affine_transform (i.e., matrix and offset with (row, col) axis order).
+
+    This function extracts the inverse of the transform and adjusts it to match the
+    coordinate conventions used by scipy.ndimage, which expects transforms to be
+    applied in (row, col) = (y, x) order, unlike skimage which uses (x, y).
+
+    Parameters
+    ----------
+    tform : EuclideanTransform
+        A skimage.transform.EuclideanTransform object (typically from estimate_transform)
+        that defines a 2D Euclidean transformation (rotation + translation).
+
+    Returns
+    -------
+    matrix : np.ndarray of shape (2, 2)
+        The affine transformation matrix in (row, col) axis order, suitable for use
+        with scipy.ndimage.affine_transform.
+
+    offset : np.ndarray of shape (2,)
+        The translation vector in (row, col) axis order, to be used as the offset
+        in scipy.ndimage.affine_transform.
+    """
+    inverse_matrix = tform.inverse.params  # 3x3 matrix
+    # Extract rotation and translation
+    matrix = inverse_matrix[:2, :2]
+    offset = inverse_matrix[:2, 2]
+
+    # Swap x and y axes to match scipy's (row, col) ordering
+    # Swap rows and columns (transpose matrix, flip offset)
+    matrix = matrix[[1, 0], :][:, [1, 0]]  # yx -> xy
+    offset = offset[[1, 0]]  # yx -> xy
+
+    return matrix, offset
+
+
+def apply_affine_to_slice(slice_2d, matrix, offset):
+    return affine_transform(
+        slice_2d, matrix=matrix, offset=offset, order=0, mode="constant", cval=0
+    )
