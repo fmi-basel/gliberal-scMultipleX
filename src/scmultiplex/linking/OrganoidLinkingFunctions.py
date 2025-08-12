@@ -193,48 +193,68 @@ def shift_array_3d_dask(arr, shift):
 
 def resize_array_to_shape(arr, target_shape):
     """
-    Resize a 3D array to match target_shape.
-    Pads or crops at the far (high-index) end only.
+    Resize a 2D or 3D array to match a given target shape.
+    Crops or pads only on the high (max index) end of each axis.
 
-    Parameters:
-        arr (dask.array or np.ndarray): Input 3D array.
-        target_shape (tuple): Desired shape (z, y, x).
+    Parameters
+    ----------
+    arr : np.ndarray or dask.array
+        Input array. Must be either 2D (Y, X) or 3D (Z, Y, X).
 
-    Returns:
-        dask.array or np.ndarray: Resized array.
+    target_shape : tuple of int
+        Desired output shape. Must match number of dimensions of `arr`.
+
+    Returns
+    -------
+    resized : np.ndarray or dask.array
+        Resized array with shape matching `target_shape`.
+
+    Raises
+    ------
+    ValueError
+        If input array and target shape do not have the same number of dimensions,
+        or if resizing fails to produce the expected shape.
     """
-    assert len(target_shape) == 3, "Target shape must be 3D"
-    assert arr.ndim == 3, "Only 3D arrays supported"
+    if arr.ndim != len(target_shape):
+        raise ValueError(
+            "Input array and target_shape must have the same number of dimensions"
+        )
 
     curr_shape = arr.shape
     slices = []
     pad_width = []
 
-    # loop over each dimension
-    for i, s in enumerate(curr_shape):
+    # Determine slices and padding for each dimension
+    for i in range(arr.ndim):
         diff = target_shape[i] - curr_shape[i]
         if diff < 0:
-            # Crop from the far end
+            # Crop from end
             slices.append(slice(0, target_shape[i]))
             pad_width.append((0, 0))
         else:
-            # Pad at the far end
+            # Pad at end
             slices.append(slice(0, curr_shape[i]))
             pad_width.append((0, diff))
 
-    # Crop first (in case of oversize)
+    # Crop first
     arr_cropped = arr[tuple(slices)]
 
-    # Then pad if needed
+    # Pad if needed
     if any(p > 0 for _, p in pad_width):
-        arr_resized = da.pad(
-            arr_cropped, pad_width=pad_width, mode="constant", constant_values=0
-        )
+        if isinstance(arr, da.Array):
+            arr_resized = da.pad(
+                arr_cropped, pad_width=pad_width, mode="constant", constant_values=0
+            )
+        else:
+            arr_resized = np.pad(
+                arr_cropped, pad_width=pad_width, mode="constant", constant_values=0
+            )
     else:
         arr_resized = arr_cropped
 
+    # Final shape check
     if arr_resized.shape != target_shape:
-        raise ValueError("Final image does not have the expected shape.")
+        raise ValueError("Final array does not match target shape.")
 
     return arr_resized
 

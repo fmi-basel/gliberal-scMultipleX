@@ -383,6 +383,74 @@ def save_new_multichannel_image_with_overlap(
     return
 
 
+def save_z_slice_to_label(
+    new_zslice: np.ndarray,
+    zslice_index: int,
+    image_url_level_0: str,
+):
+    """
+    Write zslice to label zarr image.
+    """
+    # Load label dask from disk
+    image_array = zarr.open_array(image_url_level_0)
+
+    z_slice = slice(
+        zslice_index, zslice_index + 1
+    )  # E.g. first zslice is z=0 to z=1 (non-inclusive) → 1 slice
+    y_slice = slice(0, new_zslice.shape[0])  # All y
+    x_slice = slice(0, new_zslice.shape[1])  # All x
+
+    region = (z_slice, y_slice, x_slice)
+
+    new_zslice = np.expand_dims(new_zslice, axis=0)  # Add empty z dim
+
+    # Store 0-th level of region on disk
+    # TODO: Is on-disk chunking preserved here?
+    da.array(new_zslice).to_zarr(
+        url=image_array,
+        region=region,
+        overwrite=True,
+        compute=True,
+    )
+    return
+
+
+def save_zchunk_to_label(
+    new_chunk: np.ndarray | da.Array,
+    z_chunk_start_index: int,
+    image_url_level_0: str,
+):
+    """
+    Write multichannel numpy array to zarr in specific ROI region.
+    To be used within for loop over ROIs.
+    Load on-disk region and combine with new array using element-wise max to handle potential overlapping regions
+    that were already written to disk from previous ROIs.
+    Apply to all channels
+    """
+
+    assert len(new_chunk.shape) == 3  # region should have z,y,x coordinates
+
+    # Load label dask from disk
+    image_array = zarr.open_array(image_url_level_0)
+
+    z_slice_end_index = z_chunk_start_index + new_chunk.shape[0]
+
+    z_slice = slice(z_chunk_start_index, z_slice_end_index)  # z chunk
+    y_slice = slice(0, new_chunk.shape[1])  # All y
+    x_slice = slice(0, new_chunk.shape[2])  # All x
+
+    region = (z_slice, y_slice, x_slice)
+
+    # Store 0-th level of region on disk
+    da.array(new_chunk).to_zarr(
+        url=image_array,
+        region=region,
+        overwrite=True,
+        compute=True,
+    )
+    return
+
+
 def compute_and_save_mesh(
     label_image,
     label_str,
@@ -841,3 +909,56 @@ def get_ROI_table_with_translation(
 
 def remove_roi_table_suffix(name: str) -> str:
     return re.sub(r"_ROI_table", "", name)
+
+
+def get_num_z_chunks(zarr_array) -> int:
+    """
+    Return the number of chunks along the Z axis (first dimension)
+    for a 3D Zarr array.
+
+    Parameters
+    ----------
+    zarr_array : zarr.Array or NGIO object
+        A Zarr array with shape (Z, Y, X) and chunking enabled.
+
+    Returns
+    -------
+    num_chunks_z : int
+        Number of chunks along the Z (axis=0) dimension.
+    """
+    z_dim = zarr_array.shape[0]
+    z_chunk = zarr_array.chunks[0]
+
+    num_chunks_z = (z_dim + z_chunk - 1) // z_chunk  # ceil division
+    return num_chunks_z
+
+
+def iterate_z_chunks(dask_array: da.Array):
+    """
+    Iterate over Z chunks of a 3D Dask array, loading all XY pixels
+    (i.e., all Y and X chunks) for each Z chunk into memory.
+
+    Parameters
+    ----------
+    dask_array : dask.array.Array
+        A 3D Dask array with shape (Z, Y, X).
+
+    Yields
+    ------
+    z_start : int
+        Starting index of the Z chunk.
+    z_stop : int
+        Ending index of the Z chunk (exclusive).
+    z_block : np.ndarray
+        The Z chunk loaded into memory (shape: (z_chunk_size, Y, X)).
+    """
+    z_chunks = dask_array.chunks[0]  # tuple of chunk sizes along Z
+    z_starts = [0] + list(np.cumsum(z_chunks[:-1]))  # starting indices of each Z chunk
+
+    for z_start, z_chunk_size in zip(z_starts, z_chunks):
+        z_stop = z_start + z_chunk_size
+
+        # Slice this Z chunk and load entire XY pixels (may span multiple Y,X chunks)
+        z_block = dask_array[z_start:z_stop, :, :].compute()
+
+        yield z_start, z_stop, z_block
