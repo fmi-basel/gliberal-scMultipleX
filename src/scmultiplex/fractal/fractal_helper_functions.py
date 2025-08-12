@@ -338,6 +338,32 @@ def roi_to_pixel_slices(
     return (z_slice, y_slice, x_slice)
 
 
+def update_roi_to_new_image_dims(
+    roi: Tuple[slice, slice, slice],
+    target_shape: Tuple[int, int, int],
+) -> Tuple[slice, slice, slice]:
+    """
+    Given a (z, y, x) ROI defined by slices and a target shape, return a new set of slices
+    that starts from the same indices but extends to match the target_shape.
+
+    Parameters
+    ----------
+    roi : Tuple[slice, slice, slice]
+        A tuple of slices representing the original region (z_slice, y_slice, x_slice).
+    target_shape : Tuple[int, int, int]
+        The desired shape (z, y, x) of the new region.
+
+    Returns
+    -------
+    Tuple[slice, slice, slice]
+        A tuple of updated slices (z_slice, y_slice, x_slice).
+    """
+    new_slices = tuple(
+        slice(s.start, s.start + size) for s, size in zip(roi, target_shape)
+    )
+    return new_slices
+
+
 def save_new_multichannel_image_with_overlap(
     new_npimg: np.ndarray,
     image_url: str,

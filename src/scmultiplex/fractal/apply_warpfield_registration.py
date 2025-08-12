@@ -24,7 +24,9 @@ from scmultiplex.fractal.fractal_helper_functions import (
     copy_omero_zattrs_from_source_to_target,
     roi_to_pixel_slices,
     save_new_multichannel_image_with_overlap,
+    update_roi_to_new_image_dims,
 )
+from scmultiplex.linking.OrganoidLinkingFunctions import resize_array_to_shape
 from scmultiplex.meshing.LabelFusionFunctions import select_label
 from scmultiplex.utils.ngio_utils import update_well_zattrs_with_new_image
 
@@ -191,7 +193,13 @@ def apply_warpfield_registration(
 
         # Apply warpfield transformation per channel image
         result = np.empty_like(moving_np)
+        moving_shape_from_warpmap = tuple(npz_data["mov_shape"])
         for c, moving_channel_np in enumerate(moving_np):
+
+            if moving_shape_from_warpmap != moving_channel_np.shape:
+                moving_channel_np = resize_array_to_shape(
+                    moving_channel_np, moving_shape_from_warpmap
+                )
 
             # Run warpfield transformation
             logger.info(f"Applying warpfield registration for channel {c}.")
@@ -201,11 +209,12 @@ def apply_warpfield_registration(
 
             # Optionally mask output by parent after transformation
             if mask_output_by_parent:
-                if moving_channel_np_registered.shape != masking_label.shape:
-                    raise ValueError(
-                        f"Registration output image shape {moving_channel_np_registered.shape} does "
-                        f"not match masking label shape {masking_label.shape}"
+                # Have not tested whether this padding of masking label gives good results
+                if moving_shape_from_warpmap != masking_label.shape:
+                    masking_label = resize_array_to_shape(
+                        masking_label, moving_shape_from_warpmap
                     )
+
                 moving_channel_np_registered = (
                     moving_channel_np_registered * masking_label
                 )
@@ -216,6 +225,7 @@ def apply_warpfield_registration(
 
         # save ROI to disk using dask _to_zarr, not ngio
         region = roi_to_pixel_slices(roi, spacing)
+        region = update_roi_to_new_image_dims(region, moving_shape_from_warpmap)
         save_new_multichannel_image_with_overlap(
             result, new_moving_zarr_url, region, apply_to_all_channels=True
         )
