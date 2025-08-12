@@ -31,6 +31,7 @@ from scmultiplex.fractal.fractal_helper_functions import (
 # Local application imports
 from scmultiplex.linking.OrganoidLinkingFunctions import (
     get_euclidean_metrics,
+    get_rotation_only_transform,
     get_sorted_label_centroids,
     is_identity_transform,
     resize_array_to_shape,
@@ -55,6 +56,7 @@ def shift_by_rigid_shift(
     zarr_suffix_to_add: Optional[str] = None,
     image_suffix_to_remove: Optional[str] = None,
     image_suffix_to_add: Optional[str] = None,
+    only_apply_rotation: bool = False,
 ):
     """
     Copy label image from reference round to moving round and shift by on the fly rigid transformation.
@@ -89,6 +91,8 @@ def shift_by_rigid_shift(
             If the reference image is in "/path/to/my_plate.zarr/B/03/0" and the
             registered image is in "/path/to/my_plate_mip.zarr/B/03/0_illum_corr", the
             value should be "_illum_corr".
+        only_apply_rotation: If true, translation output of EuclideanTransform is ignored and only
+            rotation is applied, if present.
     """
 
     logger.info(f"Running 'shift_by_rigid_shift' task for {zarr_url=}.")
@@ -176,6 +180,11 @@ def shift_by_rigid_shift(
         f"Calculated rigid transformation with translation {translation} and "
         f"angle rotation {angle_deg}."
     )
+
+    if only_apply_rotation:
+        # Remove translation from tform output
+        logger.info("Only applying rotation to rigid transform.")
+        tform = get_rotation_only_transform(tform)
 
     matrix, offset = transform_euclidean_metric_to_scipy(tform)
 

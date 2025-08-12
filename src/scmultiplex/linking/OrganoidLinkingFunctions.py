@@ -403,3 +403,28 @@ def is_identity_transform(tform: EuclideanTransform, rtol=1e-5, atol=1e-8) -> bo
         ]
     )
     return np.allclose(tform.params, identity_matrix, rtol=rtol, atol=atol)
+
+
+def get_rotation_only_transform(tform: EuclideanTransform) -> EuclideanTransform:
+    """
+    Return a new EuclideanTransform with only the rotation component of the original transform.
+
+    Parameters
+    ----------
+    tform : EuclideanTransform
+        Original transform with rotation and translation.
+
+    Returns
+    -------
+    EuclideanTransform
+        A new transform containing only the rotation part.
+    """
+    # Copy rotation matrix
+    rotation_matrix = tform.params.copy()
+
+    # Zero out translation
+    rotation_matrix[0, 2] = 0.0
+    rotation_matrix[1, 2] = 0.0
+
+    # Return new transform object
+    return EuclideanTransform(matrix=rotation_matrix)

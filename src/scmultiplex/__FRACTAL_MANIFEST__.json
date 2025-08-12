@@ -2297,6 +2297,12 @@
             "title": "Image Suffix To Add",
             "type": "string",
             "description": "If the image name between reference & registered zarrs don't match, this is the optional suffix that should be added to the reference image. If the reference image is in \"/path/to/my_plate.zarr/B/03/0\" and the registered image is in \"/path/to/my_plate_mip.zarr/B/03/0_illum_corr\", the value should be \"_illum_corr\"."
+          },
+          "only_apply_rotation": {
+            "default": false,
+            "title": "Only Apply Rotation",
+            "type": "boolean",
+            "description": "If true, translation output of EuclideanTransform is ignored and only rotation is applied, if present."
           }
         },
         "required": [
