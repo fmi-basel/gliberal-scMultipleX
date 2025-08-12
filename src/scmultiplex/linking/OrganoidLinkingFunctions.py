@@ -23,30 +23,39 @@ from scmultiplex.linking.matching import matching
 
 def pad_img_set(img1, img2):
     """
-    Zero-pad two images to be the same size
-    :param img1: 2D numpy array, typically R0
-    :param img2: 2D numpy array, typically RX
-    :return: padded img1 and img2
-    """
-    img1_padded = np.pad(
-        img1,
-        [
-            (0, max(0, img2.shape[0] - img1.shape[0])),
-            (0, max(0, img2.shape[1] - img1.shape[1])),
-        ],
-        mode="constant",
-        constant_values=0,
-    )
+    Zero-pad two images (2D or 3D) to be the same size.
+    Padding is applied only at the end (high-index side) of each dimension.
 
-    img2_padded = np.pad(
-        img2,
-        [
-            (0, max(0, img1.shape[0] - img2.shape[0])),
-            (0, max(0, img1.shape[1] - img2.shape[1])),
-        ],
-        mode="constant",
-        constant_values=0,
-    )
+    Parameters
+    ----------
+    img1 : np.ndarray
+        2D or 3D NumPy array
+    img2 : np.ndarray
+        2D or 3D NumPy array
+
+    Returns
+    -------
+    img1_padded, img2_padded : np.ndarray
+        The two input arrays, zero-padded to the same shape.
+    """
+    assert img1.ndim in (2, 3), "Only 2D or 3D arrays supported"
+    assert img1.ndim == img2.ndim, "Both images must have same number of dimensions"
+
+    # Determine padding per dimension
+    pad_img1 = []
+    pad_img2 = []
+
+    for dim in range(img1.ndim):
+        size1 = img1.shape[dim]
+        size2 = img2.shape[dim]
+        pad1 = max(0, size2 - size1)
+        pad2 = max(0, size1 - size2)
+        pad_img1.append((0, pad1))
+        pad_img2.append((0, pad2))
+
+    # Apply padding
+    img1_padded = np.pad(img1, pad_img1, mode="constant", constant_values=0)
+    img2_padded = np.pad(img2, pad_img2, mode="constant", constant_values=0)
 
     return img1_padded, img2_padded
 
