@@ -2303,6 +2303,12 @@
             "title": "Only Apply Rotation",
             "type": "boolean",
             "description": "If true, translation output of EuclideanTransform is ignored and only rotation is applied, if present."
+          },
+          "only_apply_if_rotation_present": {
+            "default": false,
+            "title": "Only Apply If Rotation Present",
+            "type": "boolean",
+            "description": "If true, EuclideanTransform is applied (both translation and rotation) to if non-zero rotation is detected in the image."
           }
         },
         "required": [

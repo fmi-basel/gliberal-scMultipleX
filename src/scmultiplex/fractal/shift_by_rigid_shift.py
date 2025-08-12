@@ -35,6 +35,7 @@ from scmultiplex.linking.OrganoidLinkingFunctions import (
     get_sorted_label_centroids,
     is_identity_transform,
     resize_array_to_shape,
+    select_rotating_euclidean_transform,
     transform_euclidean_metric_to_scipy,
 )
 
@@ -57,6 +58,7 @@ def shift_by_rigid_shift(
     image_suffix_to_remove: Optional[str] = None,
     image_suffix_to_add: Optional[str] = None,
     only_apply_rotation: bool = False,
+    only_apply_if_rotation_present: bool = False,
 ):
     """
     Copy label image from reference round to moving round and shift by on the fly rigid transformation.
@@ -93,6 +95,8 @@ def shift_by_rigid_shift(
             value should be "_illum_corr".
         only_apply_rotation: If true, translation output of EuclideanTransform is ignored and only
             rotation is applied, if present.
+        only_apply_if_rotation_present: If true, EuclideanTransform is applied (both translation and rotation) to
+            if non-zero rotation is detected in the image.
     """
 
     logger.info(f"Running 'shift_by_rigid_shift' task for {zarr_url=}.")
@@ -183,8 +187,18 @@ def shift_by_rigid_shift(
 
     if only_apply_rotation:
         # Remove translation from tform output
-        logger.info("Only applying rotation to rigid transform.")
+        logger.info("Only applying rotation component of rigid transform.")
         tform = get_rotation_only_transform(tform)
+
+    if only_apply_if_rotation_present:
+        logger.info("Determining whether rigid transform has rotation component.")
+        tform = select_rotating_euclidean_transform(tform)
+        if is_identity_transform(tform):
+            logger.info("No rotation component detected.")
+        else:
+            logger.info(
+                "Rotation detected, proceeding with full rigid transformation (translation + rotation)."
+            )
 
     matrix, offset = transform_euclidean_metric_to_scipy(tform)
 

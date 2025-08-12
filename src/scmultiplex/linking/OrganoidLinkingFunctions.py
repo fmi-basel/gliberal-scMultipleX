@@ -428,3 +428,34 @@ def get_rotation_only_transform(tform: EuclideanTransform) -> EuclideanTransform
 
     # Return new transform object
     return EuclideanTransform(matrix=rotation_matrix)
+
+
+def select_rotating_euclidean_transform(
+    tform: EuclideanTransform, angle_tol_degrees: float = 1e-4
+) -> EuclideanTransform:
+    """
+    Check if a EuclideanTransform has a non-zero rotation.
+    If rotation is approximately zero (within tolerance), return an identity transform.
+
+    Parameters
+    ----------
+    tform : EuclideanTransform
+        The input transformation to check.
+
+    angle_tol_degrees : float, optional
+        Tolerance in degrees below which rotation is considered zero. Default is 0.0001 degrees.
+
+    Returns
+    -------
+    EuclideanTransform
+        - Original tform if rotation is non-zero.
+        - Identity transform if rotation is approximately zero.
+    """
+    # Extract rotation angle
+    angle_deg, translation = get_euclidean_metrics(tform)
+
+    if np.abs(angle_deg) < angle_tol_degrees:
+        # Return identity transform
+        return EuclideanTransform(matrix=np.eye(3))
+    else:
+        return tform
