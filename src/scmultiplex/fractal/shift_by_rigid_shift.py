@@ -6,7 +6,7 @@
 #
 
 """
-Copy label image from reference round to moving round and shift by pre-calculated x,y,z translation.
+Copy label image from reference round to moving round and apply rigid transformation (translation and rotation).
 """
 
 import logging
