@@ -250,4 +250,14 @@ TASK_LIST = [
         input_types=dict(is_3D=True),
         output_types=dict(registered=True, is_3D=True),
     ),
+    CompoundTask(
+        name="scMultiplex Detect Clipped Rois Across Rounds",
+        executable_init="fractal/init_select_reference_knowing_all.py",
+        executable="fractal/detect_clipped_rois_across_rounds.py",
+        meta_init={"cpus_per_task": 1, "mem": 1000},
+        meta={"cpus_per_task": 4, "mem": 16000},
+        category="Registration",
+        modality="HCS",
+        tags=["multiplexing", "3D"],
+    ),
 ]

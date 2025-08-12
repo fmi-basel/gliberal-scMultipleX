@@ -7,6 +7,7 @@
 #                                                                            #
 ##############################################################################
 
+from collections import defaultdict
 from typing import Tuple
 
 import dask.array as da
@@ -459,3 +460,27 @@ def select_rotating_euclidean_transform(
         return EuclideanTransform(matrix=np.eye(3))
     else:
         return tform
+
+
+def group_by_roi_name_from_dict(roi_dict):
+    """
+    Group Roi objects by their 'name' attribute from a dictionary of lists.
+
+    Parameters
+    ----------
+    roi_dict : dict
+        Dictionary where each value is a list of Roi objects.
+
+    Returns
+    -------
+    dict
+        Dictionary where keys are ROI names (as strings),
+        and values are lists of Roi objects that share that name.
+    """
+    roi_groups = defaultdict(list)
+
+    for roi_list in roi_dict.values():
+        for roi in roi_list:
+            roi_groups[roi.name].append(roi)
+
+    return roi_groups
