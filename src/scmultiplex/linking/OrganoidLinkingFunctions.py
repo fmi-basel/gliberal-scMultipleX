@@ -374,3 +374,32 @@ def apply_affine_to_slice(slice_2d, matrix, offset):
     return affine_transform(
         slice_2d, matrix=matrix, offset=offset, order=0, mode="constant", cval=0
     )
+
+
+def is_identity_transform(tform: EuclideanTransform, rtol=1e-5, atol=1e-8) -> bool:
+    """
+    Check if a EuclideanTransform is effectively an identity transform (no rotation or translation).
+
+    Parameters
+    ----------
+    tform : EuclideanTransform
+        The transform object from estimate_transform.
+    rtol : float
+        Relative tolerance for comparing values.
+    atol : float
+        Absolute tolerance for comparing values.
+
+    Returns
+    -------
+    bool
+        True if the transform is effectively identity; False otherwise.
+    """
+    # Identity Euclidean matrix
+    identity_matrix = np.array(
+        [
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+        ]
+    )
+    return np.allclose(tform.params, identity_matrix, rtol=rtol, atol=atol)

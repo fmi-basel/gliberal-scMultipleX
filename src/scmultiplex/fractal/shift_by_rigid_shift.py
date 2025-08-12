@@ -32,6 +32,7 @@ from scmultiplex.fractal.fractal_helper_functions import (
 from scmultiplex.linking.OrganoidLinkingFunctions import (
     get_euclidean_metrics,
     get_sorted_label_centroids,
+    is_identity_transform,
     resize_array_to_shape,
     transform_euclidean_metric_to_scipy,
 )
@@ -179,9 +180,7 @@ def shift_by_rigid_shift(
     matrix, offset = transform_euclidean_metric_to_scipy(tform)
 
     # Load reference label array as dask
-    label_volume = reference_img.get_array(mode="dask")
-    chunk_size_z = reference_img.chunks[0]
-    logger.info(f"Loading xy slices by z chunk size {chunk_size_z}")
+    label_volume_dask = reference_img.get_array(mode="dask")
 
     # Save shifted label image in moving round zarr, make new label
     if new_shifted_label_name is None:
@@ -191,59 +190,80 @@ def shift_by_rigid_shift(
         name=new_shifted_label_name, overwrite=True
     )
 
-    # Get level 0 path of new label to save to
-    label_level0_zarr_url = os.path.join(zarr_url, new_label.zarr_array.path)
+    # If no rigid transformation necessary, skip writing to disk and just copy over untransformed label image
+    if is_identity_transform(tform):
 
-    # Apply 2D rigid transformation by z slice in each chunk, resize, write each chunk to disk
-    logger.info(
-        f"Resize each zchunk in XY from reference shape {reference_img.shape[-2:]} to moving shape {moving_img.shape[-2:]}."
-    )
-
-    logger.info(
-        f"Apply rigid transformation by zslice and by zchunk to reference image {reference_zarr_url}."
-    )
-    logger.info("Start apply and save to disk...")
-
-    # Loop over z chunks
-    for z_start, z_stop, z_data in iterate_z_chunks(label_volume):
-
-        np_chunk_to_save = np.empty_like(
-            z_data
-        )  # init empty array same size as z chunk
-        # Loop over zslices in z chunk
-        for z, label_slice in enumerate(z_data):
-            np_chunk_to_save[z] = affine_transform(
-                label_slice,  # source image
-                matrix=matrix,  # 2x2 rotation
-                offset=offset,  # translation
-                order=0,  # nearest-neighbor (good for labels)
-                mode="constant",  # fill outside with constant value
-                cval=0,  # the constant value to use (e.g. background label)
-            )
-
-        label_chunk_transformed = resize_array_to_shape(
-            np_chunk_to_save,
-            (z_data.shape[0], moving_img.shape[-2], moving_img.shape[-1]),
-        )  # still numpy
-        save_zchunk_to_label(
-            new_chunk=label_chunk_transformed,
-            z_chunk_start_index=z_start,
-            image_url_level_0=label_level0_zarr_url,
+        logger.info(
+            "No rigid transformation necessary, resize and directly save to disk"
         )
 
-    # for z, label_slice in enumerate(label_volume):
-    #     label_slice_transformed = affine_transform(
-    #         label_slice,  # source image
-    #         matrix=matrix,  # 2x2 rotation
-    #         offset=offset,  # translation
-    #         order=0,  # nearest-neighbor (good for labels)
-    #         mode="constant",  # fill outside with constant value
-    #         cval=0,  # the constant value to use (e.g. background label)
-    #     )
-    #
-    #     label_slice_transformed = resize_array_to_shape(label_slice_transformed, moving_img.shape[-2:])
-    #
-    #     save_z_slice_to_label(new_zslice=label_slice_transformed, zslice_index=z, image_url_level_0=label_level0_zarr_url)
+        # Get shapes of reference and moving label images
+        reference_shape = reference_img.shape[-3:]
+        moving_shape = moving_img.shape[-3:]
+
+        # Resize array to match shape of moving image
+        logger.info(f"Resizing array from {reference_shape=} to {moving_shape=}.")
+        label_volume_dask = resize_array_to_shape(label_volume_dask, moving_shape)
+
+        new_label.set_array(label_volume_dask)
+    else:
+        # Apply rigid transformation
+        chunk_size_z = reference_img.chunks[0]
+        logger.info(f"Loading xy slices by z chunk size {chunk_size_z}")
+
+        # Get level 0 path of new label to save to
+        label_level0_zarr_url = os.path.join(zarr_url, new_label.zarr_array.path)
+
+        # Apply 2D rigid transformation by z slice in each chunk, resize, write each chunk to disk
+        logger.info(
+            f"Resize each zchunk in XY from reference shape {reference_img.shape[-2:]} to moving shape {moving_img.shape[-2:]}."
+        )
+
+        logger.info(
+            f"Apply rigid transformation by zslice and by zchunk to reference image {reference_zarr_url}."
+        )
+        logger.info("Start apply and save to disk...")
+
+        # Loop over z chunks
+        for z_start, z_stop, z_data in iterate_z_chunks(label_volume_dask):
+
+            np_chunk_to_save = np.empty_like(
+                z_data
+            )  # init empty array same size as z chunk
+            # Loop over zslices in z chunk
+            for z, label_slice in enumerate(z_data):
+                np_chunk_to_save[z] = affine_transform(
+                    label_slice,  # source image
+                    matrix=matrix,  # 2x2 rotation
+                    offset=offset,  # translation
+                    order=0,  # nearest-neighbor (good for labels)
+                    mode="constant",  # fill outside with constant value
+                    cval=0,  # the constant value to use (e.g. background label)
+                )
+
+            label_chunk_transformed = resize_array_to_shape(
+                np_chunk_to_save,
+                (z_data.shape[0], moving_img.shape[-2], moving_img.shape[-1]),
+            )  # still numpy
+            save_zchunk_to_label(
+                new_chunk=label_chunk_transformed,
+                z_chunk_start_index=z_start,
+                image_url_level_0=label_level0_zarr_url,
+            )
+
+        # for z, label_slice in enumerate(label_volume):
+        #     label_slice_transformed = affine_transform(
+        #         label_slice,  # source image
+        #         matrix=matrix,  # 2x2 rotation
+        #         offset=offset,  # translation
+        #         order=0,  # nearest-neighbor (good for labels)
+        #         mode="constant",  # fill outside with constant value
+        #         cval=0,  # the constant value to use (e.g. background label)
+        #     )
+        #
+        #     label_slice_transformed = resize_array_to_shape(label_slice_transformed, moving_img.shape[-2:])
+        #
+        #     save_z_slice_to_label(new_zslice=label_slice_transformed, zslice_index=z, image_url_level_0=label_level0_zarr_url)
 
     # Build pyramids for label image
     new_label.consolidate()
