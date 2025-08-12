@@ -157,6 +157,8 @@ def shift_by_rigid_shift(
     dst_label = ome_zarr_2d_dst.get_label(name=label_name_for_2D_rigid_transform)
     src_image_np = src_label.get_array(mode="numpy")
     dst_image_np = dst_label.get_array(mode="numpy")
+    src_image_np = np.squeeze(src_image_np, axis=0)
+    dst_image_np = np.squeeze(dst_image_np, axis=0)
 
     src_objects = np.unique(src_image_np)
     dst_objects = np.unique(dst_image_np)
@@ -177,7 +179,7 @@ def shift_by_rigid_shift(
         f"Detected average shift between centroids: {np.mean(deltas, axis=0)} [x,y]"
     )
 
-    # Calculate rigid Euclidean maping from reference (src) to moving (dst) point cloud
+    # Calculate rigid Euclidean mapping from reference (src) to moving (dst) point cloud
     tform = estimate_transform("euclidean", src, dst)
     angle_deg, translation = get_euclidean_metrics(tform)
 

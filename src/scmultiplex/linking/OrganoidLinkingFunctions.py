@@ -287,7 +287,7 @@ def get_sorted_label_centroids(img: np.ndarray) -> np.ndarray:
         the centroids of the labeled regions, sorted in ascending order of their labels.
         Each row corresponds to one region.
     """
-    props_table = regionprops_table(img, properties=("label", "centroid"))
+    props_table = regionprops_table(img, properties=["label", "centroid"])
 
     labels = props_table["label"]
     centroid_y = props_table["centroid-0"]  # row
