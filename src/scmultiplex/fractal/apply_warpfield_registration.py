@@ -192,8 +192,8 @@ def apply_warpfield_registration(
             masking_label = select_label(masking_label, label_string)  # binarize mask
 
         # Apply warpfield transformation per channel image
-        result = np.empty_like(moving_np)
         moving_shape_from_warpmap = tuple(npz_data["mov_shape"])
+        result = np.empty(moving_shape_from_warpmap, dtype=moving_np.dtype)
         for c, moving_channel_np in enumerate(moving_np):
 
             if moving_shape_from_warpmap != moving_channel_np.shape:
