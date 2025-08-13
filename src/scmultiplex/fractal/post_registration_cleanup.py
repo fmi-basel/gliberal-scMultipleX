@@ -207,9 +207,7 @@ def post_registration_cleanup(
 
             # save ROI to disk using dask _to_zarr, not ngio
             region = roi_to_pixel_slices(roi, spacing)
-            save_new_multichannel_image_with_overlap(
-                result, new_zarr_url, region, apply_to_all_channels=True
-            )
+            save_new_multichannel_image_with_overlap(result, new_zarr_url, region)
 
             logger.info(f"Wrote region {label_string} to level-0 zarr image.")
 

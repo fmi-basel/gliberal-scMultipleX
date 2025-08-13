@@ -24,7 +24,7 @@ from scmultiplex.fractal.fractal_helper_functions import (
     copy_omero_zattrs_from_source_to_target,
     roi_to_pixel_slices,
     save_new_multichannel_image_with_overlap,
-    update_roi_to_new_image_dims,
+    update_region_to_new_length,
 )
 from scmultiplex.linking.OrganoidLinkingFunctions import resize_array_to_shape
 from scmultiplex.meshing.LabelFusionFunctions import select_label
@@ -225,10 +225,8 @@ def apply_warpfield_registration(
 
         # save ROI to disk using dask _to_zarr, not ngio
         region = roi_to_pixel_slices(roi, spacing)
-        region = update_roi_to_new_image_dims(region, moving_shape_from_warpmap)
-        save_new_multichannel_image_with_overlap(
-            result, new_moving_zarr_url, region, apply_to_all_channels=True
-        )
+        region = update_region_to_new_length(region, moving_shape_from_warpmap)
+        save_new_multichannel_image_with_overlap(result, new_moving_zarr_url, region)
 
         logger.info(f"Wrote region {label_string} to level-0 zarr image.")
 
