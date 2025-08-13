@@ -194,13 +194,16 @@ def apply_warpfield_registration(
             masking_label = select_label(masking_label, label_string)  # binarize mask
 
         # Apply warpfield transformation per channel image
-        moving_shape_from_warpmap = tuple(npz_data["mov_shape"])
-        result = np.empty(moving_shape_from_warpmap, dtype=moving_np.dtype)
+        zyx_moving_shape_from_warpmap = tuple(npz_data["mov_shape"])
+        czyx_moving_shape_from_warpmap = (
+            moving_np.shape[0],
+        ) + zyx_moving_shape_from_warpmap
+        result = np.empty(czyx_moving_shape_from_warpmap, dtype=moving_np.dtype)
         for c, moving_channel_np in enumerate(moving_np):
 
-            if moving_shape_from_warpmap != moving_channel_np.shape:
+            if zyx_moving_shape_from_warpmap != moving_channel_np.shape:
                 moving_channel_np = resize_array_to_shape(
-                    moving_channel_np, moving_shape_from_warpmap
+                    moving_channel_np, zyx_moving_shape_from_warpmap
                 )
 
             # Run warpfield transformation
@@ -212,9 +215,9 @@ def apply_warpfield_registration(
             # Optionally mask output by parent after transformation
             if mask_output_by_parent:
                 # Have not tested whether this padding of masking label gives good results
-                if moving_shape_from_warpmap != masking_label.shape:
+                if zyx_moving_shape_from_warpmap != masking_label.shape:
                     masking_label = resize_array_to_shape(
-                        masking_label, moving_shape_from_warpmap
+                        masking_label, zyx_moving_shape_from_warpmap
                     )
 
                 moving_channel_np_registered = (
@@ -227,7 +230,7 @@ def apply_warpfield_registration(
 
         # save ROI to disk using dask _to_zarr, not ngio
         region = roi_to_pixel_slices(roi, spacing)
-        region = update_region_to_new_length(region, moving_shape_from_warpmap)
+        region = update_region_to_new_length(region, zyx_moving_shape_from_warpmap)
         save_new_multichannel_image_with_overlap(result, new_moving_zarr_url, region)
 
         logger.info(f"Wrote region {label_string} to level-0 zarr image.")
