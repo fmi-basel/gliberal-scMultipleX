@@ -140,9 +140,11 @@ def apply_warpfield_registration(
     )
 
     # Derive the new moving image (e.g. 1_registered) from the reference image (e.g. 0)
-    # TODO: select which labels and tables should be copied over
+    # Image has same shape as reference image EXCEPT number of channels which are taken from the moving image
+    new_moving_ome_zarr_shape = (moving_image.shape[0],) + reference_image.shape[-3:]
     new_moving_ome_zarr = reference_ome_zarr.derive_image(
         store=new_moving_zarr_url,
+        shape=new_moving_ome_zarr_shape,
         copy_labels=copy_labels_and_tables,
         copy_tables=copy_labels_and_tables,
         overwrite=overwrite,
