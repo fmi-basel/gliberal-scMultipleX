@@ -338,30 +338,142 @@ def roi_to_pixel_slices(
     return (z_slice, y_slice, x_slice)
 
 
+def update_region_to_new_length(
+    roi: Tuple[slice, slice, slice],
+    target_shape: Tuple[int, int, int],
+) -> Tuple[slice, slice, slice]:
+    """
+    Given a (z, y, x) ROI defined by slices and a target shape, return a new set of slices
+    that starts from the same indices but extends to match the target_shape.
+
+    Parameters
+    ----------
+    roi : Tuple[slice, slice, slice]
+        A tuple of slices representing the original region (z_slice, y_slice, x_slice).
+    target_shape : Tuple[int, int, int]
+        The desired shape (z, y, x) of the new region.
+
+    Returns
+    -------
+    Tuple[slice, slice, slice]
+        A tuple of updated slices (z_slice, y_slice, x_slice).
+    """
+    new_slices = tuple(
+        slice(s.start, s.start + size) for s, size in zip(roi, target_shape)
+    )
+    return new_slices
+
+
+def clip_region_stop_to_shape(
+    region: Tuple[slice, slice, slice],
+    shape: Tuple[int, int, int],
+) -> Tuple[slice, slice, slice]:
+    """
+    Clip the stop values of a region (given as slices) so they do not exceed
+    the bounds defined by the target shape.
+
+    This is useful when slicing from a NumPy or Zarr array and the region
+    may extend beyond the array's dimensions. Handles None values in the slices
+    gracefully (interpreting them as 0 for start and the full dimension size for stop).
+
+    Parameters
+    ----------
+    region : Tuple[slice, slice, slice]
+        A tuple of slice objects representing the region to extract from a 3D array.
+        Each slice can have `start` and `stop` values, which may be `None`.
+
+    shape : Tuple[int, int, int]
+        The shape of the array (z, y, x) to clip against. The clipped slices will
+        ensure that stop <= corresponding shape dimension.
+
+    Returns
+    -------
+    Tuple[slice, slice, slice]
+        A new tuple of slices where the stop values are clipped to the array bounds,
+        and None values for start/stop are replaced with default safe values.
+    """
+    region_clipped = []
+    for sl, dim_size in zip(region, shape):
+        start = sl.start if sl.start is not None else 0
+        stop = min(sl.stop, dim_size) if sl.stop is not None else dim_size
+        region_clipped.append(slice(start, stop))
+
+    return tuple(region_clipped)
+
+
+def get_region_shape(region: Tuple[slice, slice, slice]) -> Tuple[int, int, int]:
+    """
+    Compute the shape (z, y, x) of a region defined by slices.
+
+    Parameters
+    ----------
+    region : Tuple[slice, slice, slice]
+        Tuple of slice objects defining a region.
+
+    Returns
+    -------
+    Tuple[int, int, int]
+        The shape of the region, calculated as (stop - start) per axis.
+    """
+    shape = []
+    for sl in region:
+        if sl.start is None:
+            raise ValueError("Cannot compute shape for region with no start value.")
+        if sl.stop is None:
+            raise ValueError("Cannot compute shape for region with no stop value.")
+        start = sl.start
+        stop = sl.stop
+        shape.append(stop - start)
+
+    return tuple(shape)
+
+
 def save_new_multichannel_image_with_overlap(
     new_npimg: np.ndarray,
     image_url: str,
-    region: Tuple[slice, ...],
-    apply_to_all_channels: bool = True,
+    region: Tuple[slice, slice, slice],
 ):
     """
     Write multichannel numpy array to zarr in specific ROI region.
+    new_npimg is a 4D numpy array.
     To be used within for loop over ROIs.
     Load on-disk region and combine with new array using element-wise max to handle potential overlapping regions
     that were already written to disk from previous ROIs.
     Apply to all channels
     """
-    if apply_to_all_channels:
-        assert len(region) == 3  # region should have z,y,x coordinates
-        # add empty channel dimension to region; this loads all channels
-        region = (slice(None),) + region
+
+    if new_npimg.ndim != 4:
+        raise ValueError(f"Expected 4D array, got {new_npimg.ndim}D.")
+
+    assert len(region) == 3  # region should have z,y,x coordinates
+    # add empty channel dimension to region; this loads all channels
+    region_4d = (slice(None),) + region
 
     # Load dask from disk, will contain rois of the previously processed objects within for loop
     image_url_level0 = os.path.join(image_url, "0")
     image_array = zarr.open_array(image_url_level0)
 
+    if image_array.ndim != 4:
+        raise ValueError(f"Expected 4D array, got {new_npimg.ndim}D.")
+
     # Load region of current object from disk, will include any previously processed neighboring objects
-    region_on_disk = image_array[region]
+    try:
+        region_on_disk = image_array[region_4d]
+    except IndexError:
+        # This means region was padded and now extends beyond edges of full dask array
+        # Clip region to max array size
+        logger.info(
+            f"Padded array extends beyond image boundary. Clipping stop coordinates of {region=} "
+            f"to match array shape {image_array.shape[-3:]}"
+        )
+        region = clip_region_stop_to_shape(region, image_array.shape[-3:])
+        region_4d = (slice(None),) + region
+        region_on_disk = image_array[region_4d]
+
+        # Clip input numpy array to same shape
+        region_shape = get_region_shape(region)
+        z, y, x = region_shape
+        new_npimg = new_npimg[:, :z, :y, :x]
 
     # Check that dimensions of rois match
     if region_on_disk.shape != new_npimg.shape:
@@ -375,6 +487,74 @@ def save_new_multichannel_image_with_overlap(
     # Store 0-th level of region on disk
     # TODO: Is on-disk chunking preserved here?
     da.array(result).to_zarr(
+        url=image_array,
+        region=region_4d,
+        overwrite=True,
+        compute=True,
+    )
+    return
+
+
+def save_z_slice_to_label(
+    new_zslice: np.ndarray,
+    zslice_index: int,
+    image_url_level_0: str,
+):
+    """
+    Write zslice to label zarr image.
+    """
+    # Load label dask from disk
+    image_array = zarr.open_array(image_url_level_0)
+
+    z_slice = slice(
+        zslice_index, zslice_index + 1
+    )  # E.g. first zslice is z=0 to z=1 (non-inclusive) → 1 slice
+    y_slice = slice(0, new_zslice.shape[0])  # All y
+    x_slice = slice(0, new_zslice.shape[1])  # All x
+
+    region = (z_slice, y_slice, x_slice)
+
+    new_zslice = np.expand_dims(new_zslice, axis=0)  # Add empty z dim
+
+    # Store 0-th level of region on disk
+    # TODO: Is on-disk chunking preserved here?
+    da.array(new_zslice).to_zarr(
+        url=image_array,
+        region=region,
+        overwrite=True,
+        compute=True,
+    )
+    return
+
+
+def save_zchunk_to_label(
+    new_chunk: np.ndarray | da.Array,
+    z_chunk_start_index: int,
+    image_url_level_0: str,
+):
+    """
+    Write multichannel numpy array to zarr in specific ROI region.
+    To be used within for loop over ROIs.
+    Load on-disk region and combine with new array using element-wise max to handle potential overlapping regions
+    that were already written to disk from previous ROIs.
+    Apply to all channels
+    """
+
+    assert len(new_chunk.shape) == 3  # region should have z,y,x coordinates
+
+    # Load label dask from disk
+    image_array = zarr.open_array(image_url_level_0)
+
+    z_slice_end_index = z_chunk_start_index + new_chunk.shape[0]
+
+    z_slice = slice(z_chunk_start_index, z_slice_end_index)  # z chunk
+    y_slice = slice(0, new_chunk.shape[1])  # All y
+    x_slice = slice(0, new_chunk.shape[2])  # All x
+
+    region = (z_slice, y_slice, x_slice)
+
+    # Store 0-th level of region on disk
+    da.array(new_chunk).to_zarr(
         url=image_array,
         region=region,
         overwrite=True,
@@ -841,3 +1021,56 @@ def get_ROI_table_with_translation(
 
 def remove_roi_table_suffix(name: str) -> str:
     return re.sub(r"_ROI_table", "", name)
+
+
+def get_num_z_chunks(zarr_array) -> int:
+    """
+    Return the number of chunks along the Z axis (first dimension)
+    for a 3D Zarr array.
+
+    Parameters
+    ----------
+    zarr_array : zarr.Array or NGIO object
+        A Zarr array with shape (Z, Y, X) and chunking enabled.
+
+    Returns
+    -------
+    num_chunks_z : int
+        Number of chunks along the Z (axis=0) dimension.
+    """
+    z_dim = zarr_array.shape[0]
+    z_chunk = zarr_array.chunks[0]
+
+    num_chunks_z = (z_dim + z_chunk - 1) // z_chunk  # ceil division
+    return num_chunks_z
+
+
+def iterate_z_chunks(dask_array: da.Array):
+    """
+    Iterate over Z chunks of a 3D Dask array, loading all XY pixels
+    (i.e., all Y and X chunks) for each Z chunk into memory.
+
+    Parameters
+    ----------
+    dask_array : dask.array.Array
+        A 3D Dask array with shape (Z, Y, X).
+
+    Yields
+    ------
+    z_start : int
+        Starting index of the Z chunk.
+    z_stop : int
+        Ending index of the Z chunk (exclusive).
+    z_block : np.ndarray
+        The Z chunk loaded into memory (shape: (z_chunk_size, Y, X)).
+    """
+    z_chunks = dask_array.chunks[0]  # tuple of chunk sizes along Z
+    z_starts = [0] + list(np.cumsum(z_chunks[:-1]))  # starting indices of each Z chunk
+
+    for z_start, z_chunk_size in zip(z_starts, z_chunks):
+        z_stop = z_start + z_chunk_size
+
+        # Slice this Z chunk and load entire XY pixels (may span multiple Y,X chunks)
+        z_block = dask_array[z_start:z_stop, :, :].compute()
+
+        yield z_start, z_stop, z_block

@@ -1931,24 +1931,87 @@
     },
     {
       "name": "Annotate Mesh by Child Features",
+      "input_types": {
+        "is_3D": true
+      },
       "category": "Image Processing",
+      "modality": "HCS",
       "tags": [
         "3D",
         "mesh"
       ],
       "docs_info": "### Purpose\n- Annotate parent mesh (.stl) vertices (points) by child features\n- This allows visualization of single-cell features on tissue-scale mesh\n- For visualization in Paraview\n\n### Outputs\n- Saves .vtp mesh with embedded point annotations.\n\n### Limitations\n- Assumes feature extraction table and mesh have same physical unit spacing and scaling.\n- Each point of mesh is assigned to closest child object by euclidean distance to centroid.\n",
+      "executable_non_parallel": "fractal/init_select_reference_knowing_all.py",
       "executable_parallel": "fractal/annotate_mesh_by_child_features.py",
+      "meta_non_parallel": {
+        "cpus_per_task": 1,
+        "mem": 1000
+      },
       "meta_parallel": {
         "cpus_per_task": 4,
         "mem": 12000
       },
+      "args_schema_non_parallel": {
+        "additionalProperties": false,
+        "properties": {
+          "zarr_urls": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Zarr Urls",
+            "type": "array",
+            "description": "List of paths or urls to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "zarr_dir": {
+            "title": "Zarr Dir",
+            "type": "string",
+            "description": "path of the directory where the new OME-Zarrs will be created. Not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "reference_acquisition": {
+            "default": 0,
+            "title": "Reference Acquisition",
+            "type": "integer",
+            "description": "Which acquisition to register against. Uses the OME-NGFF HCS well metadata acquisition keys to find the reference acquisition."
+          }
+        },
+        "required": [
+          "zarr_urls",
+          "zarr_dir"
+        ],
+        "type": "object",
+        "title": "InitSelectReferenceKnowingAll"
+      },
       "args_schema_parallel": {
+        "$defs": {
+          "InitArgsRegistrationConsensus": {
+            "description": "Registration consensus init args.",
+            "properties": {
+              "zarr_url_list": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Zarr Url List",
+                "type": "array"
+              }
+            },
+            "required": [
+              "zarr_url_list"
+            ],
+            "title": "InitArgsRegistrationConsensus",
+            "type": "object"
+          }
+        },
         "additionalProperties": false,
         "properties": {
           "zarr_url": {
             "title": "Zarr Url",
             "type": "string",
-            "description": "Path or url to the individual OME-Zarr image to be processed. Refers to the zarr_url of the reference acquisition. (standard argument for Fractal tasks, managed by Fractal server)."
+            "description": "Path or url to the individual OME-Zarr image to be processed. Refers to the zarr_url of the reference acquisition."
+          },
+          "init_args": {
+            "$ref": "#/$defs/InitArgsRegistrationConsensus",
+            "title": "Init Args",
+            "description": "Intialization arguments provided by `init_select_reference_knowing_all`. They contain the all zarr_urls submitted, both ref and moving."
           },
           "parent_mesh_name": {
             "title": "Parent Mesh Name",
@@ -1987,6 +2050,7 @@
         },
         "required": [
           "zarr_url",
+          "init_args",
           "parent_mesh_name",
           "parent_roi_table",
           "child_feature_table",
@@ -2186,6 +2250,138 @@
         ],
         "type": "object",
         "title": "ShiftByShift"
+      },
+      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+    },
+    {
+      "name": "scMultiplex Shift by Rigid Shift",
+      "category": "Registration",
+      "modality": "HCS",
+      "tags": [
+        "multiplexing",
+        "2D",
+        "3D"
+      ],
+      "docs_info": "### Purpose\n- Copy and shift 2D or 3D label image from reference round to moving round(s)\n- Shift using on the fly rigid transformation of the linked 2D MIP image\n- Allows user to propogate segmentation run only on reference round to subsequent rounds, using rough registration\n- Useful for copying over organoid-level segmentation prior to more high-res registration on single-cell level\n- Can be more accurate than shift_by_shift task since takes into account rotation.\n\n### Outputs\n- A new **label image** saved as a label in moving rounds with '_shifted' suffix\n- A new corresponding **masking ROI table** saved as `{new_label_name}_ROI_table` in the moving rounds\n\n### Limitations\n- Applies x,y,z translation and rotation (rigid transformation; no scaling or nonrigid warping)\n- Objects in 2D MIP image must be consensus linked, so that there is equal object number with matching IDs between rounds.\n",
+      "executable_non_parallel": "fractal/init_select_multiplexing_pairs.py",
+      "executable_parallel": "fractal/shift_by_rigid_shift.py",
+      "meta_non_parallel": {
+        "cpus_per_task": 1,
+        "mem": 1000
+      },
+      "meta_parallel": {
+        "cpus_per_task": 4,
+        "mem": 16000
+      },
+      "args_schema_non_parallel": {
+        "additionalProperties": false,
+        "properties": {
+          "zarr_urls": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Zarr Urls",
+            "type": "array",
+            "description": "List of paths or urls to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "zarr_dir": {
+            "title": "Zarr Dir",
+            "type": "string",
+            "description": "path of the directory where the new OME-Zarrs will be created. Not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "reference_acquisition": {
+            "default": 0,
+            "title": "Reference Acquisition",
+            "type": "integer",
+            "description": "Which acquisition to register against. Needs to match the acquisition metadata in the OME-Zarr image."
+          }
+        },
+        "required": [
+          "zarr_urls",
+          "zarr_dir"
+        ],
+        "type": "object",
+        "title": "InitSelectMultiplexingPairs"
+      },
+      "args_schema_parallel": {
+        "$defs": {
+          "InitArgsRegistration": {
+            "description": "Registration init args.",
+            "properties": {
+              "reference_zarr_url": {
+                "title": "Reference Zarr Url",
+                "type": "string"
+              }
+            },
+            "required": [
+              "reference_zarr_url"
+            ],
+            "title": "InitArgsRegistration",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "zarr_url": {
+            "title": "Zarr Url",
+            "type": "string",
+            "description": "Path or url to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "init_args": {
+            "$ref": "#/$defs/InitArgsRegistration",
+            "title": "Init Args",
+            "description": "Intialization arguments provided by `_image_based_registration_hcs_init`. They contain the reference_zarr_url that is used for registration. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "label_name_to_shift": {
+            "title": "Label Name To Shift",
+            "type": "string",
+            "description": "Label name of 3D reference round to be copied and shifted."
+          },
+          "new_shifted_label_name": {
+            "title": "New Shifted Label Name",
+            "type": "string",
+            "description": "Optionally new name for shifted label. If left None, default is {label_name}_shifted"
+          },
+          "label_name_for_2D_rigid_transform": {
+            "title": "Label Name For 2D Rigid Transform",
+            "type": "string",
+            "description": "Label name for the linked segmentation in the 2D MIP zarr to be used for rigid transformation using skimage.transform.EuclideanTransform."
+          },
+          "zarr_suffix_to_add": {
+            "title": "Zarr Suffix To Add",
+            "type": "string",
+            "description": "Optional suffix that needs to be added to input OME-Zarr name to generate the path to the registered OME-Zarr. If the registered OME-Zarr is \"/path/to/my_plate_mip.zarr/B/03/0\" and the input OME-Zarr is located in \"/path/to/my_plate.zarr/B/03/0\", the correct suffix is \"_mip\"."
+          },
+          "image_suffix_to_remove": {
+            "title": "Image Suffix To Remove",
+            "type": "string",
+            "description": "If the image name between reference & registered zarrs don't match, this is the optional suffix that should be removed from the reference image. If the reference image is in \"/path/to/my_plate.zarr/B/03/ 0_registered\" and the registered image is in \"/path/to/my_plate_mip.zarr/ B/03/0\", the value should be \"_registered\""
+          },
+          "image_suffix_to_add": {
+            "title": "Image Suffix To Add",
+            "type": "string",
+            "description": "If the image name between reference & registered zarrs don't match, this is the optional suffix that should be added to the reference image. If the reference image is in \"/path/to/my_plate.zarr/B/03/0\" and the registered image is in \"/path/to/my_plate_mip.zarr/B/03/0_illum_corr\", the value should be \"_illum_corr\"."
+          },
+          "only_apply_rotation": {
+            "default": false,
+            "title": "Only Apply Rotation",
+            "type": "boolean",
+            "description": "If true, translation output of EuclideanTransform is ignored and only rotation is applied, if present."
+          },
+          "only_apply_if_rotation_present": {
+            "default": false,
+            "title": "Only Apply If Rotation Present",
+            "type": "boolean",
+            "description": "If true, EuclideanTransform is applied (both translation and rotation) to if non-zero rotation is detected in the image."
+          }
+        },
+        "required": [
+          "zarr_url",
+          "init_args",
+          "label_name_to_shift"
+        ],
+        "type": "object",
+        "title": "ShiftByRigidShift"
       },
       "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
     },
@@ -2649,6 +2845,113 @@
         "type": "object",
         "title": "PostRegistrationCleanup"
       },
+      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+    },
+    {
+      "name": "scMultiplex Detect Clipped Rois Across Rounds",
+      "category": "Registration",
+      "modality": "HCS",
+      "tags": [
+        "multiplexing",
+        "3D"
+      ],
+      "executable_non_parallel": "fractal/init_select_reference_knowing_all.py",
+      "executable_parallel": "fractal/detect_clipped_rois_across_rounds.py",
+      "meta_non_parallel": {
+        "cpus_per_task": 1,
+        "mem": 1000
+      },
+      "meta_parallel": {
+        "cpus_per_task": 4,
+        "mem": 16000
+      },
+      "args_schema_non_parallel": {
+        "additionalProperties": false,
+        "properties": {
+          "zarr_urls": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Zarr Urls",
+            "type": "array",
+            "description": "List of paths or urls to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "zarr_dir": {
+            "title": "Zarr Dir",
+            "type": "string",
+            "description": "path of the directory where the new OME-Zarrs will be created. Not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "reference_acquisition": {
+            "default": 0,
+            "title": "Reference Acquisition",
+            "type": "integer",
+            "description": "Which acquisition to register against. Uses the OME-NGFF HCS well metadata acquisition keys to find the reference acquisition."
+          }
+        },
+        "required": [
+          "zarr_urls",
+          "zarr_dir"
+        ],
+        "type": "object",
+        "title": "InitSelectReferenceKnowingAll"
+      },
+      "args_schema_parallel": {
+        "$defs": {
+          "InitArgsRegistrationConsensus": {
+            "description": "Registration consensus init args.",
+            "properties": {
+              "zarr_url_list": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Zarr Url List",
+                "type": "array"
+              }
+            },
+            "required": [
+              "zarr_url_list"
+            ],
+            "title": "InitArgsRegistrationConsensus",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "zarr_url": {
+            "title": "Zarr Url",
+            "type": "string",
+            "description": "Path or url to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "init_args": {
+            "$ref": "#/$defs/InitArgsRegistrationConsensus",
+            "title": "Init Args",
+            "description": "Intialization arguments provided by `init_select_all_knowing_reference`. They contain the reference_zarr_url information. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "roi_table_name": {
+            "title": "Roi Table Name",
+            "type": "string",
+            "description": "Name of masking ROI table to be used for ROI loading."
+          },
+          "save_folder_name": {
+            "title": "Save Folder Name",
+            "type": "string",
+            "description": "Name of folder where to save the labels to be deleted. Saved in reference directory."
+          },
+          "overwrite_folder": {
+            "default": false,
+            "title": "Overwrite Folder",
+            "type": "boolean",
+            "description": "If True, clear existing subfolder {save_folder_name} in 'registration' folder to allow re-run of task with same output name."
+          }
+        },
+        "required": [
+          "zarr_url",
+          "init_args"
+        ],
+        "type": "object",
+        "title": "DetectClippedRoisAcrossRounds"
+      },
+      "docs_info": "## init_select_reference_knowing_all\nTask runs once, only for reference round (single zarr_url is returned)\nAll rounds are given as init_args, which can be used in task logic to read from them\n## detect_clipped_rois_across_rounds\nFind labels to delete from multiplexing rounds.\n",
       "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
     }
   ],

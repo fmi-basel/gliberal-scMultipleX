@@ -174,13 +174,17 @@ TASK_LIST = [
         tags=["Mixed modality"],
         docs_info="file:task_info/build_label_image.md",
     ),
-    ParallelTask(
+    CompoundTask(
         name="Annotate Mesh by Child Features",
+        executable_init="fractal/init_select_reference_knowing_all.py",
         executable="fractal/annotate_mesh_by_child_features.py",
+        meta_init={"cpus_per_task": 1, "mem": 1000},
         meta={"cpus_per_task": 4, "mem": 12000},
         category="Image Processing",
+        modality="HCS",
         tags=["3D", "mesh"],
         docs_info="file:task_info/annotate_mesh_by_child_features.md",
+        input_types=dict(is_3D=True),
     ),
     ParallelTask(
         name="Cleanup 3D Child Labels",
@@ -200,6 +204,17 @@ TASK_LIST = [
         modality="HCS",
         tags=["multiplexing", "2D", "3D"],
         docs_info="file:task_info/shift_by_shift.md",
+    ),
+    CompoundTask(
+        name="scMultiplex Shift by Rigid Shift",
+        executable_init="fractal/init_select_multiplexing_pairs.py",
+        executable="fractal/shift_by_rigid_shift.py",
+        meta_init={"cpus_per_task": 1, "mem": 1000},
+        meta={"cpus_per_task": 4, "mem": 16000},
+        category="Registration",
+        modality="HCS",
+        tags=["multiplexing", "2D", "3D"],
+        docs_info="file:task_info/shift_by_rigid_shift.md",
     ),
     CompoundTask(
         name="scMultiplex Calculate Warpfield Registration",
@@ -238,5 +253,15 @@ TASK_LIST = [
         docs_info="file:task_info/post_registration_cleanup.md",
         input_types=dict(is_3D=True),
         output_types=dict(registered=True, is_3D=True),
+    ),
+    CompoundTask(
+        name="scMultiplex Detect Clipped Rois Across Rounds",
+        executable_init="fractal/init_select_reference_knowing_all.py",
+        executable="fractal/detect_clipped_rois_across_rounds.py",
+        meta_init={"cpus_per_task": 1, "mem": 1000},
+        meta={"cpus_per_task": 4, "mem": 16000},
+        category="Registration",
+        modality="HCS",
+        tags=["multiplexing", "3D"],
     ),
 ]

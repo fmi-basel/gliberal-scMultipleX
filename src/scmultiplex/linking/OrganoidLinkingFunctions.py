@@ -7,41 +7,55 @@
 #                                                                            #
 ##############################################################################
 
+from collections import defaultdict
+from typing import Tuple
+
 import dask.array as da
 import numpy as np
 import pandas as pd
-from scipy.ndimage import shift
+from scipy.ndimage import affine_transform, shift
+from skimage.measure import regionprops_table
 from skimage.registration import phase_cross_correlation
+from skimage.transform import EuclideanTransform
 
 from scmultiplex.linking.matching import matching
 
 
 def pad_img_set(img1, img2):
     """
-    Zero-pad two images to be the same size
-    :param img1: 2D numpy array, typically R0
-    :param img2: 2D numpy array, typically RX
-    :return: padded img1 and img2
-    """
-    img1_padded = np.pad(
-        img1,
-        [
-            (0, max(0, img2.shape[0] - img1.shape[0])),
-            (0, max(0, img2.shape[1] - img1.shape[1])),
-        ],
-        mode="constant",
-        constant_values=0,
-    )
+    Zero-pad two images (2D or 3D) to be the same size.
+    Padding is applied only at the end (high-index side) of each dimension.
 
-    img2_padded = np.pad(
-        img2,
-        [
-            (0, max(0, img1.shape[0] - img2.shape[0])),
-            (0, max(0, img1.shape[1] - img2.shape[1])),
-        ],
-        mode="constant",
-        constant_values=0,
-    )
+    Parameters
+    ----------
+    img1 : np.ndarray
+        2D or 3D NumPy array
+    img2 : np.ndarray
+        2D or 3D NumPy array
+
+    Returns
+    -------
+    img1_padded, img2_padded : np.ndarray
+        The two input arrays, zero-padded to the same shape.
+    """
+    assert img1.ndim in (2, 3), "Only 2D or 3D arrays supported"
+    assert img1.ndim == img2.ndim, "Both images must have same number of dimensions"
+
+    # Determine padding per dimension
+    pad_img1 = []
+    pad_img2 = []
+
+    for dim in range(img1.ndim):
+        size1 = img1.shape[dim]
+        size2 = img2.shape[dim]
+        pad1 = max(0, size2 - size1)
+        pad2 = max(0, size1 - size2)
+        pad_img1.append((0, pad1))
+        pad_img2.append((0, pad2))
+
+    # Apply padding
+    img1_padded = np.pad(img1, pad_img1, mode="constant", constant_values=0)
+    img2_padded = np.pad(img2, pad_img2, mode="constant", constant_values=0)
 
     return img1_padded, img2_padded
 
@@ -189,47 +203,293 @@ def shift_array_3d_dask(arr, shift):
 
 def resize_array_to_shape(arr, target_shape):
     """
-    Resize a 3D array to match target_shape.
-    Pads or crops at the far (high-index) end only.
+    Resize a 2D or 3D array to match a given target shape.
+    Crops or pads only on the high (max index) end of each axis.
 
-    Parameters:
-        arr (dask.array or np.ndarray): Input 3D array.
-        target_shape (tuple): Desired shape (z, y, x).
+    Parameters
+    ----------
+    arr : np.ndarray or dask.array
+        Input array. Must be either 2D (Y, X) or 3D (Z, Y, X).
 
-    Returns:
-        dask.array or np.ndarray: Resized array.
+    target_shape : tuple of int
+        Desired output shape. Must match number of dimensions of `arr`.
+
+    Returns
+    -------
+    resized : np.ndarray or dask.array
+        Resized array with shape matching `target_shape`.
+
+    Raises
+    ------
+    ValueError
+        If input array and target shape do not have the same number of dimensions,
+        or if resizing fails to produce the expected shape.
     """
-    assert len(target_shape) == 3, "Target shape must be 3D"
-    assert arr.ndim == 3, "Only 3D arrays supported"
+    if arr.ndim != len(target_shape):
+        raise ValueError(
+            "Input array and target_shape must have the same number of dimensions"
+        )
 
     curr_shape = arr.shape
     slices = []
     pad_width = []
 
-    # loop over each dimension
-    for i, s in enumerate(curr_shape):
+    # Determine slices and padding for each dimension
+    for i in range(arr.ndim):
         diff = target_shape[i] - curr_shape[i]
         if diff < 0:
-            # Crop from the far end
+            # Crop from end
             slices.append(slice(0, target_shape[i]))
             pad_width.append((0, 0))
         else:
-            # Pad at the far end
+            # Pad at end
             slices.append(slice(0, curr_shape[i]))
             pad_width.append((0, diff))
 
-    # Crop first (in case of oversize)
+    # Crop first
     arr_cropped = arr[tuple(slices)]
 
-    # Then pad if needed
+    # Pad if needed
     if any(p > 0 for _, p in pad_width):
-        arr_resized = da.pad(
-            arr_cropped, pad_width=pad_width, mode="constant", constant_values=0
-        )
+        if isinstance(arr, da.Array):
+            arr_resized = da.pad(
+                arr_cropped, pad_width=pad_width, mode="constant", constant_values=0
+            )
+        else:
+            arr_resized = np.pad(
+                arr_cropped, pad_width=pad_width, mode="constant", constant_values=0
+            )
     else:
         arr_resized = arr_cropped
 
+    # Final shape check
     if arr_resized.shape != target_shape:
-        raise ValueError("Final image does not have the expected shape.")
+        raise ValueError("Final array does not match target shape.")
 
     return arr_resized
+
+
+def get_sorted_label_centroids(img: np.ndarray) -> np.ndarray:
+    """
+    Compute and return centroids of labeled regions in a 2D label image,
+    sorted by increasing label value.
+
+    Parameters
+    ----------
+    img : np.ndarray
+        A 2D NumPy array containing integer label values. Each unique
+        non-zero value is treated as a separate labeled region.
+
+    Returns
+    -------
+    sorted_centroids : np.ndarray of shape (N, 2)
+        A NumPy array of (x, y) coordinates (i.e., (col, row)) representing
+        the centroids of the labeled regions, sorted in ascending order of their labels.
+        Each row corresponds to one region.
+    """
+    props_table = regionprops_table(img, properties=["label", "centroid"])
+
+    labels = props_table["label"]
+    centroid_y = props_table["centroid-0"]  # row
+    centroid_x = props_table["centroid-1"]  # col
+
+    # Stack into (x, y) format
+    centroids = np.stack([centroid_x, centroid_y], axis=1)
+
+    # Sort by label
+    sort_idx = np.argsort(labels)
+    sorted_centroids = centroids[sort_idx]
+    return sorted_centroids
+
+
+def get_euclidean_metrics(tform: EuclideanTransform) -> Tuple[float, np.ndarray]:
+    """
+    Extract the rotation angle (in degrees) and translation vector from
+    a 2D EuclideanTransform.
+
+    A Euclidean transform includes:
+    - Rotation (around the origin)
+    - Translation (shift in x and y)
+    - No scaling or shearing
+
+    Parameters
+    ----------
+    tform : EuclideanTransform
+        A skimage.transform.EuclideanTransform object representing a 2D transform.
+        The transform matrix is expected to be in homogeneous (3x3) form.
+
+    Returns
+    -------
+    angle_deg : float
+        The rotation angle in degrees. Positive values indicate counter-clockwise rotation.
+
+    translation : np.ndarray of shape (2,)
+        The translation vector [tx, ty], representing shifts along the x and y axes (in pixels).
+    """
+
+    # Rotation matrix (top-left 2x2)
+    R = tform.params[:2, :2]
+
+    # Rotation angle
+    angle_rad = np.arctan2(R[0, 1], R[0, 0])
+    angle_deg = np.degrees(angle_rad)
+
+    # Translation vector (last column, first two rows)
+    translation = tform.params[:2, 2]
+
+    return angle_deg, translation
+
+
+def transform_euclidean_metric_to_scipy(
+    tform: EuclideanTransform,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Convert a EuclideanTransform object from skimage into a format compatible with
+    scipy.ndimage.affine_transform (i.e., matrix and offset with (row, col) axis order).
+
+    This function extracts the inverse of the transform and adjusts it to match the
+    coordinate conventions used by scipy.ndimage, which expects transforms to be
+    applied in (row, col) = (y, x) order, unlike skimage which uses (x, y).
+
+    Parameters
+    ----------
+    tform : EuclideanTransform
+        A skimage.transform.EuclideanTransform object (typically from estimate_transform)
+        that defines a 2D Euclidean transformation (rotation + translation).
+
+    Returns
+    -------
+    matrix : np.ndarray of shape (2, 2)
+        The affine transformation matrix in (row, col) axis order, suitable for use
+        with scipy.ndimage.affine_transform.
+
+    offset : np.ndarray of shape (2,)
+        The translation vector in (row, col) axis order, to be used as the offset
+        in scipy.ndimage.affine_transform.
+    """
+    inverse_matrix = tform.inverse.params  # 3x3 matrix
+    # Extract rotation and translation
+    matrix = inverse_matrix[:2, :2]
+    offset = inverse_matrix[:2, 2]
+
+    # Swap x and y axes to match scipy's (row, col) ordering
+    # Swap rows and columns (transpose matrix, flip offset)
+    matrix = matrix[[1, 0], :][:, [1, 0]]  # yx -> xy
+    offset = offset[[1, 0]]  # yx -> xy
+
+    return matrix, offset
+
+
+def apply_affine_to_slice(slice_2d, matrix, offset):
+    return affine_transform(
+        slice_2d, matrix=matrix, offset=offset, order=0, mode="constant", cval=0
+    )
+
+
+def is_identity_transform(tform: EuclideanTransform, rtol=1e-5, atol=1e-8) -> bool:
+    """
+    Check if a EuclideanTransform is effectively an identity transform (no rotation or translation).
+
+    Parameters
+    ----------
+    tform : EuclideanTransform
+        The transform object from estimate_transform.
+    rtol : float
+        Relative tolerance for comparing values.
+    atol : float
+        Absolute tolerance for comparing values.
+
+    Returns
+    -------
+    bool
+        True if the transform is effectively identity; False otherwise.
+    """
+    # Identity Euclidean matrix
+    identity_matrix = np.array(
+        [
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+        ]
+    )
+    return np.allclose(tform.params, identity_matrix, rtol=rtol, atol=atol)
+
+
+def get_rotation_only_transform(tform: EuclideanTransform) -> EuclideanTransform:
+    """
+    Return a new EuclideanTransform with only the rotation component of the original transform.
+
+    Parameters
+    ----------
+    tform : EuclideanTransform
+        Original transform with rotation and translation.
+
+    Returns
+    -------
+    EuclideanTransform
+        A new transform containing only the rotation part.
+    """
+    # Copy rotation matrix
+    rotation_matrix = tform.params.copy()
+
+    # Zero out translation
+    rotation_matrix[0, 2] = 0.0
+    rotation_matrix[1, 2] = 0.0
+
+    # Return new transform object
+    return EuclideanTransform(matrix=rotation_matrix)
+
+
+def select_rotating_euclidean_transform(
+    tform: EuclideanTransform, angle_tol_degrees: float = 1e-4
+) -> EuclideanTransform:
+    """
+    Check if a EuclideanTransform has a non-zero rotation.
+    If rotation is approximately zero (within tolerance), return an identity transform.
+
+    Parameters
+    ----------
+    tform : EuclideanTransform
+        The input transformation to check.
+
+    angle_tol_degrees : float, optional
+        Tolerance in degrees below which rotation is considered zero. Default is 0.0001 degrees.
+
+    Returns
+    -------
+    EuclideanTransform
+        - Original tform if rotation is non-zero.
+        - Identity transform if rotation is approximately zero.
+    """
+    # Extract rotation angle
+    angle_deg, translation = get_euclidean_metrics(tform)
+
+    if np.abs(angle_deg) < angle_tol_degrees:
+        # Return identity transform
+        return EuclideanTransform(matrix=np.eye(3))
+    else:
+        return tform
+
+
+def group_by_roi_name_from_dict(roi_dict):
+    """
+    Group Roi objects by their 'name' attribute from a dictionary of lists.
+
+    Parameters
+    ----------
+    roi_dict : dict
+        Dictionary where each value is a list of Roi objects.
+
+    Returns
+    -------
+    dict
+        Dictionary where keys are ROI names (as strings),
+        and values are lists of Roi objects that share that name.
+    """
+    roi_groups = defaultdict(list)
+
+    for roi_list in roi_dict.values():
+        for roi in roi_list:
+            roi_groups[roi.name].append(roi)
+
+    return roi_groups
