@@ -1931,24 +1931,87 @@
     },
     {
       "name": "Annotate Mesh by Child Features",
+      "input_types": {
+        "is_3D": true
+      },
       "category": "Image Processing",
+      "modality": "HCS",
       "tags": [
         "3D",
         "mesh"
       ],
       "docs_info": "### Purpose\n- Annotate parent mesh (.stl) vertices (points) by child features\n- This allows visualization of single-cell features on tissue-scale mesh\n- For visualization in Paraview\n\n### Outputs\n- Saves .vtp mesh with embedded point annotations.\n\n### Limitations\n- Assumes feature extraction table and mesh have same physical unit spacing and scaling.\n- Each point of mesh is assigned to closest child object by euclidean distance to centroid.\n",
+      "executable_non_parallel": "fractal/init_select_reference_knowing_all.py",
       "executable_parallel": "fractal/annotate_mesh_by_child_features.py",
+      "meta_non_parallel": {
+        "cpus_per_task": 1,
+        "mem": 1000
+      },
       "meta_parallel": {
         "cpus_per_task": 4,
         "mem": 12000
       },
+      "args_schema_non_parallel": {
+        "additionalProperties": false,
+        "properties": {
+          "zarr_urls": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Zarr Urls",
+            "type": "array",
+            "description": "List of paths or urls to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "zarr_dir": {
+            "title": "Zarr Dir",
+            "type": "string",
+            "description": "path of the directory where the new OME-Zarrs will be created. Not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "reference_acquisition": {
+            "default": 0,
+            "title": "Reference Acquisition",
+            "type": "integer",
+            "description": "Which acquisition to register against. Uses the OME-NGFF HCS well metadata acquisition keys to find the reference acquisition."
+          }
+        },
+        "required": [
+          "zarr_urls",
+          "zarr_dir"
+        ],
+        "type": "object",
+        "title": "InitSelectReferenceKnowingAll"
+      },
       "args_schema_parallel": {
+        "$defs": {
+          "InitArgsRegistrationConsensus": {
+            "description": "Registration consensus init args.",
+            "properties": {
+              "zarr_url_list": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Zarr Url List",
+                "type": "array"
+              }
+            },
+            "required": [
+              "zarr_url_list"
+            ],
+            "title": "InitArgsRegistrationConsensus",
+            "type": "object"
+          }
+        },
         "additionalProperties": false,
         "properties": {
           "zarr_url": {
             "title": "Zarr Url",
             "type": "string",
-            "description": "Path or url to the individual OME-Zarr image to be processed. Refers to the zarr_url of the reference acquisition. (standard argument for Fractal tasks, managed by Fractal server)."
+            "description": "Path or url to the individual OME-Zarr image to be processed. Refers to the zarr_url of the reference acquisition."
+          },
+          "init_args": {
+            "$ref": "#/$defs/InitArgsRegistrationConsensus",
+            "title": "Init Args",
+            "description": "Intialization arguments provided by `init_select_reference_knowing_all`. They contain the all zarr_urls submitted, both ref and moving."
           },
           "parent_mesh_name": {
             "title": "Parent Mesh Name",
@@ -1987,6 +2050,7 @@
         },
         "required": [
           "zarr_url",
+          "init_args",
           "parent_mesh_name",
           "parent_roi_table",
           "child_feature_table",

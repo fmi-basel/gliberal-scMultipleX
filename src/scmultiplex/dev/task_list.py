@@ -174,13 +174,17 @@ TASK_LIST = [
         tags=["Mixed modality"],
         docs_info="file:task_info/build_label_image.md",
     ),
-    ParallelTask(
+    CompoundTask(
         name="Annotate Mesh by Child Features",
+        executable_init="fractal/init_select_reference_knowing_all.py",
         executable="fractal/annotate_mesh_by_child_features.py",
+        meta_init={"cpus_per_task": 1, "mem": 1000},
         meta={"cpus_per_task": 4, "mem": 12000},
         category="Image Processing",
+        modality="HCS",
         tags=["3D", "mesh"],
         docs_info="file:task_info/annotate_mesh_by_child_features.md",
+        input_types=dict(is_3D=True),
     ),
     ParallelTask(
         name="Cleanup 3D Child Labels",
