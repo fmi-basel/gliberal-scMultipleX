@@ -2848,6 +2848,26 @@
             "title": "Overwrite Folders",
             "type": "boolean",
             "description": "If True, overwrite folders with same name in registered zarr image"
+          },
+          "cleanup_4_copy_labels_and_tables_from_registered_reference": {
+            "default": false,
+            "title": "Cleanup 4 Copy Labels And Tables From Registered Reference",
+            "type": "boolean",
+            "description": "If True, copy over specified tables and corresponding labels from the registered reference round to all moving rounds. E.g. tables and labels from the \"0_fused_registered\" round can be copied to the rounds \"1_fused_registered\", \"2_fused_registered\", etc"
+          },
+          "roi_table_names_to_copy_from_ref": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Roi Table Names To Copy From Ref",
+            "type": "array",
+            "description": "List of ROI table names present in registered reference round to copy over. The corresponding label of masking ROI tables are also copied over."
+          },
+          "overwrite_labels_and_tables_from_ref": {
+            "default": false,
+            "title": "Overwrite Labels And Tables From Ref",
+            "type": "boolean",
+            "description": "If True, overwrite labels and tables with same name in registered zarr image."
           }
         },
         "required": [

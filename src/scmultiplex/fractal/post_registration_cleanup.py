@@ -57,6 +57,9 @@ def post_registration_cleanup(
     folders_to_copy: list[str] = None,
     image_suffix_to_remove: str = "_registered",
     overwrite_folders: bool = False,
+    cleanup_4_copy_labels_and_tables_from_registered_reference: bool = False,
+    roi_table_names_to_copy_from_ref: list[str] = None,
+    overwrite_labels_and_tables_from_ref: bool = False,
 ):
     """
     Cleanup 1: must be run separately from Cleanup 2 & 3. Submit only unregistered reference zarr on Fractal server.
@@ -112,6 +115,14 @@ def post_registration_cleanup(
         image_suffix_to_remove: Image suffix to remove from submitted registered image to generate the unregistered
             zarr, e.g. to copy folders from "1_fused" to "1_fused_registered", the suffix is "_registered"
         overwrite_folders: If True, overwrite folders with same name in registered zarr image
+        cleanup_4_copy_labels_and_tables_from_registered_reference: If True, copy over specified tables and
+            corresponding labels from the registered reference round to all moving rounds.
+            E.g. tables and labels from the "0_fused_registered" round can be copied to the rounds "1_fused_registered",
+            "2_fused_registered", etc
+        roi_table_names_to_copy_from_ref: List of ROI table names present in registered reference round to copy
+            over. The corresponding label of masking ROI tables are also copied over.
+        overwrite_labels_and_tables_from_ref: If True, overwrite labels and tables with same name in registered zarr image.
+
     """
     # iterate over each round, not pairwise loading
     reference_zarr_url = init_args.reference_zarr_url
@@ -303,6 +314,59 @@ def post_registration_cleanup(
                     folder_name=folder,
                     overwrite=overwrite_folders,
                 )
+
+    ##########################################
+    # Run cleanup 4 for only moving rounds, copy over FROM REGISTERED REFERENCE ROUND:
+    # selected ROI tables
+    # selected corresponding label images if ROI table is a masking ROI (match label name to ROI table for consistency)
+    ##########################################
+
+    if cleanup_4_copy_labels_and_tables_from_registered_reference:
+
+        # skip the reference round
+        if current_round_id == ref_round_id:
+            return image_list_updates
+
+        # Open the ome-zarr image container from which to copy
+        source_ome_zarr = open_ome_zarr_container(reference_zarr_url)
+        target_zarr_image_name = os.path.basename(zarr_url)
+        target_ome_zarr = open_ome_zarr_container(zarr_url)
+
+        label_names_to_copy = []
+
+        # Copy tables
+        if roi_table_names_to_copy_from_ref is not None:
+            for table_name in roi_table_names_to_copy_from_ref:
+                table = source_ome_zarr.get_table(table_name)
+
+                logger.info(
+                    f"Copying table {table_name} from registered reference round to "
+                    f"{target_zarr_image_name}."
+                )
+
+                target_ome_zarr.add_table(
+                    table_name, table, overwrite=overwrite_labels_and_tables_from_ref
+                )
+                # Make list of labels to copy
+                if table.type() == "masking_roi_table":
+                    # get name of corresponding label as stored in table metadata
+                    label_names_to_copy.append(Path(table._meta.region.path).name)
+
+        # Copy labels
+        for i, label_name in enumerate(label_names_to_copy):
+
+            logger.info(
+                f"Copying label {label_name} from registered reference round to "
+                f"{target_zarr_image_name} as {label_name}."
+            )
+
+            label_image = source_ome_zarr.get_label(name=label_name)
+            new_label = target_ome_zarr.derive_label(
+                label_name, overwrite=overwrite_labels_and_tables_from_ref
+            )
+            label_image_dask = label_image.get_array(mode="dask")
+            new_label.set_array(label_image_dask)
+            new_label.consolidate()
 
     logger.info(f"End post_registration_cleanup task for {zarr_url=}")
 
