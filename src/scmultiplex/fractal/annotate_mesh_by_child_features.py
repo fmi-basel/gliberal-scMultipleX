@@ -44,6 +44,7 @@ def annotate_mesh_by_child_features(
     annotate_by_features: list[str],
     parent_of_child_colname: str = "ROI_label",
     new_mesh_name: str,
+    save_nonsurface_labels: bool = True,
 ) -> dict[str, Any]:
     """
     Annotate parent mesh (.stl) vertices by child features, save as .vtp mesh.
@@ -78,6 +79,7 @@ def annotate_mesh_by_child_features(
             parent organoid. This column is assumed to be within obs of the child_feature_table. Usually this is
             defined in the feature extraction task.
         new_mesh_name: Name of the new mesh folder where annotated .vtp meshes are saved.
+        save_nonsurface_labels: If True, saves a .npy for each organoid id with list of label ids to remove.
 
     """
     logger.info(
@@ -90,6 +92,7 @@ def annotate_mesh_by_child_features(
     adata = ad.read_zarr(f"{zarr_url}/tables/{parent_roi_table}")
     roi_attrs = get_zattrs(f"{zarr_url}/tables/{parent_roi_table}")
     instance_key = roi_attrs["instance_key"]  # e.g. "label"
+    ref_round_id = extract_acq_info(zarr_url)
 
     # NGIO FIX, TEMP
     # Check that ROI_table.obs has the right column and extract label_value
@@ -113,6 +116,9 @@ def annotate_mesh_by_child_features(
     os.makedirs(save_mesh_path, exist_ok=True)
 
     logger.info(f"Saving meshes to reference directory: /meshes/{new_mesh_name}")
+
+    # Intialize dictionary in case saving nonsurface labels
+    nonsurface_dict = {}
 
     # TODO with NGIO refactor, consider not looping over ROI table but directly over mesh names. This will
     #  generalize task to not require a corresponding ROI table in case meshes were generated outside of Fractal
@@ -191,6 +197,19 @@ def annotate_mesh_by_child_features(
                 vtk_intensity.SetName(save_col_name)  # Name of the array in VTK
                 polydata.GetPointData().AddArray(vtk_intensity)
 
+                # TODO: Do not hardcode "label" here
+                if (
+                    save_nonsurface_labels
+                    and col == "label"
+                    and round_id == ref_round_id
+                ):
+                    # Save nonsurface labels (to remove) only for reference round and "label" column
+                    surface_labels = mesh_df[col].unique()
+                    all_labels = feat_df[col].unique()
+                    nonsurface_labels = list(set(all_labels) - set(surface_labels))
+                    # Assign value for this object to dict
+                    nonsurface_dict[org_label] = nonsurface_labels
+
         ##############
         # Save mesh  ###
         ##############
@@ -200,6 +219,21 @@ def annotate_mesh_by_child_features(
         export_vtk_polydata(os.path.join(save_mesh_path, save_name), polydata)
 
         logger.info(f"Saved annotated .vtp mesh for object {org_label}.")
+
+        # Save nonsurface labels
+        if save_nonsurface_labels and nonsurface_dict:
+            save_dict = {
+                str(k): np.array(v, dtype=np.int32) for k, v in nonsurface_dict.items()
+            }
+            # if dictionary not empty, save it in reference round
+            registration_folder_path = os.path.join(
+                zarr_url, "registration", "nonsurface_labels"
+            )
+            os.makedirs(registration_folder_path, exist_ok=True)
+            filename = "nonsurface_labels_to_remove.npz"
+            registration_save_path = os.path.join(registration_folder_path, filename)
+            # Save to .npz file
+            np.savez(registration_save_path, **save_dict)
 
     logger.info(f"End annotate_mesh_by_features task for {zarr_url=}")
 
