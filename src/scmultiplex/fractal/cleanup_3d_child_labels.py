@@ -32,6 +32,7 @@ from pydantic import validate_call
 from scmultiplex.fractal.fractal_helper_functions import (
     get_zattrs,
     initialize_new_label,
+    save_new_label_with_overlap,
 )
 from scmultiplex.linking.NucleiLinkingFunctions import remove_labels
 from scmultiplex.meshing.FilterFunctions import mask_by_parent_object, min_nonzero_label
@@ -351,10 +352,8 @@ def cleanup_3d_child_labels(
                 )
 
         # Compute and store 0-th level to disk
-        da.array(seg).to_zarr(
-            url=new_label3d_array,
-            region=region,
-            compute=True,
+        save_new_label_with_overlap(
+            seg, new_label3d_array, zarr_url, output_label_name, region, compute=True
         )
 
     logger.info("End looping over parent objects, now building pyramids.")
