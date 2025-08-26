@@ -2046,6 +2046,12 @@
             "title": "New Mesh Name",
             "type": "string",
             "description": "Name of the new mesh folder where annotated .vtp meshes are saved."
+          },
+          "save_nonsurface_labels": {
+            "default": true,
+            "title": "Save Nonsurface Labels",
+            "type": "boolean",
+            "description": "If True, saves a .npy for each organoid id with list of label ids to remove."
           }
         },
         "required": [
@@ -2121,6 +2127,12 @@
             "title": "Repair Uint16 Clipped Labels",
             "type": "boolean",
             "description": "If child labels were clipped to uint16 during segmentation and there were more than 2^16 labels, the label id's above 65535 get clipped. If True, these clipped values get remapped to monotonically increasing values 65536, 65537, etc."
+          },
+          "remove_nonsurface_labels": {
+            "default": false,
+            "title": "Remove Nonsurface Labels",
+            "type": "boolean",
+            "description": "If true, remove child labels that are not on organoid surface, as determined by Annotate_mesh_by_child_features\" task. The values to be removed are loaded from disk."
           }
         },
         "required": [
