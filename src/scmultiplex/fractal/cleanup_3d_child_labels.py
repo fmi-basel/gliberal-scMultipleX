@@ -344,10 +344,10 @@ def cleanup_3d_child_labels(
                 segids_toremove = []  # remove nothing
             datatype = seg.dtype
             if len(segids_toremove) > 0:
-                seg = remove_labels(seg, segids_toremove, datatype)
+                seg = remove_labels(seg, np.array(segids_toremove), datatype)
                 logger.info(
                     f"Removed {len(segids_toremove)} cell(s) from object {label_str} "
-                    f"that are nonsurface labels wish label id(s): "
+                    f"that are nonsurface labels with label id(s): "
                     f"\n {segids_toremove}"
                 )
 
