@@ -11,6 +11,7 @@
 Remove debris based on volume filtering from 3D segmentation.
 """
 import logging
+import os
 from typing import Any, Optional
 
 import anndata as ad
@@ -32,6 +33,7 @@ from scmultiplex.fractal.fractal_helper_functions import (
     get_zattrs,
     initialize_new_label,
 )
+from scmultiplex.linking.NucleiLinkingFunctions import remove_labels
 from scmultiplex.meshing.FilterFunctions import mask_by_parent_object, min_nonzero_label
 from scmultiplex.meshing.LabelFusionFunctions import filter_by_volume
 
@@ -53,6 +55,7 @@ def cleanup_3d_child_labels(
     filter_children_by_volume: bool = True,
     child_volume_filter_threshold: float = 0.05,
     repair_uint16_clipped_labels: bool = False,
+    remove_nonsurface_labels: bool = False,
 ) -> dict[str, Any]:
     """
 
@@ -80,6 +83,8 @@ def cleanup_3d_child_labels(
         repair_uint16_clipped_labels: If child labels were clipped to uint16 during segmentation and
             there were more than 2^16 labels, the label id's above 65535 get clipped. If True, these clipped
             values get remapped to monotonically increasing values 65536, 65537, etc.
+        remove_nonsurface_labels: If true, remove child labels that are not on organoid surface, as
+            determined by Annotate_mesh_by_child_features" task. The values to be removed are loaded from disk.
 
     """
     logger.info(
@@ -192,6 +197,24 @@ def cleanup_3d_child_labels(
     detected_clipped_values = False
     start_label = 65536
 
+    if remove_nonsurface_labels:
+        # Load label info to remove
+        registration_save_path = os.path.join(
+            zarr_url,
+            "registration",
+            "nonsurface_labels",
+            "nonsurface_labels_to_remove.npz",
+        )
+        try:
+            npz_data = np.load(registration_save_path)
+        except FileNotFoundError or OSError:
+            raise ValueError(
+                f"File {registration_save_path} not found. Make sure you have run "
+                f"annotate_mesh_by_features first. "
+            )
+        # convert to dictionary where key is organoid label (str), value is list of label ids (ints) to remove
+        nonsurface_dict = {k: npz_data[k].tolist() for k in npz_data}
+
     # For each object in input ROI table...
     for i, obsname in enumerate(roi_adata.obs_names):
 
@@ -303,6 +326,27 @@ def cleanup_3d_child_labels(
                     f"that have a volume below the calculated {np.round(volume_cutoff,1)} pixel threshold"
                     f"\n Removed labels have a mean volume of {np.round(removed_size_mean,1)} and are the "
                     f"label id(s): "
+                    f"\n {segids_toremove}"
+                )
+
+        ##############
+        # Remove nonsurface labels  ###
+        ##############
+        if remove_nonsurface_labels:
+            # Relabel input image to remove nonsurface IDs
+            try:
+                segids_toremove = nonsurface_dict[label_str]
+            except KeyError:
+                logger.warning(
+                    f"Key '{label_str}' not found in nonsurface_dict. Check ROI table input."
+                )
+                segids_toremove = []  # remove nothing
+            datatype = seg.dtype
+            if len(segids_toremove) > 0:
+                seg = remove_labels(seg, segids_toremove, datatype)
+                logger.info(
+                    f"Removed {len(segids_toremove)} cell(s) from object {label_str} "
+                    f"that are nonsurface labels wish label id(s): "
                     f"\n {segids_toremove}"
                 )
 
