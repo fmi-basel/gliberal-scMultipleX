@@ -377,7 +377,7 @@ def cleanup_3d_child_labels(
     except NgioFileNotFoundError as e:
         raise ValueError(f"OME-Zarr {zarr_url} not found.") from e
 
-    masking_table = ome_zarr_container.build_masking_roi_table(child_label_name)
+    masking_table = ome_zarr_container.build_masking_roi_table(output_label_name)
 
     ome_zarr_container.add_table(output_roi_table_name, masking_table, overwrite=True)
 
