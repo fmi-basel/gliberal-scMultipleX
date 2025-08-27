@@ -260,7 +260,9 @@ def cleanup_3d_child_labels(
             if hit_uint16_max and detected_clipped_values:
                 logger.warning(f"Detected clipped label values in object {label_str}.")
                 # relabel child labels for all subsequent objects
-                relabeled_image = seg.copy()
+                relabeled_image = seg.astype(
+                    np.uint32
+                ).copy()  # first convert to uint32
 
                 used_labels = np.unique(seg)  # sorted in numerically increasing order
                 used_labels = used_labels[used_labels != 0]  # drop 0 background
