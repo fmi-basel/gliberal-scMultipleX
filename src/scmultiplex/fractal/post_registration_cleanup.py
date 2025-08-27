@@ -362,9 +362,12 @@ def post_registration_cleanup(
 
             label_image = source_ome_zarr.get_label(name=label_name)
             new_label = target_ome_zarr.derive_label(
-                label_name, overwrite=overwrite_labels_and_tables_from_ref
+                label_name,
+                dtype=np.uint32,
+                overwrite=overwrite_labels_and_tables_from_ref,
             )
             label_image_dask = label_image.get_array(mode="dask")
+            logger.info(f"Datatype of label image: {label_image_dask.dtype}")
             new_label.set_array(label_image_dask)
             new_label.consolidate()
 
