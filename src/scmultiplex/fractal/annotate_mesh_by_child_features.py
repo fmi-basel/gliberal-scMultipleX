@@ -158,6 +158,9 @@ def annotate_mesh_by_child_features(
             # Load child features
             feat_adata = ad.read_zarr(f"{acq_zarr_url}/tables/{child_feature_table}")
 
+            # Add index as column of obs; handles NGIO standard
+            feat_adata.obs[feat_adata.obs.index.name] = feat_adata.obs.index
+
             round_id = extract_acq_info(acq_zarr_url)
 
             label_dtype = feat_adata.obs[parent_of_child_colname].dtype
