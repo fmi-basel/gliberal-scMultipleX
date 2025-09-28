@@ -159,7 +159,12 @@ def annotate_mesh_by_child_features(
             feat_adata = ad.read_zarr(f"{acq_zarr_url}/tables/{child_feature_table}")
 
             # Add index as column of obs; handles NGIO standard
-            feat_adata.obs[feat_adata.obs.index.name] = feat_adata.obs.index
+            try:
+                feat_adata.obs[feat_adata.obs.index.name] = feat_adata.obs.index.astype(
+                    int
+                )
+            except ValueError:
+                logger.info("No obs index name detected in feature table.")
 
             round_id = extract_acq_info(acq_zarr_url)
 
