@@ -326,6 +326,8 @@ def post_registration_cleanup(
             for table_name in table_names_to_copy:
                 table = source_ome_zarr.get_table(table_name)
 
+                table.dataframe
+
                 logger.info(
                     f"Copying table {table_name} from image {unregistered_source_image_name} to "
                     f"{target_zarr_image_name}."
