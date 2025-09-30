@@ -2837,6 +2837,14 @@
             "type": "array",
             "description": "List of folder names to copy over, e.g. [\"registration\"]"
           },
+          "table_names_to_copy": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Table Names To Copy",
+            "type": "array",
+            "description": "List of table names (e.g. feature table, but can be any table type) present in matching unregistered image round to copy over. Only tables are copied."
+          },
           "image_suffix_to_remove": {
             "default": "_registered",
             "title": "Image Suffix To Remove",

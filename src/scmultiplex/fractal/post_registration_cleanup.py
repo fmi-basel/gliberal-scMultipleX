@@ -55,6 +55,7 @@ def post_registration_cleanup(
     overwrite_labels_and_tables: bool = False,
     cleanup_3_copy_folders_from_matching_unregistered_round: bool = False,
     folders_to_copy: list[str] = None,
+    table_names_to_copy: list[str] = None,
     image_suffix_to_remove: str = "_registered",
     overwrite_folders: bool = False,
     cleanup_4_copy_labels_and_tables_from_registered_reference: bool = False,
@@ -112,6 +113,8 @@ def post_registration_cleanup(
             via the Fractal web interface, it is also possible to copy ["meshes"] from e.g. "0_fused" to the
             "0_fused_registered" round.
         folders_to_copy: List of folder names to copy over, e.g. ["registration"]
+        table_names_to_copy: List of table names (e.g. feature table, but can be any table type) present in
+            matching unregistered image round to copy over. Only tables are copied.
         image_suffix_to_remove: Image suffix to remove from submitted registered image to generate the unregistered
             zarr, e.g. to copy folders from "1_fused" to "1_fused_registered", the suffix is "_registered"
         overwrite_folders: If True, overwrite folders with same name in registered zarr image
@@ -314,6 +317,29 @@ def post_registration_cleanup(
                     folder_name=folder,
                     overwrite=overwrite_folders,
                 )
+
+        # Copy tables e.g. feature tables from unregistered to corresponding registered zarr
+        source_ome_zarr = open_ome_zarr_container(source_zarr_url)
+        target_ome_zarr = open_ome_zarr_container(zarr_url)
+
+        if table_names_to_copy is not None:
+            for table_name in table_names_to_copy:
+                table = source_ome_zarr.get_table(table_name)
+
+                logger.info(
+                    f"Copying table {table_name} from image {unregistered_source_image_name} to "
+                    f"{target_zarr_image_name}."
+                )
+
+                target_ome_zarr.add_table(
+                    table_name, table, overwrite=overwrite_labels_and_tables
+                )
+
+                if table.type() == "masking_roi_table":
+                    logger.warning(
+                        f"Detected masking ROI table {table_name}. Copying only table and "
+                        f"not corresponding label image - is this the desired behavior?"
+                    )
 
     ##########################################
     # Run cleanup 4 for only moving rounds, copy over FROM REGISTERED REFERENCE ROUND:
