@@ -1,0 +1,241 @@
+# Copyright 2025 (C) Friedrich Miescher Institute for Biomedical Research and
+# University of Zurich
+#
+# Original authors:
+# Nicole Repina <nicole.repina@fmi.ch>
+#
+
+"""
+Annotate parent mesh vertices by child features.
+"""
+
+import logging
+import os
+import warnings
+from typing import Any
+
+import anndata as ad
+import numpy as np
+import pandas as pd
+from anndata._core.aligned_df import ImplicitModificationWarning
+from fractal_tasks_core.tasks.io_models import InitArgsRegistrationConsensus
+from pydantic import validate_call
+from vtkmodules.util import numpy_support
+
+from scmultiplex.fractal.fractal_helper_functions import extract_acq_info, get_zattrs
+from scmultiplex.meshing.MeshFunctions import export_vtk_polydata, read_vtp_polydata
+
+warnings.filterwarnings("ignore", category=ImplicitModificationWarning)
+
+logger = logging.getLogger(__name__)
+
+
+@validate_call
+def annotate_child_mesh(
+    *,
+    # Fractal arguments
+    zarr_url: str,
+    init_args: InitArgsRegistrationConsensus,
+    # Task-specific arguments
+    grouped_mesh_name: str,
+    parent_roi_table: str,
+    child_feature_table: str,
+    annotate_by_features: list[str],
+    parent_of_child_colname: str = "ROI_label",
+    new_mesh_name: str,
+) -> dict[str, Any]:
+    """
+    Annotate grouped child mesh (.vtp) vertices by child features, save as .vtp mesh.
+
+    Only meshes in reference round are annotated, run on reference round but know moving rounds.
+    Moving round is added as appendix.
+
+    Args:
+        zarr_url: Path or url to the individual OME-Zarr image to be processed.
+            Refers to the zarr_url of the reference acquisition.
+        init_args: Intialization arguments provided by
+            `init_select_reference_knowing_all`. They contain the all zarr_urls submitted, both ref and moving.
+        grouped_mesh_name: Mesh folder name on which annotation is performed. Must contain .vtp format meshes whose
+            filename corresponds to label name in ROI table. Usually these are grouped child labels per parent object.
+        parent_roi_table: Name of the ROI table that corresponds to labels of meshed objects, only used for indexing
+            objects in for loop.
+        child_feature_table: Name of the feature table extracted from child objects. Assumes that it contains columns
+            called ['x_pos_pix', 'y_pos_pix', 'z_pos_pix_scaled'] for the x,y,z centroids of each object. Assumes that
+            these centroid units and scaling matches the mesh point units and scaling.
+        annotate_by_features: List of strings. Each string is a column name of the child feature table and will be added
+            to the .vtp mesh as a point annotation. Input should exactly match naming in child_feature_table
+            columns. instance_key of child feature (e.g. "label") is added as column internally, so can be used
+            as annotation feature as well.
+        parent_of_child_colname: Name of column for parent label id's of child objects, e.g. the organoid id of the
+            parent organoid. This column is assumed to be within obs of the child_feature_table. Usually this is
+            defined in the feature extraction task.
+        new_mesh_name: Name of the new mesh folder where annotated .vtp meshes are saved.
+    """
+    logger.info(
+        f"Running for {zarr_url=}. \n"
+        f"Annotating meshes in {grouped_mesh_name=} with features {annotate_by_features} from feature table "
+        f"{child_feature_table=}."
+    )
+    # Zarr_url is the url of the reference round
+    # Read ROIs of objects
+    adata = ad.read_zarr(f"{zarr_url}/tables/{parent_roi_table}")
+    roi_attrs = get_zattrs(f"{zarr_url}/tables/{parent_roi_table}")
+    instance_key = roi_attrs["instance_key"]  # e.g. "label"
+
+    # NGIO FIX, TEMP
+    # Check that ROI_table.obs has the right column and extract label_value
+    if instance_key not in adata.obs.columns:
+        if adata.obs.index.name == instance_key:
+            # Workaround for new ngio table
+            adata.obs[instance_key] = adata.obs.index
+        else:
+            raise ValueError(
+                f"In input ROI table, {instance_key=} "
+                f" missing in {adata.obs.columns=}"
+            )
+
+    labels = adata.obs_vector(instance_key)
+
+    if len(labels) == 0:
+        logger.warning("Well contains no objects")
+
+    # Initializing saving location
+    save_mesh_path = f"{zarr_url}/meshes/{new_mesh_name}"
+    os.makedirs(save_mesh_path, exist_ok=True)
+
+    logger.info(f"Saving meshes to reference directory: /meshes/{new_mesh_name}")
+
+    # TODO with NGIO refactor, consider not looping over ROI table but directly over mesh names. This will
+    #  generalize task to not require a corresponding ROI table in case meshes were generated outside of Fractal
+    # for every object in ROI table...
+    for i, obsname in enumerate(adata.obs_names):
+        org_label = labels[i]
+
+        if not isinstance(org_label, str):
+            raise TypeError("Label index must be string. Check ROI table obs naming.")
+
+        # TODO: do not hard code file type
+        mesh_fname = org_label + ".vtp"
+        mesh_path = f"{zarr_url}/meshes/{grouped_mesh_name}/{mesh_fname}"
+
+        # Check that mesh for corresponding label id exists, if not continue to next id
+        if os.path.isfile(mesh_path):
+            polydata = read_vtp_polydata(mesh_path)
+        else:
+            logger.warning(f"No mesh found for label {org_label}")
+            continue
+
+        ##############
+        # Annotate point data with feature values  ###
+        ##############
+        # get mesh points
+        point_data = polydata.GetPointData()
+
+        # Get label_id array (assumed to be per-point)
+        label_id_vtk = point_data.GetArray("label_id")
+
+        if label_id_vtk is None:
+            raise ValueError("No 'label_id' array found in point data.")
+
+        label_ids = numpy_support.vtk_to_numpy(label_id_vtk)  # shape: (n_points,)
+        unique_label_ids = np.unique(label_ids)
+
+        logger.info(f"Found {len(unique_label_ids)} unique labels in {mesh_fname}")
+
+        # get feature table data
+        # loop over multiple moving rounds, add to polydata
+        logger.info(
+            f"Annotating by round(s) {[extract_acq_info(url) for url in init_args.zarr_url_list]}..."
+        )
+
+        for acq_zarr_url in init_args.zarr_url_list:
+            # Load child features
+            feat_adata = ad.read_zarr(f"{acq_zarr_url}/tables/{child_feature_table}")
+
+            # Add index as column of obs; handles NGIO standard
+            try:
+                feat_adata.obs[feat_adata.obs.index.name] = feat_adata.obs.index.astype(
+                    int
+                )
+            except ValueError:
+                logger.info("No obs index name detected in feature table.")
+
+            round_id = extract_acq_info(acq_zarr_url)
+
+            label_dtype = feat_adata.obs[parent_of_child_colname].dtype
+            org_label_typed = np.dtype(label_dtype).type(org_label)
+
+            # select features table that correspond to specific parent object
+            mask = feat_adata.obs[parent_of_child_colname] == org_label_typed
+            feat_df = pd.DataFrame(feat_adata.X[mask], columns=feat_adata.var_names)
+            feat_df[instance_key] = feat_adata.obs.loc[mask, instance_key].values
+            # set index to label
+            feat_df = feat_df.set_index(instance_key, drop=False)
+
+            if feat_df.empty:
+                logger.warning(
+                    f"No child objects found in object {org_label}. Skipping."
+                )
+                continue
+
+            if not (
+                np.issubdtype(feat_df.index.dtype, np.number)
+                and np.issubdtype(label_ids.dtype, np.number)
+            ):
+                raise ValueError(
+                    f"Feature labels dtype {feat_df.index.dtype} and "
+                    f"mesh label dtype {label_ids.dtype} do not match."
+                )
+
+            for col in annotate_by_features:
+                # Define round-based column name
+                save_col_name = f"{str(round_id)}.{col}"
+
+                if col not in feat_df.columns:
+                    # Skip column names not in data table
+                    continue
+                # Assign the corresponding feature value
+
+                # Create array for all points
+                # match dtype of original column
+                new_array = np.zeros_like(label_ids, dtype=feat_df[col].dtype)
+
+                # Map label_id -> value
+                # key is label is, value is specific feature value for that label
+                feat_map = feat_df[col].to_dict()  # 'label' is the index now
+
+                for id in unique_label_ids:
+                    if id in feat_map:
+                        # check that label_ids and id have same dtype
+                        new_array[label_ids == id] = feat_map[id]
+                    else:
+                        # if label does not exist set value to NA
+                        new_array[label_ids == id] = np.nan
+
+                # Convert to VTK array
+                vtk_array = numpy_support.numpy_to_vtk(new_array, deep=True)
+                vtk_array.SetName(save_col_name)
+                polydata.GetPointData().AddArray(vtk_array)
+
+        ##############
+        # Save mesh  ###
+        ##############
+
+        # Save name is the organoid label id
+        save_name = f"{int(org_label)}.vtp"
+        export_vtk_polydata(os.path.join(save_mesh_path, save_name), polydata)
+
+        logger.info(f"Saved annotated .vtp mesh for object {org_label}.")
+
+    logger.info(f"End annotate_mesh_by_features task for {zarr_url=}")
+
+    return {}
+
+
+if __name__ == "__main__":
+    from fractal_tasks_core.tasks._utils import run_fractal_task
+
+    run_fractal_task(
+        task_function=annotate_child_mesh,
+        logger_name=logger.name,
+    )
