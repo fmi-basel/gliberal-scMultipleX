@@ -334,7 +334,7 @@ def post_registration_cleanup(
                 )
 
                 target_ome_zarr.add_table(
-                    table_name, table, overwrite=overwrite_labels_and_tables
+                    table_name, table, overwrite=overwrite_folders
                 )
 
                 if table.type() == "masking_roi_table":
