@@ -2079,7 +2079,7 @@
         "3D",
         "mesh"
       ],
-      "docs_info": "### Purpose\n- Annotate grouped child mesh (.vtp) vertices (points) by child features\n- This allows visualization of single-cell features on cell-scale mesh\n- For visualization in Paraview\n\n### Outputs\n- Saves .vtp mesh with embedded point annotations.\n\n### Limitations\n- Assumes grouped child mesh (.vtp) generate by Surface Mesh Multiscale task and contains \"label_id\" annotations to identify each child.",
+      "docs_info": "### Purpose\n- Annotate grouped child mesh (.vtp) vertices (points) by child features\n- This allows visualization of single-cell features on cell-scale mesh\n- For visualization in Paraview\n\n### Outputs\n- Saves .vtp mesh with embedded point annotations.\n\n### Limitations\n- Assumes grouped child mesh (.vtp) generate by Surface Mesh Multiscale task and contains \"label_id\" annotations to identify each child.\n",
       "executable_non_parallel": "fractal/init_select_reference_knowing_all.py",
       "executable_parallel": "fractal/annotate_child_mesh.py",
       "meta_non_parallel": {
