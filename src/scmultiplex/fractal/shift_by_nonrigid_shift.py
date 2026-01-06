@@ -25,20 +25,23 @@ from scipy.ndimage import affine_transform
 from skimage.transform import estimate_transform
 
 from scmultiplex.fractal.fractal_helper_functions import (
+    clear_registration_folder,
     iterate_z_chunks,
     save_zchunk_to_label,
 )
 
 # Local application imports
 from scmultiplex.linking.OrganoidLinkingFunctions import (
+    convert_transform_to_physical,
     get_euclidean_metrics,
     get_rotation_only_transform,
     get_sorted_label_centroids,
     is_identity_transform,
     resize_array_to_shape,
     select_rotating_euclidean_transform,
-    transform_euclidean_metric_to_scipy,
+    transform_tform_to_scipy_affine,
 )
+from scmultiplex.utils.ngio_utils import save_sequence_coordinatetransform
 
 # Configure logging
 ngio_logger.setLevel("ERROR")
@@ -46,7 +49,7 @@ logger = logging.getLogger(__name__)
 
 
 @validate_call
-def shift_by_rigid_shift(
+def shift_by_nonrigid_shift(
     *,
     # Fractal arguments
     zarr_url: str,
@@ -60,6 +63,8 @@ def shift_by_rigid_shift(
     image_suffix_to_add: Optional[str] = None,
     only_apply_rotation: bool = False,
     only_apply_if_rotation_present: bool = False,
+    registration_name: str = "nonrigid_2D",
+    overwrite_folder: bool = False,
 ):
     """
     Copy label image from reference round to moving round and shift by on the fly rigid transformation.
@@ -98,6 +103,10 @@ def shift_by_rigid_shift(
             rotation is applied, if present.
         only_apply_if_rotation_present: If true, EuclideanTransform is applied (both translation and rotation) to
             if non-zero rotation is detected in the image.
+        registration_name: Name of folder that contains warp map .npz files per moving object. Created as
+            subfolder of 'registration' folder.
+        overwrite_folder: If True, clear existing subfolder {registration_name} in 'registration' folder to allow
+            re-run of registration with same name.
     """
 
     logger.info(f"Running 'shift_by_rigid_shift' task for {zarr_url=}.")
@@ -159,6 +168,7 @@ def shift_by_rigid_shift(
     dst_image_np = dst_label.get_array(mode="numpy")
     src_image_np = np.squeeze(src_image_np, axis=0)
     dst_image_np = np.squeeze(dst_image_np, axis=0)
+    pixel_size = src_label.pixel_size
 
     src_objects = np.unique(src_image_np)
     dst_objects = np.unique(dst_image_np)
@@ -188,6 +198,49 @@ def shift_by_rigid_shift(
         f"angle rotation {angle_deg}."
     )
 
+    # matrix is forward rotation matrix mov to ref
+    # offset is forward translation mov to ref (yx order)
+    # rotation first, then translation
+    # [y_src, x_src] = matrix @ [y_dst, x_dst] + offset
+    matrix, offset = transform_tform_to_scipy_affine(tform)
+
+    # save transformation to disk, in "registration" folder of 2D dst image
+    # convert transform from pixels to physical units using zarr metadata
+    matrix_um, offset_um = convert_transform_to_physical(
+        matrix, offset, pixel_size.y, pixel_size.x
+    )
+
+    # Set save location and clear if necessary
+    registration_save_path = os.path.join(zarr_url, "registration", registration_name)
+    if os.path.isdir(registration_save_path):
+        if overwrite_folder:
+            clear_registration_folder(registration_name, zarr_url)
+            logger.info(f"Cleared existing registration folder: {registration_name=}")
+        else:
+            raise ValueError(
+                f"Folder {registration_name=} already exists. To overwrite, set "
+                f"overwrite_folder=True."
+            )
+    else:
+        # Make directory
+        os.makedirs(registration_save_path)
+
+    json_path = save_sequence_coordinatetransform(
+        matrix_um, offset_um, registration_save_path
+    )
+    logger.info(f"Saving sequence coordinateTransform to: {json_path=}")
+
+    # Load reference label array as dask
+    label_volume_dask = reference_img.get_array(mode="dask")
+
+    # Save shifted label image in moving round zarr, make new label
+    if new_shifted_label_name is None:
+        new_shifted_label_name = label_name_to_shift + "_shifted"
+
+    new_label = moving_ome_zarr.derive_label(
+        name=new_shifted_label_name, overwrite=True
+    )
+
     if only_apply_rotation:
         # Remove translation from tform output
         logger.info("Only applying rotation component of rigid transform.")
@@ -202,19 +255,6 @@ def shift_by_rigid_shift(
             logger.info(
                 "Rotation detected, proceeding with full rigid transformation (translation + rotation)."
             )
-
-    matrix, offset = transform_euclidean_metric_to_scipy(tform)
-
-    # Load reference label array as dask
-    label_volume_dask = reference_img.get_array(mode="dask")
-
-    # Save shifted label image in moving round zarr, make new label
-    if new_shifted_label_name is None:
-        new_shifted_label_name = label_name_to_shift + "_shifted"
-
-    new_label = moving_ome_zarr.derive_label(
-        name=new_shifted_label_name, overwrite=True
-    )
 
     # If no rigid transformation necessary, skip writing to disk and just copy over untransformed label image
     if is_identity_transform(tform):
@@ -324,7 +364,7 @@ def shift_by_rigid_shift(
                 raise  # raise error
             time.sleep(wait_seconds)
 
-    logger.info(f"End shift_by_shift task for {zarr_url=}")
+    logger.info(f"End shift_by_rigid_shift task for {zarr_url=}")
 
     return {}
 
@@ -333,6 +373,6 @@ if __name__ == "__main__":
     from fractal_tasks_core.tasks._utils import run_fractal_task
 
     run_fractal_task(
-        task_function=shift_by_rigid_shift,
+        task_function=shift_by_nonrigid_shift,
         logger_name=logger.name,
     )

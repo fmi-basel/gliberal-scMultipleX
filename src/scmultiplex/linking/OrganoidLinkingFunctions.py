@@ -340,7 +340,7 @@ def get_euclidean_metrics(tform: EuclideanTransform) -> Tuple[float, np.ndarray]
     return angle_deg, translation
 
 
-def transform_euclidean_metric_to_scipy(
+def transform_tform_to_scipy_affine(
     tform: EuclideanTransform,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
@@ -372,12 +372,50 @@ def transform_euclidean_metric_to_scipy(
     matrix = inverse_matrix[:2, :2]
     offset = inverse_matrix[:2, 2]
 
-    # Swap x and y axes to match scipy's (row, col) ordering
-    # Swap rows and columns (transpose matrix, flip offset)
-    matrix = matrix[[1, 0], :][:, [1, 0]]  # yx -> xy
-    offset = offset[[1, 0]]  # yx -> xy
+    # Convert from (x, y) to (y, x) coordinate order by permuting axes
+    matrix = matrix[[1, 0], :][:, [1, 0]]  # (x, y) -> (y, x)
+    offset = offset[[1, 0]]  # (x, y) -> (y, x)
 
     return matrix, offset
+
+
+def convert_transform_to_physical(rotation_matrix, translation_offset, pix_y, pix_x):
+    """
+    Convert a 2x2 rotation matrix and 2-vector translation from pixel units to physical units (micrometers),
+    assuming input is in (y, x) ordering.
+
+    Parameters
+    ----------
+    rotation_matrix : np.ndarray
+        2x2 rotation matrix in pixel coordinates (unitless)
+    translation_offset : np.ndarray
+        2-element translation vector [t_y, t_x] in pixels
+    pix_y : float
+        Pixel size along y-axis (µm/pixel)
+    pix_x : float
+        Pixel size along x-axis (µm/pixel)
+
+    Returns
+    -------
+    R_um : np.ndarray
+        2x2 rotation matrix in micrometer coordinates
+    t_um : np.ndarray
+        2-element translation vector in micrometers [t_y_um, t_x_um]
+    """
+    # Scaling matrix for y and x
+    S = np.diag([pix_y, pix_x])
+
+    # Scale translation
+    t_um = S @ translation_offset
+
+    # Scale rotation only if pixels are anisotropic
+    if pix_y == pix_x:
+        R_um = rotation_matrix.copy()  # unitless rotation is unchanged
+    else:
+        # Adjust rotation for anisotropic axes
+        R_um = S @ rotation_matrix @ np.linalg.inv(S)
+
+    return R_um, t_um
 
 
 def apply_affine_to_slice(slice_2d, matrix, offset):
