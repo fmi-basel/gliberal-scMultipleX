@@ -454,7 +454,7 @@ def save_new_multichannel_image_with_overlap(
     image_array = zarr.open_array(image_url_level0)
 
     if image_array.ndim != 4:
-        raise ValueError(f"Expected 4D array, got {new_npimg.ndim}D.")
+        raise ValueError(f"Expected 4D array, got {image_array.ndim}D.")
 
     # Load region of current object from disk, will include any previously processed neighboring objects
     try:
@@ -492,6 +492,72 @@ def save_new_multichannel_image_with_overlap(
         overwrite=True,
         compute=True,
     )
+    return
+
+
+def save_new_label_image_with_overlap(
+    new_nplabel: np.ndarray,
+    zarr_url: str,
+    new_label_name: str,
+    region: Tuple[slice, slice, slice],
+):
+    """
+    Write label numpy array to zarr in specific ROI region.
+    new_npimg is a 3D numpy array.
+    To be used within for loop over ROIs.
+    Load on-disk region and combine with new array using element-wise max to handle potential overlapping regions
+    that were already written to disk from previous ROIs.
+    Apply to all channels
+    """
+
+    if new_nplabel.ndim != 3:
+        raise ValueError(f"Expected 3D array, got {new_nplabel.ndim}D.")
+
+    assert len(region) == 3  # region should have z,y,x coordinates
+
+    # Load dask from disk, will contain rois of the previously processed objects within for loop
+    image_url_level0 = os.path.join(zarr_url, "labels", new_label_name, "0")
+    image_array = zarr.open_array(image_url_level0)
+
+    if image_array.ndim != 3:
+        raise ValueError(f"Expected 3D array, got {image_array.ndim}D.")
+
+    # Load region of current object from disk, will include any previously processed neighboring objects
+    try:
+        region_on_disk = image_array[region]
+    except IndexError:
+        # This means region was padded and now extends beyond edges of full dask array
+        # Clip region to max array size
+        logger.info(
+            f"Padded array extends beyond image boundary. Clipping stop coordinates of {region=} "
+            f"to match array shape {image_array.shape[-3:]}"
+        )
+        region = clip_region_stop_to_shape(region, image_array.shape[-3:])
+        region_on_disk = image_array[region]
+
+        # Clip input numpy array to same shape
+        region_shape = get_region_shape(region)
+        z, y, x = region_shape
+        new_nplabel = new_nplabel[:z, :y, :x]
+
+    # Check that dimensions of rois match
+    if region_on_disk.shape != new_nplabel.shape:
+        raise ValueError(
+            f"Shape of new label {new_nplabel.shape} must match region {region_on_disk.shape}. "
+        )
+
+    # Combine new image with the region that is already on disk using element-wise max
+    result = np.fmax(new_nplabel, region_on_disk)
+
+    # Store 0-th level of region on disk
+    # TODO: Is on-disk chunking preserved here?
+    da.array(result).to_zarr(
+        url=image_array,
+        region=region,
+        overwrite=True,
+        compute=True,
+    )
+
     return
 
 
