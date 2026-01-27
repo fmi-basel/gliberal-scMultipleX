@@ -11,6 +11,7 @@
 Remove debris based on volume filtering from 3D segmentation.
 """
 import logging
+import os
 from typing import Any, Optional
 
 import anndata as ad
@@ -31,7 +32,9 @@ from pydantic import validate_call
 from scmultiplex.fractal.fractal_helper_functions import (
     get_zattrs,
     initialize_new_label,
+    save_new_label_with_overlap,
 )
+from scmultiplex.linking.NucleiLinkingFunctions import remove_labels
 from scmultiplex.meshing.FilterFunctions import mask_by_parent_object, min_nonzero_label
 from scmultiplex.meshing.LabelFusionFunctions import filter_by_volume
 
@@ -53,6 +56,7 @@ def cleanup_3d_child_labels(
     filter_children_by_volume: bool = True,
     child_volume_filter_threshold: float = 0.05,
     repair_uint16_clipped_labels: bool = False,
+    remove_nonsurface_labels: bool = False,
 ) -> dict[str, Any]:
     """
 
@@ -80,6 +84,8 @@ def cleanup_3d_child_labels(
         repair_uint16_clipped_labels: If child labels were clipped to uint16 during segmentation and
             there were more than 2^16 labels, the label id's above 65535 get clipped. If True, these clipped
             values get remapped to monotonically increasing values 65536, 65537, etc.
+        remove_nonsurface_labels: If true, remove child labels that are not on organoid surface, as
+            determined by Annotate_mesh_by_child_features" task. The values to be removed are loaded from disk.
 
     """
     logger.info(
@@ -192,6 +198,24 @@ def cleanup_3d_child_labels(
     detected_clipped_values = False
     start_label = 65536
 
+    if remove_nonsurface_labels:
+        # Load label info to remove
+        registration_save_path = os.path.join(
+            zarr_url,
+            "registration",
+            "nonsurface_labels",
+            "nonsurface_labels_to_remove.npz",
+        )
+        try:
+            npz_data = np.load(registration_save_path)
+        except FileNotFoundError or OSError:
+            raise ValueError(
+                f"File {registration_save_path} not found. Make sure you have run "
+                f"annotate_mesh_by_features first. "
+            )
+        # convert to dictionary where key is organoid label (str), value is list of label ids (ints) to remove
+        nonsurface_dict = {k: npz_data[k].tolist() for k in npz_data}
+
     # For each object in input ROI table...
     for i, obsname in enumerate(roi_adata.obs_names):
 
@@ -236,7 +260,9 @@ def cleanup_3d_child_labels(
             if hit_uint16_max and detected_clipped_values:
                 logger.warning(f"Detected clipped label values in object {label_str}.")
                 # relabel child labels for all subsequent objects
-                relabeled_image = seg.copy()
+                relabeled_image = seg.astype(
+                    np.uint32
+                ).copy()  # first convert to uint32
 
                 used_labels = np.unique(seg)  # sorted in numerically increasing order
                 used_labels = used_labels[used_labels != 0]  # drop 0 background
@@ -306,11 +332,30 @@ def cleanup_3d_child_labels(
                     f"\n {segids_toremove}"
                 )
 
+        ##############
+        # Remove nonsurface labels  ###
+        ##############
+        if remove_nonsurface_labels:
+            # Relabel input image to remove nonsurface IDs
+            try:
+                segids_toremove = nonsurface_dict[label_str]
+            except KeyError:
+                logger.warning(
+                    f"Key '{label_str}' not found in nonsurface_dict. Check ROI table input."
+                )
+                segids_toremove = []  # remove nothing
+            datatype = seg.dtype
+            if len(segids_toremove) > 0:
+                seg = remove_labels(seg, np.array(segids_toremove), datatype)
+                logger.info(
+                    f"Removed {len(segids_toremove)} cell(s) from object {label_str} "
+                    f"that are nonsurface labels with label id(s): "
+                    f"\n {segids_toremove}"
+                )
+
         # Compute and store 0-th level to disk
-        da.array(seg).to_zarr(
-            url=new_label3d_array,
-            region=region,
-            compute=True,
+        save_new_label_with_overlap(
+            seg, new_label3d_array, zarr_url, output_label_name, region, compute=True
         )
 
     logger.info("End looping over parent objects, now building pyramids.")
@@ -334,7 +379,7 @@ def cleanup_3d_child_labels(
     except NgioFileNotFoundError as e:
         raise ValueError(f"OME-Zarr {zarr_url} not found.") from e
 
-    masking_table = ome_zarr_container.build_masking_roi_table(child_label_name)
+    masking_table = ome_zarr_container.build_masking_roi_table(output_label_name)
 
     ome_zarr_container.add_table(output_roi_table_name, masking_table, overwrite=True)
 

@@ -10,6 +10,7 @@ Copy label image from reference round to moving round and shift by pre-calculate
 """
 
 import logging
+import random
 import time
 from typing import Optional
 
@@ -212,7 +213,7 @@ def shift_by_shift(
     ref_masking_table = reference_ome_zarr.build_masking_roi_table(label_name_to_shift)
 
     max_retries = 10
-    wait_seconds = 2
+    wait_seconds = random.randint(1, 15)
 
     for attempt in range(1, max_retries + 1):
         try:
@@ -220,7 +221,7 @@ def shift_by_shift(
                 new_table_name, ref_masking_table, overwrite=True
             )
             break  # success, exit loop
-        except (FileNotFoundError, OSError) as e:
+        except (FileNotFoundError, OSError, KeyError) as e:
             logging.warning(f"[Attempt {attempt}] Failed to write table due to: {e}")
             if attempt == max_retries:
                 raise  # raise error

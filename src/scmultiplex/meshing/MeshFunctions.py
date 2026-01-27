@@ -562,3 +562,12 @@ def read_stl_polydata(fpath):
     reader.Update()
     polydata = reader.GetOutput()
     return polydata
+
+
+def read_vtp_polydata(fpath):
+    """Load .vtp mesh from disk and return as vtkPolyData object"""
+    reader = vtk.vtkXMLPolyDataReader()
+    reader.SetFileName(fpath)
+    reader.Update()
+    polydata = reader.GetOutput()
+    return polydata

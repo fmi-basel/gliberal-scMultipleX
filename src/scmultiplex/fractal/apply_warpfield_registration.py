@@ -24,7 +24,9 @@ from scmultiplex.fractal.fractal_helper_functions import (
     copy_omero_zattrs_from_source_to_target,
     roi_to_pixel_slices,
     save_new_multichannel_image_with_overlap,
+    update_region_to_new_length,
 )
+from scmultiplex.linking.OrganoidLinkingFunctions import resize_array_to_shape
 from scmultiplex.meshing.LabelFusionFunctions import select_label
 from scmultiplex.utils.ngio_utils import update_well_zattrs_with_new_image
 
@@ -83,6 +85,8 @@ def apply_warpfield_registration(
             "The `apply_warpfield_registration` task requires GPU. "
         ) from e
 
+    logger.info(f"Running 'apply_warpfield_registration' task for {zarr_url=}.")
+
     # Set OME-Zarr paths
     reference_zarr_url = init_args.reference_zarr_url
     moving_image_name = os.path.basename(zarr_url)
@@ -136,9 +140,11 @@ def apply_warpfield_registration(
     )
 
     # Derive the new moving image (e.g. 1_registered) from the reference image (e.g. 0)
-    # TODO: select which labels and tables should be copied over
+    # Image has same shape as reference image EXCEPT number of channels which are taken from the moving image
+    new_moving_ome_zarr_shape = (moving_image.shape[0],) + reference_image.shape[-3:]
     new_moving_ome_zarr = reference_ome_zarr.derive_image(
         store=new_moving_zarr_url,
+        shape=new_moving_ome_zarr_shape,
         copy_labels=copy_labels_and_tables,
         copy_tables=copy_labels_and_tables,
         overwrite=overwrite,
@@ -188,8 +194,17 @@ def apply_warpfield_registration(
             masking_label = select_label(masking_label, label_string)  # binarize mask
 
         # Apply warpfield transformation per channel image
-        result = np.empty_like(moving_np)
+        zyx_moving_shape_from_warpmap = tuple(npz_data["mov_shape"])
+        czyx_moving_shape_from_warpmap = (
+            moving_np.shape[0],
+        ) + zyx_moving_shape_from_warpmap
+        result = np.empty(czyx_moving_shape_from_warpmap, dtype=moving_np.dtype)
         for c, moving_channel_np in enumerate(moving_np):
+
+            if zyx_moving_shape_from_warpmap != moving_channel_np.shape:
+                moving_channel_np = resize_array_to_shape(
+                    moving_channel_np, zyx_moving_shape_from_warpmap
+                )
 
             # Run warpfield transformation
             logger.info(f"Applying warpfield registration for channel {c}.")
@@ -199,11 +214,12 @@ def apply_warpfield_registration(
 
             # Optionally mask output by parent after transformation
             if mask_output_by_parent:
-                if moving_channel_np_registered.shape != masking_label.shape:
-                    raise ValueError(
-                        f"Registration output image shape {moving_channel_np_registered.shape} does "
-                        f"not match masking label shape {masking_label.shape}"
+                # Have not tested whether this padding of masking label gives good results
+                if zyx_moving_shape_from_warpmap != masking_label.shape:
+                    masking_label = resize_array_to_shape(
+                        masking_label, zyx_moving_shape_from_warpmap
                     )
+
                 moving_channel_np_registered = (
                     moving_channel_np_registered * masking_label
                 )
@@ -214,9 +230,8 @@ def apply_warpfield_registration(
 
         # save ROI to disk using dask _to_zarr, not ngio
         region = roi_to_pixel_slices(roi, spacing)
-        save_new_multichannel_image_with_overlap(
-            result, new_moving_zarr_url, region, apply_to_all_channels=True
-        )
+        region = update_region_to_new_length(region, zyx_moving_shape_from_warpmap)
+        save_new_multichannel_image_with_overlap(result, new_moving_zarr_url, region)
 
         logger.info(f"Wrote region {label_string} to level-0 zarr image.")
 

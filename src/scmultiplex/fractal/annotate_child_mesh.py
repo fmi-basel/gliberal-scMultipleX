@@ -20,11 +20,10 @@ import pandas as pd
 from anndata._core.aligned_df import ImplicitModificationWarning
 from fractal_tasks_core.tasks.io_models import InitArgsRegistrationConsensus
 from pydantic import validate_call
-from scipy.spatial import cKDTree
 from vtkmodules.util import numpy_support
 
 from scmultiplex.fractal.fractal_helper_functions import extract_acq_info, get_zattrs
-from scmultiplex.meshing.MeshFunctions import export_vtk_polydata, read_stl_polydata
+from scmultiplex.meshing.MeshFunctions import export_vtk_polydata, read_vtp_polydata
 
 warnings.filterwarnings("ignore", category=ImplicitModificationWarning)
 
@@ -32,29 +31,21 @@ logger = logging.getLogger(__name__)
 
 
 @validate_call
-def annotate_mesh_by_child_features(
+def annotate_child_mesh(
     *,
     # Fractal arguments
     zarr_url: str,
     init_args: InitArgsRegistrationConsensus,
     # Task-specific arguments
-    parent_mesh_name: str,
+    grouped_mesh_name: str,
     parent_roi_table: str,
     child_feature_table: str,
     annotate_by_features: list[str],
     parent_of_child_colname: str = "ROI_label",
     new_mesh_name: str,
-    save_nonsurface_labels: bool = True,
 ) -> dict[str, Any]:
     """
-    Annotate parent mesh (.stl) vertices by child features, save as .vtp mesh.
-
-    Parent mesh vertices (i.e. points of organoid mesh) are annotated by child (e.g. single-cell)
-    features. The single-cell features are mapped to the mesh surface by minimizing the 3D euclidian distance.
-    Each point in mesh is assigned the value of the closest child object centroid using KDTree. User specifies
-    which features from feature table should be added to .vtp point data. Output of task is .vtp mesh
-    identical to parent_mesh .stl with each point annotated with desired features, for visualization in
-    Paraview or conversion to a Blender-compatible format.
+    Annotate grouped child mesh (.vtp) vertices by child features, save as .vtp mesh.
 
     Only meshes in reference round are annotated, run on reference round but know moving rounds.
     Moving round is added as appendix.
@@ -64,8 +55,8 @@ def annotate_mesh_by_child_features(
             Refers to the zarr_url of the reference acquisition.
         init_args: Intialization arguments provided by
             `init_select_reference_knowing_all`. They contain the all zarr_urls submitted, both ref and moving.
-        parent_mesh_name: Mesh folder name on which annotation is performed. Must contain .stl format meshes whose
-            filename corresponds to label name in ROI table.
+        grouped_mesh_name: Mesh folder name on which annotation is performed. Must contain .vtp format meshes whose
+            filename corresponds to label name in ROI table. Usually these are grouped child labels per parent object.
         parent_roi_table: Name of the ROI table that corresponds to labels of meshed objects, only used for indexing
             objects in for loop.
         child_feature_table: Name of the feature table extracted from child objects. Assumes that it contains columns
@@ -79,12 +70,10 @@ def annotate_mesh_by_child_features(
             parent organoid. This column is assumed to be within obs of the child_feature_table. Usually this is
             defined in the feature extraction task.
         new_mesh_name: Name of the new mesh folder where annotated .vtp meshes are saved.
-        save_nonsurface_labels: If True, saves a .npy for each organoid id with list of label ids to remove.
-
     """
     logger.info(
         f"Running for {zarr_url=}. \n"
-        f"Annotating meshes in {parent_mesh_name=} with features {annotate_by_features} from feature table "
+        f"Annotating meshes in {grouped_mesh_name=} with features {annotate_by_features} from feature table "
         f"{child_feature_table=}."
     )
     # Zarr_url is the url of the reference round
@@ -92,7 +81,6 @@ def annotate_mesh_by_child_features(
     adata = ad.read_zarr(f"{zarr_url}/tables/{parent_roi_table}")
     roi_attrs = get_zattrs(f"{zarr_url}/tables/{parent_roi_table}")
     instance_key = roi_attrs["instance_key"]  # e.g. "label"
-    ref_round_id = extract_acq_info(zarr_url)
 
     # NGIO FIX, TEMP
     # Check that ROI_table.obs has the right column and extract label_value
@@ -117,9 +105,6 @@ def annotate_mesh_by_child_features(
 
     logger.info(f"Saving meshes to reference directory: /meshes/{new_mesh_name}")
 
-    # Intialize dictionary in case saving nonsurface labels
-    nonsurface_dict = {}
-
     # TODO with NGIO refactor, consider not looping over ROI table but directly over mesh names. This will
     #  generalize task to not require a corresponding ROI table in case meshes were generated outside of Fractal
     # for every object in ROI table...
@@ -129,12 +114,13 @@ def annotate_mesh_by_child_features(
         if not isinstance(org_label, str):
             raise TypeError("Label index must be string. Check ROI table obs naming.")
 
-        mesh_fname = org_label + ".stl"
-        mesh_path = f"{zarr_url}/meshes/{parent_mesh_name}/{mesh_fname}"
+        # TODO: do not hard code file type
+        mesh_fname = org_label + ".vtp"
+        mesh_path = f"{zarr_url}/meshes/{grouped_mesh_name}/{mesh_fname}"
 
         # Check that mesh for corresponding label id exists, if not continue to next id
         if os.path.isfile(mesh_path):
-            polydata = read_stl_polydata(mesh_path)
+            polydata = read_vtp_polydata(mesh_path)
         else:
             logger.warning(f"No mesh found for label {org_label}")
             continue
@@ -143,17 +129,25 @@ def annotate_mesh_by_child_features(
         # Annotate point data with feature values  ###
         ##############
         # get mesh points
-        vtk_points = polydata.GetPoints()
-        points_array = numpy_support.vtk_to_numpy(
-            vtk_points.GetData()
-        )  # shape: (n_points, 3)
-        mesh_df = pd.DataFrame(points_array, columns=["x", "y", "z"])
+        point_data = polydata.GetPointData()
+
+        # Get label_id array (assumed to be per-point)
+        label_id_vtk = point_data.GetArray("label_id")
+
+        if label_id_vtk is None:
+            raise ValueError("No 'label_id' array found in point data.")
+
+        label_ids = numpy_support.vtk_to_numpy(label_id_vtk)  # shape: (n_points,)
+        unique_label_ids = np.unique(label_ids)
+
+        logger.info(f"Found {len(unique_label_ids)} unique labels in {mesh_fname}")
 
         # get feature table data
         # loop over multiple moving rounds, add to polydata
         logger.info(
             f"Annotating by round(s) {[extract_acq_info(url) for url in init_args.zarr_url_list]}..."
         )
+
         for acq_zarr_url in init_args.zarr_url_list:
             # Load child features
             feat_adata = ad.read_zarr(f"{acq_zarr_url}/tables/{child_feature_table}")
@@ -175,6 +169,8 @@ def annotate_mesh_by_child_features(
             mask = feat_adata.obs[parent_of_child_colname] == org_label_typed
             feat_df = pd.DataFrame(feat_adata.X[mask], columns=feat_adata.var_names)
             feat_df[instance_key] = feat_adata.obs.loc[mask, instance_key].values
+            # set index to label
+            feat_df = feat_df.set_index(instance_key, drop=False)
 
             if feat_df.empty:
                 logger.warning(
@@ -182,13 +178,14 @@ def annotate_mesh_by_child_features(
                 )
                 continue
 
-            # Build KD-tree from points in feature table
-            tree = cKDTree(
-                feat_df[["x_pos_pix", "y_pos_pix", "z_pos_pix_scaled"]].values
-            )
-
-            # Query the nearest neighbor in feature table for each point in mesh
-            distances, indices = tree.query(mesh_df[["x", "y", "z"]].values)
+            if not (
+                np.issubdtype(feat_df.index.dtype, np.number)
+                and np.issubdtype(label_ids.dtype, np.number)
+            ):
+                raise ValueError(
+                    f"Feature labels dtype {feat_df.index.dtype} and "
+                    f"mesh label dtype {label_ids.dtype} do not match."
+                )
 
             for col in annotate_by_features:
                 # Define round-based column name
@@ -198,25 +195,27 @@ def annotate_mesh_by_child_features(
                     # Skip column names not in data table
                     continue
                 # Assign the corresponding feature value
-                mesh_df[col] = feat_df.iloc[indices][col].values
-                intensity_array = mesh_df[col].to_numpy()
-                # Convert to VTK array
-                vtk_intensity = numpy_support.numpy_to_vtk(intensity_array)
-                vtk_intensity.SetName(save_col_name)  # Name of the array in VTK
-                polydata.GetPointData().AddArray(vtk_intensity)
 
-                # TODO: Do not hardcode "label" here
-                if (
-                    save_nonsurface_labels
-                    and col == "label"
-                    and round_id == ref_round_id
-                ):
-                    # Save nonsurface labels (to remove) only for reference round and "label" column
-                    surface_labels = mesh_df[col].unique()
-                    all_labels = feat_df[col].unique()
-                    nonsurface_labels = list(set(all_labels) - set(surface_labels))
-                    # Assign value for this object to dict
-                    nonsurface_dict[org_label] = nonsurface_labels
+                # Create array for all points
+                # match dtype of original column
+                new_array = np.zeros_like(label_ids, dtype=feat_df[col].dtype)
+
+                # Map label_id -> value
+                # key is label is, value is specific feature value for that label
+                feat_map = feat_df[col].to_dict()  # 'label' is the index now
+
+                for id in unique_label_ids:
+                    if id in feat_map:
+                        # check that label_ids and id have same dtype
+                        new_array[label_ids == id] = feat_map[id]
+                    else:
+                        # if label does not exist set value to NA
+                        new_array[label_ids == id] = np.nan
+
+                # Convert to VTK array
+                vtk_array = numpy_support.numpy_to_vtk(new_array, deep=True)
+                vtk_array.SetName(save_col_name)
+                polydata.GetPointData().AddArray(vtk_array)
 
         ##############
         # Save mesh  ###
@@ -228,21 +227,6 @@ def annotate_mesh_by_child_features(
 
         logger.info(f"Saved annotated .vtp mesh for object {org_label}.")
 
-        # Save nonsurface labels
-        if save_nonsurface_labels and nonsurface_dict:
-            save_dict = {
-                str(k): np.array(v, dtype=np.int32) for k, v in nonsurface_dict.items()
-            }
-            # if dictionary not empty, save it in reference round
-            registration_folder_path = os.path.join(
-                zarr_url, "registration", "nonsurface_labels"
-            )
-            os.makedirs(registration_folder_path, exist_ok=True)
-            filename = "nonsurface_labels_to_remove.npz"
-            registration_save_path = os.path.join(registration_folder_path, filename)
-            # Save to .npz file
-            np.savez(registration_save_path, **save_dict)
-
     logger.info(f"End annotate_mesh_by_features task for {zarr_url=}")
 
     return {}
@@ -252,6 +236,6 @@ if __name__ == "__main__":
     from fractal_tasks_core.tasks._utils import run_fractal_task
 
     run_fractal_task(
-        task_function=annotate_mesh_by_child_features,
+        task_function=annotate_child_mesh,
         logger_name=logger.name,
     )

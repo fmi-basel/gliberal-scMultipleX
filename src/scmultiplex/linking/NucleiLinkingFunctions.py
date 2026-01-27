@@ -516,6 +516,14 @@ def remove_labels(seg_img, labels_to_remove, datatype):
     return seg_img_relabeled
 
 
+# TODO: refactor to something like below for faster computation
+# def remove_labels(seg_img, labels_to_remove, datatype):
+#     seg_img_relabeled = seg_img.copy()
+#     mask = np.isin(seg_img_relabeled, labels_to_remove)
+#     seg_img_relabeled[mask] = 0
+#     return seg_img_relabeled
+
+
 def make_linking_dict(matches, moving_colname, fixed_colname):
     linking_dict = matches.set_index(moving_colname).T.to_dict("index")[fixed_colname]
     return linking_dict

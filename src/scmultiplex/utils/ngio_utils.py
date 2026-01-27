@@ -6,6 +6,7 @@
 #                                                                            #
 ##############################################################################
 
+import json
 import logging
 from pathlib import Path
 
@@ -51,3 +52,52 @@ def update_well_zattrs_with_new_image(
         logger.info(
             f"Image with name {new_image_name} already exists in well metadata."
         )
+
+
+def save_sequence_coordinatetransform(matrix_um, offset_um, folder_path):
+    """
+    Save a forward transform as a JSON file named 'sequence.json' in the specified folder.
+
+    Parameters
+    ----------
+    matrix_um : np.ndarray
+        2x2 rotation matrix in micrometer units
+    offset_um : np.ndarray
+        2-element translation vector in micrometer units [y, x]
+    folder_path : str
+        Folder path where 'sequence.json' will be saved
+    """
+    # Ensure values are plain Python types
+    rotation_list = matrix_um.tolist()
+    translation_list = offset_um.tolist()
+
+    # Construct JSON dictionary
+    transform_json = {
+        "coordinateSystems": [
+            {"name": "moving", "axes": [{"name": "y"}, {"name": "x"}]},
+            {
+                "name": "moving_nonrigid",
+                "axes": [{"name": "y_nonrigid"}, {"name": "x_nonrigid"}],
+            },
+        ],
+        "coordinateTransformations": [
+            {
+                "type": "sequence",
+                "input": "moving",
+                "output": "moving_nonrigid",
+                "transformations": [
+                    {"type": "rotation", "rotation": rotation_list},
+                    {"type": "translation", "translation": translation_list},
+                ],
+            }
+        ],
+    }
+
+    # Build full file path
+    file_path = f"{folder_path}/sequence.json"
+
+    # Write to file
+    with open(file_path, "w") as f:
+        json.dump(transform_json, f, indent=4)
+
+    return file_path

@@ -27,6 +27,7 @@ from scmultiplex.fractal.fractal_helper_functions import (
     clear_registration_folder,
     get_channel_index_from_inputmodel,
 )
+from scmultiplex.linking.OrganoidLinkingFunctions import pad_img_set
 
 # Configure logging
 ngio_logger.setLevel("ERROR")
@@ -81,6 +82,8 @@ def calculate_warpfield_registration(
         raise ImportError(
             "The `calculate_warpfield_registration` task requires GPU. "
         ) from e
+
+    logger.info(f"Running 'calculate_warpfield_registration' task for {zarr_url=}.")
 
     # Set OME-Zarr paths
     reference_zarr_url = init_args.reference_zarr_url
@@ -168,18 +171,16 @@ def calculate_warpfield_registration(
         reference_np = reference_np.squeeze(axis=0)  # Remove the channel dimension
         moving_np = moving_np.squeeze(axis=0)
 
-        moving_shape = moving_np.shape
-
-        if reference_np.shape != moving_shape:
-            raise ValueError(
-                f"Reference ROI shape {reference_np.shape} does not match moving ROI "
-                f"shape {moving_shape}. Check input ROI table or pre-process ROIs to have "
-                f"matching shapes for each region pair."
-            )
-
         logger.info(
-            f"Loaded matching ROI pairs with ref shape: {reference_np.shape}, mov shapes: {moving_shape}"
+            f"Loaded matching ROI pairs with ref shape: {reference_np.shape}, mov shapes: {moving_np.shape}"
         )
+
+        if reference_np.shape != moving_np.shape:
+            reference_np, moving_np = pad_img_set(reference_np, moving_np)
+            logger.info(
+                f"Input ROIs do not have matching dimensions, zero-padded to match. "
+                f"Padded reference shape: {reference_np.shape}, mov shapes: {moving_np.shape}"
+            )
 
         # Check that blocksize is not larger than image shape. If it is, reduce blocksize to match shape.
         # Otherwise get ValueError: C2R/R2C PlanNd for F-order arrays is not supported
@@ -189,14 +190,14 @@ def calculate_warpfield_registration(
             original_blocksize = blocksize.copy()
 
             # Adjust blocksize only where it's too large
-            for dim, (s, b) in enumerate(zip(list(moving_shape), blocksize)):
+            for dim, (s, b) in enumerate(zip(list(moving_np.shape), blocksize)):
                 if s < b:
                     blocksize[dim] = s
 
             # Only apply change if blocksize was modified
             if blocksize != original_blocksize:
                 logger.warning(
-                    f"Blocksize {original_blocksize} too large for ROI of shape {moving_shape}. "
+                    f"Blocksize {original_blocksize} too large for ROI of shape {moving_np.shape}. "
                     f"Decreased blocksize of level {i} to {blocksize}."
                 )
                 recipe_copy.levels[i].block_size = blocksize

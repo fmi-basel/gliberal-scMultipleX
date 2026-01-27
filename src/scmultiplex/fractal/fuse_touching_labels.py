@@ -96,7 +96,8 @@ def fuse_touching_labels(
     )
 
     fused_dask.to_zarr(
-        f"{zarr_url}/labels/{output_label_name}/0",
+        f"{zarr_url}/labels/{output_label_name}",
+        component="0",
         overwrite=True,
         dimension_separator="/",
         return_stored=False,
