@@ -2399,7 +2399,7 @@
       "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
     },
     {
-      "name": "scMultiplex Shift by Non-Rigid Shift",
+      "name": "scMultiplex Shift by Rigid Shift",
       "category": "Registration",
       "modality": "HCS",
       "tags": [
@@ -2407,9 +2407,9 @@
         "2D",
         "3D"
       ],
-      "docs_info": "### Purpose\n- Copy and shift 2D or 3D label image from reference round to moving round(s) using non-rigid transform calculated from 2D label images\n- Transform (rotation + translation) label using on the fly 2D (xy) non-rigid transformation of the linked 2D MIP label image\n- Same XY transform applied across all Z for 3D labels\n- 2D label image must be linked across rounds to have same number and matching ID's of objects\n- Allows user to propogate segmentation run only on reference round to subsequent rounds, using non-rigid registration\n- Useful for copying over organoid-level segmentation prior to more high-res registration on single-cell level\n- Can be more accurate than shift_by_shift task since takes into account rotation.\n- Adds 0 padding when chunks shifted beyond image canvas edge.\n\n### Outputs\n- A new **label image** saved as a label in moving rounds with '_shifted' suffix\n- A new corresponding **masking ROI table** saved as `{new_label_name}_ROI_table` in the moving rounds\n- Saves 2D non-rigid transform in 'registration' folder of moving image following NGFF coordinateTransformations specification: JSON file of sequence (rotation, translation) for forward transform from moving to reference image in physical units (y,x).\n\n### Limitations\n- Applies x,y translation and rotation only (non-rigid Euclidean transformation only; no scaling or warping)\n- No z transformation: assumes same x,y translations applied across z\n- Objects in 2D MIP image must be consensus linked, so that there is equal object number with matching IDs between rounds.\n",
+      "docs_info": "### Purpose\n- Copy and shift 2D or 3D label image from reference round to moving round(s) using rigid transform (EuclideanTransform) calculated from 2D label images\n- Transform (rotation + translation) label using on the fly 2D (xy) rigid transformation of the linked 2D MIP label image\n- Same XY transform applied across all Z for 3D labels\n- 2D label image must be linked across rounds to have same number and matching ID's of objects\n- Allows user to propogate segmentation run only on reference round to subsequent rounds, using rigid registration\n- Useful for copying over organoid-level segmentation prior to more high-res registration on single-cell level\n- Can be more accurate than shift_by_shift task since takes into account rotation.\n- Adds 0 padding when chunks shifted beyond image canvas edge.\n\n### Outputs\n- A new **label image** saved as a label in moving rounds with '_shifted' suffix\n- A new corresponding **masking ROI table** saved as `{new_label_name}_ROI_table` in the moving rounds\n- Saves 2D rigid transform in 'registration' folder of moving image following NGFF coordinateTransformations specification: JSON file of sequence (rotation, translation) for forward transform from moving to reference image in physical units (y,x).\n\n### Limitations\n- Applies x,y translation and rotation only (rigid Euclidean transformation only; no scaling or warping)\n- No z transformation: assumes same x,y translations applied across z\n- Objects in 2D MIP image must be consensus linked, so that there is equal object number with matching IDs between rounds.\n",
       "executable_non_parallel": "fractal/init_select_multiplexing_pairs.py",
-      "executable_parallel": "fractal/shift_by_nonrigid_shift.py",
+      "executable_parallel": "fractal/shift_by_rigid_shift.py",
       "meta_non_parallel": {
         "cpus_per_task": 1,
         "mem": 1000
@@ -2520,7 +2520,7 @@
             "description": "If true, EuclideanTransform is applied (both translation and rotation) to if non-zero rotation is detected in the image."
           },
           "registration_name": {
-            "default": "nonrigid_2D",
+            "default": "rigid_2D",
             "title": "Registration Name",
             "type": "string",
             "description": "Name of folder that contains warp map .npz files per moving object. Created as subfolder of 'registration' folder."
@@ -2538,7 +2538,7 @@
           "label_name_to_shift"
         ],
         "type": "object",
-        "title": "ShiftByNonrigidShift"
+        "title": "ShiftByRigidShift"
       },
       "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
     },
