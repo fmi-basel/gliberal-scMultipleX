@@ -8,7 +8,7 @@
 ##############################################################################
 
 from collections import defaultdict
-from typing import Tuple
+from typing import Tuple, Union
 
 import dask.array as da
 import numpy as np
@@ -19,6 +19,8 @@ from skimage.registration import phase_cross_correlation
 from skimage.transform import EuclideanTransform
 
 from scmultiplex.linking.matching import matching
+
+ArrayLike = Union[np.ndarray, da.Array]
 
 
 def pad_img_set(img1, img2):
@@ -267,6 +269,74 @@ def resize_array_to_shape(arr, target_shape):
         raise ValueError("Final array does not match target shape.")
 
     return arr_resized
+
+
+def pad_to_match_maximum_xy_extent(
+    array_1: ArrayLike, array_2_shape: Tuple[int, ...]
+) -> ArrayLike:
+    """
+    Zero-pad array_1 in the last two dimensions (Y, X) to match the
+    maximum pixel shape between array_1 and array_2.
+
+    Padding is applied only if array_2 is larger in Y and/or X.
+    The first dimension (e.g., Z) is left unchanged.
+
+    Works with both NumPy and Dask arrays. For Dask, operation remains lazy.
+
+    Parameters
+    ----------
+    array_1 : numpy.ndarray or dask.array.Array
+        The array to pad, expected shape (Z, Y, X).
+
+    array_2_shape : tuple of int
+        Shape tuple of the reference array (array_2). Must have the same number
+        of dimensions as `array_1`.
+
+    Returns
+    -------
+    array_1_padded : numpy.ndarray or dask.array.Array
+        array_1 padded with zeros in Y/X to match the target shape.
+    """
+
+    if len(array_2_shape) != array_1.ndim:
+        raise ValueError(
+            f"array_2_shape must have same rank as array_1. "
+            f"Got {array_1.ndim=} and {len(array_2_shape)=}"
+        )
+
+    if array_1.ndim != 3:
+        raise ValueError(f"array_1 must be 3D (Z, Y, X). Got shape {array_1.shape}")
+
+    z1, y1, x1 = array_1.shape
+    z2, y2, x2 = array_2_shape
+
+    target_y = max(y1, y2)
+    target_x = max(x1, x2)
+
+    pad_y = target_y - y1
+    pad_x = target_x - x1
+
+    # No padding needed
+    if pad_y == 0 and pad_x == 0:
+        return array_1
+
+    pad_width = (
+        (0, 0),  # Z unchanged
+        (0, pad_y),  # pad Y at end
+        (0, pad_x),  # pad X at end
+    )
+
+    # Choose backend based on array type
+    pad_fn = da.pad if isinstance(array_1, da.Array) else np.pad
+
+    array_1_padded = pad_fn(
+        array_1,
+        pad_width=pad_width,
+        mode="constant",
+        constant_values=0,
+    )
+
+    return array_1_padded
 
 
 def get_sorted_label_centroids(img: np.ndarray) -> np.ndarray:

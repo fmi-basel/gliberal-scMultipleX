@@ -37,6 +37,7 @@ from scmultiplex.linking.OrganoidLinkingFunctions import (
     get_rotation_only_transform,
     get_sorted_label_centroids,
     is_identity_transform,
+    pad_to_match_maximum_xy_extent,
     resize_array_to_shape,
     select_rotating_euclidean_transform,
     transform_tform_to_scipy_affine,
@@ -186,10 +187,11 @@ def shift_by_nonrigid_shift(
 
     deltas = dst - src
     logger.info(
-        f"Detected average shift between centroids: {np.mean(deltas, axis=0)} [x,y]"
+        f"Quality control: Average shift between point cloud centroids = {np.mean(deltas, axis=0)} [x,y]"
     )
 
     # Calculate rigid Euclidean mapping from reference (src) to moving (dst) point cloud
+    logger.info("Computing 2D EuclideanTransform (rigid transformation)...")
     tform = estimate_transform("euclidean", src, dst)
     angle_deg, translation = get_euclidean_metrics(tform)
 
@@ -273,20 +275,25 @@ def shift_by_nonrigid_shift(
 
         new_label.set_array(label_volume_dask)
     else:
-        # Apply rigid transformation
-        chunk_size_z = reference_img.chunks[0]
+        # Apply 2D rigid transformation by z slice in each z-block, resize, write each chunk to disk
+        logger.info(
+            f"Applying rigid transformation to reference image {reference_zarr_url}."
+        )
 
         # Get level 0 path of new label to save to
         label_level0_zarr_url = os.path.join(zarr_url, new_label.zarr_array.path)
 
-        # Apply 2D rigid transformation by z slice in each z-block, resize, write each chunk to disk
+        # Zero-pad reference image in the case that moving image is larger. This ensures that transformed reference
+        # image is not cropped when the transform shifts the image beyond image border.
+
+        chunk_size_z = reference_img.chunks[0]
         logger.info(
-            f"Apply non-rigid transformation to reference image {reference_zarr_url}."
+            f"Starting iteration over z-blocks of size "
+            f"[z={chunk_size_z}, y={reference_img.shape[-2]}, x={reference_img.shape[-1]}]..."
         )
 
-        logger.info(
-            f"Start apply transform and save to disk. Iterating over z-blocks of size "
-            f"[z={chunk_size_z}, y={reference_img.shape[-2]}, x={reference_img.shape[-1]}]..."
+        label_volume_dask = pad_to_match_maximum_xy_extent(
+            label_volume_dask, moving_img.shape[-3:]
         )
 
         # Loop over z blocks: this loads full z-block of reference label into memory from disk
@@ -317,22 +324,8 @@ def shift_by_nonrigid_shift(
                 image_url_level_0=label_level0_zarr_url,
             )
 
-        # for z, label_slice in enumerate(label_volume):
-        #     label_slice_transformed = affine_transform(
-        #         label_slice,  # source image
-        #         matrix=matrix,  # 2x2 rotation
-        #         offset=offset,  # translation
-        #         order=0,  # nearest-neighbor (good for labels)
-        #         mode="constant",  # fill outside with constant value
-        #         cval=0,  # the constant value to use (e.g. background label)
-        #     )
-        #
-        #     label_slice_transformed = resize_array_to_shape(label_slice_transformed, moving_img.shape[-2:])
-        #
-        #     save_z_slice_to_label(new_zslice=label_slice_transformed, zslice_index=z, image_url_level_0=label_level0_zarr_url)
-
     logger.info(
-        f"End apply transform. Resized xy dimensions of reference shape {reference_img.shape[-2:]} to match moving shape {moving_img.shape[-2:]}."
+        f"End apply transform. Resized xy dimensions of transformed image {reference_img.shape[-2:]} to match destination shape {moving_img.shape[-2:]}."
     )
 
     # Build pyramids for label image
