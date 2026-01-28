@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 
 
 @validate_call
-def shift_by_nonrigid_shift(
+def shift_by_rigid_shift(
     *,
     # Fractal arguments
     zarr_url: str,
@@ -64,7 +64,7 @@ def shift_by_nonrigid_shift(
     image_suffix_to_add: Optional[str] = None,
     only_apply_rotation: bool = False,
     only_apply_if_rotation_present: bool = False,
-    registration_name: str = "nonrigid_2D",
+    registration_name: str = "rigid_2D",
     overwrite_folder: bool = False,
 ):
     """
@@ -370,6 +370,6 @@ if __name__ == "__main__":
     from fractal_tasks_core.tasks._utils import run_fractal_task
 
     run_fractal_task(
-        task_function=shift_by_nonrigid_shift,
+        task_function=shift_by_rigid_shift,
         logger_name=logger.name,
     )
