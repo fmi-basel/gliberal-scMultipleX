@@ -6,10 +6,15 @@
 #                                                                            #
 ##############################################################################
 
-import dask.array as da
 import numpy as np
 import pandas as pd
-from scipy.ndimage import binary_erosion, binary_fill_holes, distance_transform_edt
+from dask_image.ndmeasure import label as dask_label
+from scipy.ndimage import (
+    binary_erosion,
+    binary_fill_holes,
+    distance_transform_edt,
+    generate_binary_structure,
+)
 from skimage.draw import polygon
 from skimage.exposure import rescale_intensity
 from skimage.filters import gaussian, threshold_otsu
@@ -27,6 +32,7 @@ from scmultiplex.meshing.FilterFunctions import (
     remove_border,
     remove_xy_pad,
 )
+from scmultiplex.utils.ngio_utils import restore_squeezed_axes, squeeze_with_record
 
 
 def get_expandby_pixels(seg, expandby_factor):
@@ -121,6 +127,29 @@ def fuse_labels(seg, expandby_factor):
 
 
 def fill_holes_by_slice(seg):
+    """
+    Fill holes in each 2D slice of a 3D binary array.
+
+    This function processes a 3D array slice by slice along the first axis (Z-axis),
+    filling any holes in each 2D slice. Holes are defined as background regions
+    (zeros) that are completely surrounded by foreground (non-zero) pixels.
+
+    Parameters
+    ----------
+    seg : array_like
+        Input 3D binary array of shape (Z, Y, X). Must be exactly 3-dimensional. It can also be a 2D image with
+        shape (1, Y, X).
+
+        The array is expected to have non-zero values for foreground and zero for background.
+
+    Returns
+    -------
+    seg_filled : np.ndarray
+        A 3D array of the same shape as `seg` with holes filled in each slice.
+    """
+    if seg.ndim != 3:
+        raise ValueError(f"Input array must be 3D, got shape {seg.shape}")
+
     # Initialize empty array
     seg_filled = np.zeros_like(seg)
     # Iterate over each zslice in image
@@ -131,6 +160,31 @@ def fill_holes_by_slice(seg):
 
 
 def fill_holes_by_slice_multi_instance(seg):
+    """
+    Fill holes in each labeled object of a 3D segmentation array, slice by slice.
+
+    This function operates on a labeled 3D segmentation array where each non-zero
+    integer represents a distinct object instance. For each label, a binary mask
+    is created and holes are filled independently in each 2D slice (along the Z-axis).
+    The filled masks are then recombined into a single labeled output array.
+
+    This ensures that holes are filled **per instance**, preventing neighboring
+    objects from being merged.
+
+    Parameters
+    ----------
+    seg : array_like
+        Input 3D label map of shape (Z, Y, X). Must be exactly 3-dimensional.
+        It can also be a 2D image with shape (1, Y, X).
+        Zero is treated as background, and all positive integer values are treated
+        as separate object labels.
+
+    Returns
+    -------
+    filled_array : np.ndarray
+        A 3D labeled array of the same shape as `seg`, where holes have been
+        filled independently for each object label on a per-slice basis.
+    """
     unique_labels = list(set(seg.ravel()) - {0})  # drop 0 background
     filled_array = np.zeros_like(seg)
     for lab in unique_labels:
@@ -568,32 +622,32 @@ def select_label(seg, label_str):
     return seg
 
 
-def simple_fuse_labels(label_dask, connectivity, fill_holes):
+def simple_fuse_labels(label_dask, connectivity):
     dtype = label_dask.dtype
-    dtype_max = np.iinfo(dtype).max
+
+    # Remove axes of dimension 1
+    label_dask, axes = squeeze_with_record(label_dask)
+    rank = label_dask.ndim
 
     # Set all values > 0 to True
-    binary_array = label_dask > 0  # binary boolean array
-    binary_numpy = binary_array.compute()
+    binary_dask = label_dask > 0  # binary boolean array
 
-    # Default connectivity is maximum based on array dimensions
-    if connectivity is None:
-        connectivity = binary_numpy.ndim
+    if connectivity is not None:
+        if connectivity > binary_dask.ndim:
+            raise ValueError(
+                "Connectivity must not be greater than number of array dimensions. Check user input."
+            )
+        structure = generate_binary_structure(rank=rank, connectivity=connectivity)
+    else:
+        structure = None
 
-    # Apply skimage label function
-    fused_numpy, label_count = label(
-        binary_numpy, background=0, return_num=True, connectivity=connectivity
-    )
+    # Run Dask-based connected components
+    fused_dask, label_count = dask_label(binary_dask, structure=structure)
 
-    if label_count > dtype_max:
-        raise ValueError(
-            f"Number of identified labels {label_count} exceeds {dtype} maximum of {dtype_max}."
-        )
+    # Add back axes of dimension 1
+    fused_dask = restore_squeezed_axes(fused_dask, axes)
 
-    if fill_holes:
-        fused_numpy = fill_holes_by_slice_multi_instance(fused_numpy)
+    # Cast to original dtype lazily
+    fused_dask = fused_dask.astype(dtype)
 
-    # Convert back to dask to save on disk with same chunk sizes and dtype as input label map
-    fused_dask = da.from_array(fused_numpy, chunks=label_dask.chunksize).astype(dtype)
-
-    return fused_numpy, fused_dask, label_count, connectivity
+    return fused_dask, label_count, rank
