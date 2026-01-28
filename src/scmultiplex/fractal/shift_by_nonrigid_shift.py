@@ -275,29 +275,29 @@ def shift_by_nonrigid_shift(
     else:
         # Apply rigid transformation
         chunk_size_z = reference_img.chunks[0]
-        logger.info(f"Loading xy slices by z chunk size {chunk_size_z}")
 
         # Get level 0 path of new label to save to
         label_level0_zarr_url = os.path.join(zarr_url, new_label.zarr_array.path)
 
-        # Apply 2D rigid transformation by z slice in each chunk, resize, write each chunk to disk
+        # Apply 2D rigid transformation by z slice in each z-block, resize, write each chunk to disk
         logger.info(
-            f"Resize each zchunk in XY from reference shape {reference_img.shape[-2:]} to moving shape {moving_img.shape[-2:]}."
+            f"Apply non-rigid transformation to reference image {reference_zarr_url}."
         )
 
         logger.info(
-            f"Apply rigid transformation by zslice and by zchunk to reference image {reference_zarr_url}."
+            f"Start apply transform and save to disk. Iterating over z-blocks of size "
+            f"[z={chunk_size_z}, y={reference_img.shape[-2]}, x={reference_img.shape[-1]}]..."
         )
-        logger.info("Start apply and save to disk...")
 
-        # Loop over z chunks
+        # Loop over z blocks: this loads full z-block of reference label into memory from disk
         for z_start, z_stop, z_data in iterate_z_chunks(label_volume_dask):
 
             np_chunk_to_save = np.empty_like(
                 z_data
-            )  # init empty array same size as z chunk
-            # Loop over zslices in z chunk
+            )  # init empty array same size as z-block
+            # Loop over zslices in z-block
             for z, label_slice in enumerate(z_data):
+                # Apply transform to each z-slice of full well image
                 np_chunk_to_save[z] = affine_transform(
                     label_slice,  # source image
                     matrix=matrix,  # 2x2 rotation
@@ -330,6 +330,10 @@ def shift_by_nonrigid_shift(
         #     label_slice_transformed = resize_array_to_shape(label_slice_transformed, moving_img.shape[-2:])
         #
         #     save_z_slice_to_label(new_zslice=label_slice_transformed, zslice_index=z, image_url_level_0=label_level0_zarr_url)
+
+    logger.info(
+        f"End apply transform. Resized xy dimensions of reference shape {reference_img.shape[-2:]} to match moving shape {moving_img.shape[-2:]}."
+    )
 
     # Build pyramids for label image
     new_label.consolidate()
