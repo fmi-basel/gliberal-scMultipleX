@@ -440,16 +440,34 @@ def count_number_of_labels_in_dask(label_dask: da.Array) -> Tuple[int, Set[int]]
     return number_of_labels, existing_labels_set
 
 
-def make_correction_dict(
+def make_linking_dict(
     matches: pd.DataFrame,
     moving_colname: str = "RX_nuc_id",
     fixed_colname: str = "R0_nuc_id",
 ) -> dict:
+    """
+    Create a dictionary mapping moving labels to fixed labels.
 
-    # key is moving_label (current label), value is fixed_label (value to rename to)
-    matching_dict = make_linking_dict(matches, moving_colname, fixed_colname)
+    Parameters
+    ----------
+    matches : pandas.DataFrame
+        DataFrame containing at least the moving and fixed label columns.
+    moving_colname : str
+        Column name representing the original (moving) labels.
+    fixed_colname : str
+        Column name representing the target (fixed) labels.
 
-    return matching_dict
+    Returns
+    -------
+    dict
+        Dictionary mapping {moving_label -> fixed_label}.
+
+    Notes
+    -----
+    If duplicate moving labels exist, later values may overwrite earlier ones.
+    """
+    linking_dict = matches.set_index(moving_colname).T.to_dict("index")[fixed_colname]
+    return linking_dict
 
 
 def make_relabeled_block(
@@ -457,6 +475,29 @@ def make_relabeled_block(
     matching_dict: dict,
     label_dtype: np.dtype,
 ) -> np.ndarray:
+    """
+    Relabel a single NumPy block using a mapping dictionary.
+
+    Parameters
+    ----------
+    block1 : numpy.ndarray
+        Input labeled array block (e.g., chunk from a Dask array).
+    matching_dict : dict
+        Dictionary mapping old labels (key) to new labels (value).
+    label_dtype : numpy.dtype
+        Desired dtype of the output labeled block.
+
+    Returns
+    -------
+    numpy.ndarray
+        Relabeled array block with the same shape as `block1`.
+
+    Notes
+    -----
+    - Pixels with value 0 are ignored (assumed background).
+    - Labels not found in `matching_dict` remain 0 in the output.
+    - This function operates element-wise over nonzero pixels only.
+    """
 
     # return indeces of elements that are non-zero in block as tuple
     pix_nonzero = np.nonzero(block1)
@@ -486,8 +527,34 @@ def run_relabel_dask(
     moving_colname: str = "RX_nuc_id",
     fixed_colname: str = "R0_nuc_id",
 ) -> da.Array:
+    """
+    Apply label remapping to a Dask array using block-wise relabeling.
 
-    matching_dict = make_correction_dict(matches, moving_colname, fixed_colname)
+    Parameters
+    ----------
+    label_dask : dask.array.Array
+        Input labeled Dask array.
+    matches : pandas.DataFrame
+        DataFrame mapping moving labels to fixed labels.
+    moving_colname : str, default="RX_nuc_id"
+        Column containing original label IDs.
+    fixed_colname : str, default="R0_nuc_id"
+        Column containing target label IDs.
+
+    Returns
+    -------
+    dask.array.Array
+        Lazily evaluated Dask array with relabeled values.
+
+    Notes
+    -----
+    - Uses `da.map_blocks` to process chunks independently.
+    - Output dtype matches input dtype.
+    - Labels not found in the mapping are set to zero.
+    """
+
+    # key is moving_label (current label), value is fixed_label (value to rename to)
+    matching_dict = make_linking_dict(matches, moving_colname, fixed_colname)
 
     dtype = label_dask.dtype
 
@@ -522,8 +589,3 @@ def remove_labels(seg_img, labels_to_remove, datatype):
 #     mask = np.isin(seg_img_relabeled, labels_to_remove)
 #     seg_img_relabeled[mask] = 0
 #     return seg_img_relabeled
-
-
-def make_linking_dict(matches, moving_colname, fixed_colname):
-    linking_dict = matches.set_index(moving_colname).T.to_dict("index")[fixed_colname]
-    return linking_dict
