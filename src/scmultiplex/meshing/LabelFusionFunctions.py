@@ -6,6 +6,8 @@
 #                                                                            #
 ##############################################################################
 
+import dask
+import dask.array as da
 import numpy as np
 import pandas as pd
 from dask_image.ndmeasure import label as dask_label
@@ -651,3 +653,136 @@ def simple_fuse_labels(label_dask, connectivity):
     fused_dask = fused_dask.astype(dtype)
 
     return fused_dask, label_count, rank
+
+
+def get_label_mapping_from_block(
+    block1: np.ndarray,
+    block2: np.ndarray,
+) -> dict:
+    """
+    Build a mapping from nonzero values in a single block of array_1 to
+    the corresponding values in array_2, recording only the first occurrence
+    of each label within the block.
+
+    This function operates on NumPy array chunks and is intended to be
+    used with Dask's delayed computation to process large arrays without
+    loading the entire array into memory.
+
+    Parameters
+    ----------
+    block1 : np.ndarray
+        A chunk of the first array (e.g., a label array). Can be 2D or 3D.
+        Nonzero values are considered foreground labels; zeros are ignored.
+
+    block2 : np.ndarray
+        A chunk of the second array, of the same shape as `block1`.
+        Each nonzero pixel in `block1` is mapped to the corresponding value
+        in `block2`.
+
+    Returns
+    -------
+    mapping : dict
+        Dictionary mapping each unique nonzero value in `block1` to its
+        corresponding value in `block2` based on the first occurrence in the block.
+        Keys and values are Python integers.
+
+    Notes
+    -----
+    - Only the first occurrence of each key in the block is recorded.
+    - Works efficiently with small or large array chunks.
+    - Does not operate on full Dask arrays directly.
+
+    Example
+    -------
+    >> block1 = np.array([[0, 1], [2, 1]])
+    >> block2 = np.array([[0, 10], [20, 15]])
+    >> get_label_mapping_from_block(block1, block2)
+    {1: 10, 2: 20}
+    """
+    mapping = {}
+    pix_nonzero = np.nonzero(block1)  # tuple of arrays (z, y, x)
+
+    # Iterate over non-zero pixels
+    for idx in zip(*pix_nonzero):
+        key = block1[idx].item()
+        value = block2[idx].item()
+        if key not in mapping:
+            mapping[key] = value
+
+    return mapping
+
+
+def get_label_mapping_dask(
+    array_1: da.array,
+    array_2: da.array,
+) -> dict:
+    """
+    Build a global mapping from values in `array_1` to corresponding values
+    in `array_2` by processing large arrays in chunks with Dask.
+
+    Each unique nonzero value in `array_1` is mapped to its corresponding
+    value in `array_2` based on the first occurrence. Uses Dask delayed
+    computation to merge per-chunk mappings into a single global dictionary.
+
+    Parameters
+    ----------
+    array_1 : dask.array.Array
+        The first array (e.g., a label array). Nonzero values are considered
+        foreground labels; zeros are ignored.
+        Must be the same shape as `array_2`.
+
+    array_2 : dask.array.Array
+        The second array, of the same shape as `array_1`. Provides the values
+        corresponding to each label in `array_1`.
+
+    Returns
+    -------
+    global_mapping : dict
+        Dictionary mapping each unique nonzero value in `array_1` to the
+        corresponding value in `array_2` based on the first occurrence across
+        all chunks. Keys and values are Python integers.
+
+    Notes
+    -----
+    - This function is memory-efficient because it processes each chunk independently.
+    - Each chunk returns a dictionary of mappings, and the final global
+      mapping preserves the first occurrence across the entire array.
+    - Works for 2D or 3D arrays.
+    - Dask chunking must align between `array_1` and `array_2` so that corresponding
+      pixels are in the same chunk.
+    - Returns a fully computed Python dict; large arrays themselves are not loaded into memory.
+
+    Example
+    -------
+    >> a1 = da.from_array(np.array([[0, 1], [2, 1]]), chunks=(1, 2))
+    >> a2 = da.from_array(np.array([[0, 10], [20, 15]]), chunks=(1, 2))
+    >> get_label_mapping_dask(a1, a2)
+    {1: 10, 2: 20}
+    """
+    if array_1.chunks != array_2.chunks:
+        raise ValueError(
+            f"Chunks of array_1 {array_1.chunks} and array_2 {array_2.chunks} do not match. "
+            "Dask arrays must have the same chunking for label mapping. Were unfused and fused images written by "
+            "different zarr pyramid writers?"
+        )
+    # Convert Dask array chunks to delayed objects
+    blocks_1 = array_1.to_delayed().ravel()
+    blocks_2 = array_2.to_delayed().ravel()
+
+    # Apply per-block mapping function
+    delayed_dicts = [
+        dask.delayed(get_label_mapping_from_block)(b1, b2)
+        for b1, b2 in zip(blocks_1, blocks_2)
+    ]
+
+    # Compute all chunk-level dicts
+    block_mappings = dask.compute(*delayed_dicts)
+
+    # Merge all block dicts into a single global mapping
+    global_mapping = {}
+    for d in block_mappings:
+        for k, v in d.items():
+            if k not in global_mapping:
+                global_mapping[k] = v
+
+    return global_mapping

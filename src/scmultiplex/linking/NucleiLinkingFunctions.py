@@ -523,9 +523,10 @@ def make_relabeled_block(
 
 def run_relabel_dask(
     label_dask: da.Array,
-    matches: pd.DataFrame,
+    matches: pd.DataFrame = None,
     moving_colname: str = "RX_nuc_id",
     fixed_colname: str = "R0_nuc_id",
+    matching_dict: dict = None,
 ) -> da.Array:
     """
     Apply label remapping to a Dask array using block-wise relabeling.
@@ -533,13 +534,16 @@ def run_relabel_dask(
     Parameters
     ----------
     label_dask : dask.array.Array
-        Input labeled Dask array.
-    matches : pandas.DataFrame
-        DataFrame mapping moving labels to fixed labels.
+        Input labeled Dask array to relabel (moving label).
+    matches : pandas.DataFrame, optional
+        DataFrame mapping moving labels to fixed labels. Required if `matching_dict` is not provided.
     moving_colname : str, default="RX_nuc_id"
-        Column containing original label IDs.
+        Column containing original label IDs (only used if `matches` is provided).
     fixed_colname : str, default="R0_nuc_id"
-        Column containing target label IDs.
+        Column containing target label IDs (only used if `matches` is provided).
+    matching_dict : dict, optional
+        Precomputed mapping dictionary {moving_label -> fixed_label}, typically integer values.
+        If provided, `matches` and column names are ignored.
 
     Returns
     -------
@@ -551,10 +555,15 @@ def run_relabel_dask(
     - Uses `da.map_blocks` to process chunks independently.
     - Output dtype matches input dtype.
     - Labels not found in the mapping are set to zero.
+    - Either `matching_dict` must be provided, or `matches` DataFrame with the specified columns.
+
     """
 
-    # key is moving_label (current label), value is fixed_label (value to rename to)
-    matching_dict = make_linking_dict(matches, moving_colname, fixed_colname)
+    if matching_dict is None:
+        if matches is None:
+            raise ValueError("Either 'matches' or 'matching_dict' must be provided.")
+        # key is moving_label (current label), value is fixed_label (value to rename to)
+        matching_dict = make_linking_dict(matches, moving_colname, fixed_colname)
 
     dtype = label_dask.dtype
 

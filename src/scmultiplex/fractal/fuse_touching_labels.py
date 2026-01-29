@@ -18,8 +18,10 @@ from scmultiplex.fractal.fractal_helper_functions import (
     roi_to_pixel_slices,
     save_new_label_image_with_overlap,
 )
+from scmultiplex.linking.NucleiLinkingFunctions import run_relabel_dask
 from scmultiplex.meshing.LabelFusionFunctions import (
     fill_holes_by_slice_multi_instance,
+    get_label_mapping_dask,
     simple_fuse_labels,
 )
 
@@ -36,6 +38,7 @@ def fuse_touching_labels(
     label_name_to_fuse: str,
     new_label_name: Optional[str] = None,
     connectivity: Union[int, None] = None,
+    level: int = 0,
     fill_holes: bool = False,
 ) -> None:
     """
@@ -68,6 +71,9 @@ def fuse_touching_labels(
             any face, edge, or vertex is considered a neighbor. Follows default behavior of
             dask_image.ndmeasure.label, with structuring element generated using
             scipy.ndimage.generate_binary_structure(input.ndim, connectivity).
+        level: Defaults to full resolution level 0. However, this may lead to out of memory for fusion of large 3D
+            arrays. In this case, setting to a higher pyramid level (e.g. 4) will perform fusion using low-resolution
+            pyramid. The level-0 array will then be relabelled according to this mapping.
         fill_holes: if True, the new label image (after fusion) has holes filled by iterating
             over z-slices. Useful for filling any gaps between fused labels.
     """
@@ -78,15 +84,15 @@ def fuse_touching_labels(
 
     # Load label image
     ome_zarr = open_ome_zarr_container(zarr_url)
-    label_img = ome_zarr.get_label(label_name_to_fuse)
-    label_dask = label_img.get_array(mode="dask")
 
-    logger.info("Building dask graph to fuse labels.")
+    # If level != 0, load low-res image and perform fusion on it
+    label_img_to_fuse = ome_zarr.get_label(label_name_to_fuse, path=str(level))
+    label_dask_to_fuse = label_img_to_fuse.get_array(mode="dask")
 
-    fused_dask, label_count, rank = simple_fuse_labels(label_dask, connectivity)
+    logger.info("Start building dask graphs.")
+    logger.info("Fusing labels...")
 
-    logger.info("Start compute of fused labels.")
-    fused_dask, label_count = da.compute(fused_dask, label_count)
+    fused_dask, label_count, rank = simple_fuse_labels(label_dask_to_fuse, connectivity)
 
     if connectivity is None:
         # Default dask_image.ndmeasure.label connectivity if None is squared connectivity equal == 1
@@ -94,10 +100,26 @@ def fuse_touching_labels(
     else:
         connectivity_logged = connectivity
 
-    logger.info(
-        f"Finished compute, found {label_count} connected components using structuring element rank {rank} and "
-        f"squared connectivity {connectivity_logged}."
-    )
+    # If level != 0, match fused to unfused image and relabel level-0 array to the fused label IDs
+    if level != 0:
+        # Link unfused (low-res) dask to fused (low-res) dask
+        logger.info("Low-resolution fusion: linking unfused to fused zarr...")
+        mapping = get_label_mapping_dask(label_dask_to_fuse, fused_dask)
+
+        # Relabel level-0 image based on mapping
+        # Load level-0
+        label_img_full_res = ome_zarr.get_label(label_name_to_fuse)
+        label_dask_full_res = label_img_full_res.get_array(mode="dask")
+        # Relabel
+        logger.info("Low-resolution fusion: relabeling level-0 zarr...")
+        dask_to_save = run_relabel_dask(label_dask_full_res, matching_dict=mapping)
+
+    else:
+        logger.info("Performed full-resolution fusion on level-0 zarr.")
+        # if already performed fusion on full-res dask, directly save it
+        dask_to_save = fused_dask
+
+    logger.info("Finished building dask graphs.")
 
     # Save new fused label image and masking ROI table
     if new_label_name is None:
@@ -107,7 +129,14 @@ def fuse_touching_labels(
 
     new_label_container = ome_zarr.derive_label(name=output_label_name, overwrite=True)
 
-    new_label_container.set_array(fused_dask)
+    logger.info("Computing and saving zarr...")
+    dask_to_save, label_count = da.compute(dask_to_save, label_count)
+    new_label_container.set_array(dask_to_save)
+
+    logger.info(
+        f"Finished compute, found {label_count} connected components using structuring element rank {rank} and "
+        f"squared connectivity {connectivity_logged}."
+    )
 
     # Build pyramids for label image
     new_label_container.consolidate()
