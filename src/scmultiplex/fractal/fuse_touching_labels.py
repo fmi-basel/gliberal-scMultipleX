@@ -73,7 +73,9 @@ def fuse_touching_labels(
             scipy.ndimage.generate_binary_structure(input.ndim, connectivity).
         level: Defaults to full resolution level 0. However, this may lead to out of memory for fusion of large 3D
             arrays. In this case, setting to a higher pyramid level (e.g. 4) will perform fusion using low-resolution
-            pyramid. The level-0 array will then be relabelled according to this mapping.
+            pyramid. The level-0 array will then be relabelled according to this mapping. Note that low-res fusion
+            may yield different results than full-res fusion, since fine spacing between neighboring objects may be
+            lost in the low-level representation!
         fill_holes: if True, the new label image (after fusion) has holes filled by iterating
             over z-slices. Useful for filling any gaps between fused labels.
     """
@@ -105,6 +107,22 @@ def fuse_touching_labels(
         # Link unfused (low-res) dask to fused (low-res) dask
         logger.info("Low-resolution fusion: linking unfused to fused zarr...")
         mapping = get_label_mapping_dask(label_dask_to_fuse, fused_dask)
+
+        # Check how many ROIs image should have (based on full-res ROI table), if mismatch give warning
+        try:
+            label_img_roi_table = ome_zarr.get_table(
+                f"{label_name_to_fuse}_ROI_table", check_type="generic_roi_table"
+            )
+        except KeyError:
+            logger.warning(
+                f"ROI table corresponding to label image '{label_name_to_fuse}' not found."
+            )
+        else:
+            if len(mapping) != len(label_img_roi_table.rois()):
+                logger.warning(
+                    "Low-resolution level contains fewer ROIs than full-resolution label image. "
+                    "Some small objects may be lost. Consider changing to a higher-resolution level."
+                )
 
         # Relabel level-0 image based on mapping
         # Load level-0
