@@ -1787,6 +1787,12 @@
             "type": "integer",
             "description": "Connectivity determines which elements of the output array belong to the structure and thus considered neighbors of the central element during fusion. Accepted values are ranging from 1 to input.ndim. If None, defaults to a squared connectivity = 1, where only connected center faces are considered neighbors (diagonally connected components are considered separated). Maximum connectivity is at input.ndim, when any face, edge, or vertex is considered a neighbor. Follows default behavior of dask_image.ndmeasure.label, with structuring element generated using scipy.ndimage.generate_binary_structure(input.ndim, connectivity)."
           },
+          "level": {
+            "default": 0,
+            "title": "Level",
+            "type": "integer",
+            "description": "Defaults to full resolution level 0. However, this may lead to out of memory for fusion of large 3D arrays. In this case, setting to a higher pyramid level (e.g. 4) will perform fusion using low-resolution pyramid. The level-0 array will then be relabelled according to this mapping."
+          },
           "fill_holes": {
             "default": false,
             "title": "Fill Holes",
