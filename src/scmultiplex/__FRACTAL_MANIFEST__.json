@@ -1791,7 +1791,7 @@
             "default": 0,
             "title": "Level",
             "type": "integer",
-            "description": "Defaults to full resolution level 0. However, this may lead to out of memory for fusion of large 3D arrays. In this case, setting to a higher pyramid level (e.g. 4) will perform fusion using low-resolution pyramid. The level-0 array will then be relabelled according to this mapping."
+            "description": "Defaults to full resolution level 0. However, this may lead to out of memory for fusion of large 3D arrays. In this case, setting to a higher pyramid level (e.g. 4) will perform fusion using low-resolution pyramid. The level-0 array will then be relabelled according to this mapping. Note that low-res fusion may yield different results than full-res fusion, since fine spacing between neighboring objects may be lost in the low-level representation!"
           },
           "fill_holes": {
             "default": false,
