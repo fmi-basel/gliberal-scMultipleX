@@ -127,6 +127,8 @@ def fuse_touching_labels(
                     "Some small objects may be lost. Consider changing to a higher-resolution level."
                 )
 
+        logger.info(f"Computed mapping dictionary: {mapping}")
+
         # Relabel level-0 image based on mapping
         # Load level-0
         label_img_full_res = ome_zarr.get_label(label_name_to_fuse)
