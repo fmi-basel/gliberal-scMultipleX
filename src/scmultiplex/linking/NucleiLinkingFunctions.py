@@ -533,8 +533,10 @@ def make_relabeled_block(
 
     # Fill LUT using mapping dictionary
     for k, v in matching_dict.items():
-        if k <= max_label:
-            lut[k] = v
+        k_int = int(k)
+        v_int = int(v)
+        if k_int <= max_label:
+            lut[k_int] = v_int
 
     # Vectorized remap
     return lut[block1]
