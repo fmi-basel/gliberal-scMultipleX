@@ -476,49 +476,68 @@ def make_relabeled_block(
     label_dtype: np.dtype,
 ) -> np.ndarray:
     """
-    Relabel a single NumPy block using a mapping dictionary.
+    Relabel a NumPy array block using a vectorized lookup table (LUT).
+
+    This function remaps integer label values in `block1` according to
+    `matching_dict`, returning a new array of the same shape with updated
+    labels. Labels not present in the mapping are set to zero. The operation
+    is fully vectorized using NumPy and avoids Python-level loops over pixels,
+    making it efficient for large array chunks (e.g., in Dask blockwise
+    processing).
 
     Parameters
     ----------
     block1 : numpy.ndarray
-        Input labeled array block (e.g., chunk from a Dask array).
+        Input labeled array block. Expected to contain non-negative integer
+        label values, where 0 typically represents background.
     matching_dict : dict
-        Dictionary mapping old labels (key) to new labels (value).
+        Dictionary mapping original label IDs (keys) to new label IDs (values).
+        Keys and values should be integers. Labels not found in this dictionary
+        will be mapped to 0 in the output.
     label_dtype : numpy.dtype
-        Desired dtype of the output labeled block.
+        Desired dtype of the output array (e.g., `np.uint32`), used both for
+        the lookup table and the returned array.
 
     Returns
     -------
     numpy.ndarray
-        Relabeled array block with the same shape as `block1`.
+        A new NumPy array with the same shape as `block1`, where label values
+        have been replaced according to `matching_dict` and cast to
+        `label_dtype`.
 
     Notes
     -----
-    - Pixels with value 0 are ignored (assumed background).
-    - Labels not found in `matching_dict` remain 0 in the output.
-    - This function operates element-wise over nonzero pixels only.
+    - A lookup table (LUT) of size `(max_label + 1)` is constructed, where
+      `max_label` is the largest label value present in `block1`.
+    - Each index in the LUT corresponds to an original label ID; the value
+      stored at that index is the new label ID.
+    - The relabeling is performed in a single vectorized operation:
+      `lut[block1]`, which is significantly faster than iterating over pixels.
+    - Memory usage scales with the maximum label value in `block1`. If label
+      IDs are extremely large or sparse, consider using a sparse or hashed
+      remapping strategy instead.
+
+    Examples
+    --------
+    >> block = np.array([[0, 1, 2], [2, 5, 0]])
+    >> mapping = {1: 10, 2: 20, 5: 99}
+    >> make_relabeled_block(block, mapping, np.uint32)
+    array([[ 0, 10, 20],
+           [20, 99,  0]], dtype=uint32)
     """
+    # Build LUT (lookup table)
+    # Find largest label in block
+    max_label = block1.max()
+    # Initialize empty look up table (all zeros). Index is old label; value at index is new label.
+    lut = np.zeros(max_label + 1, dtype=label_dtype)
 
-    # return indeces of elements that are non-zero in block as tuple
-    pix_nonzero = np.nonzero(block1)
+    # Fill LUT using mapping dictionary
+    for k, v in matching_dict.items():
+        if k <= max_label:
+            lut[k] = v
 
-    # initialize new block
-    relabeled_block = np.zeros_like(block1, dtype=label_dtype)
-
-    for nonzero_pixel in zip(*pix_nonzero):
-        # nonzero_pixel is [z,y,x]
-        # fetch value (as Python scalar) of array at given pixel, as string to match obs
-
-        key = block1[nonzero_pixel].item()  # fetch value of given pixel
-
-        try:
-            relabeled_value = matching_dict[key]
-        except KeyError:
-            pass
-        else:
-            relabeled_block[tuple(nonzero_pixel)] = relabeled_value
-
-    return relabeled_block
+    # Vectorized remap
+    return lut[block1]
 
 
 def run_relabel_dask(
