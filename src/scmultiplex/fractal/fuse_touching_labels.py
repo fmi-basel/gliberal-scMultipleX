@@ -8,7 +8,6 @@
 import logging
 from typing import Optional, Union
 
-import dask.array as da
 import numpy as np
 from ngio import open_ome_zarr_container
 from ngio.utils import ngio_logger
@@ -110,6 +109,7 @@ def fuse_touching_labels(
         # Link unfused (low-res) dask to fused (low-res) dask
         logger.info("Low-resolution fusion: linking unfused to fused zarr...")
         mapping = get_label_mapping_dask(label_dask_to_fuse, fused_dask)
+        fused_label_count = len(set(mapping.values()))
 
         # Check how many ROIs image should have (based on full-res ROI table), if mismatch give warning
         try:
@@ -141,6 +141,9 @@ def fuse_touching_labels(
         logger.info("Performed full-resolution fusion on level-0 zarr.")
         # if already performed fusion on full-res dask, directly save it
         dask_to_save = fused_dask
+        # TODO: get label counts from final ROI table, this will be faster
+        # fused_label_count = label_count.compute()
+        fused_label_count = "NA"
 
     logger.info("Finished building dask graphs.")
 
@@ -153,11 +156,10 @@ def fuse_touching_labels(
     new_label_container = ome_zarr.derive_label(name=output_label_name, overwrite=True)
 
     logger.info("Computing and saving zarr...")
-    dask_to_save, label_count = da.compute(dask_to_save, label_count)
     new_label_container.set_array(dask_to_save)
 
     logger.info(
-        f"Finished compute, found {label_count} connected components using structuring element rank {rank} and "
+        f"Finished compute, found {fused_label_count} connected components using structuring element rank {rank} and "
         f"squared connectivity {connectivity_logged}."
     )
 
