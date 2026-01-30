@@ -91,6 +91,9 @@ def fuse_touching_labels(
     label_img_to_fuse = ome_zarr.get_label(label_name_to_fuse, path=str(level))
     label_dask_to_fuse = label_img_to_fuse.get_array(mode="dask")
 
+    logger.info(f"Input shape: {label_dask_to_fuse.shape}")
+    logger.info(f"Input chunks: {label_dask_to_fuse.chunks}")
+
     logger.info("Start building dask graphs.")
     logger.info("Fusing labels...")
 
