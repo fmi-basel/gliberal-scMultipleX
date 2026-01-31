@@ -276,6 +276,13 @@ def shift_by_rigid_shift(
         new_label.set_array(label_volume_dask)
     else:
         # Apply 2D rigid transformation by z slice in each z-block, resize, write each chunk to disk
+
+        # Note: cannot parallelize this transform with dask over chunks, because transform can shift or rotate
+        # image beyond chunk border.
+        # Instead, load all xy chunks for a small z-range (specified by z-chunking
+        # distance), apply transform, and save. This is valid since transform is only applied XY, not in Z.
+        # TODO: specify custom z extent in task input; currently z extent defaults to z-chunking of array.
+
         logger.info(
             f"Applying rigid transformation to reference image {reference_zarr_url}."
         )
