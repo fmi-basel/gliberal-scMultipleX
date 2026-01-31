@@ -764,7 +764,9 @@ def load_label_rois(
         return {}
 
     # Read ROIs of objects
-    roi_adata = ad.read_zarr(f"{zarr_url}/tables/{roi_table}")
+    path = f"{zarr_url}/tables/{roi_table}"
+    roi_adata = ad.read_zarr(path)
+    roi_attrs = get_zattrs(path)
 
     # Read Zarr metadata
     label_ngffmeta = load_NgffImageMeta(f"{zarr_url}/labels/{label_name}")
@@ -782,6 +784,20 @@ def load_label_rois(
         coarsening_xy=label_xycoars,
         full_res_pxl_sizes_zyx=label_pixmeta,
     )
+
+    instance_key = roi_attrs["instance_key"]  # e.g. "label"
+
+    # NGIO FIX, TEMP
+    # Check that ROI_table.obs has the right column and extract label_value
+    if instance_key not in roi_adata.obs.columns:
+        if roi_adata.obs.index.name == instance_key:
+            # Workaround for new ngio table
+            roi_adata.obs[instance_key] = roi_adata.obs.index
+        else:
+            raise ValueError(
+                f"Table at {path=} has {instance_key=} "
+                f" missing in {roi_adata.obs.columns=}"
+            )
 
     check_valid_ROI_indices(roi_idlist, roi_table)
 
@@ -825,9 +841,10 @@ def read_table_from_zarrurl(zarr_url, table_name):
     path = f"{zarr_url}/tables/{table_name}"
     if os.path.exists(path):
         adata = ad.read_zarr(path)
+        zattrs = get_zattrs(path)
     else:
         raise ValueError(f"Table {table_name} not found in {zarr_url=}")
-    return adata
+    return adata, zattrs
 
 
 def check_match_zarr_chunking(dask1, dask2):
