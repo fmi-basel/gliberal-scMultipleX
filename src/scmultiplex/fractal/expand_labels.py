@@ -43,7 +43,8 @@ def expand_labels(
     new_label_name: Optional[str] = None,
     roi_table: str = "org_ROI_table_linked",
     masking_label_map: Union[str, None] = None,
-    mask_output: bool = True,
+    mask_input: bool = False,
+    mask_output: bool = False,
     expand_by_pixels: Union[int, None] = None,
     calculate_image_based_expansion_distance: bool = False,
     expand_by_factor: Union[float, None] = None,
@@ -79,6 +80,9 @@ def expand_labels(
             mandatory if a roi table of type "masking_roi_table" is provided. It is the name of the label map
             that corresponds to the input ROI table. The masking_label_map will be used to mask label_name_to_expand
             objects, to only select children belonging to given parent.
+        mask_input: If True, input non-expanded label is masked by parent label prior to expansion. If True, this
+            selects children belonging to a given parent. However, this may crop input in cases where parent mask
+            segmentation is not perfect.
         mask_output: If True, expanded label is masked by parent label. Only used if masking_label_map is provided.
             Recommended to set as True, to avoid overwriting of children labels between neighboring parents. However,
             it may lead to expanded results to be cropped by parent mask; in this case, the parent mask can first be
@@ -252,7 +256,7 @@ def expand_labels(
             compute=compute,
         )
 
-        if table_type == "masking_roi_table":
+        if mask_input and table_type == "masking_roi_table":
             # Mask objects by parent group_by object
             seg, parent_mask = mask_by_parent_object(
                 seg, mask_dask, mask_idlist, i, label_str
