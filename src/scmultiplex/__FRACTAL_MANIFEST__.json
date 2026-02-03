@@ -1395,8 +1395,14 @@
             "type": "string",
             "description": "Label name of segmented objects that are parents of label_name. This input is mandatory if a roi table of type \"masking_roi_table\" is provided. It is the name of the label map that corresponds to the input ROI table. The masking_label_map will be used to mask label_name_to_expand objects, to only select children belonging to given parent."
           },
+          "mask_input": {
+            "default": false,
+            "title": "Mask Input",
+            "type": "boolean",
+            "description": "If True, input non-expanded label is masked by parent label prior to expansion. If True, this selects children belonging to a given parent. However, this may crop input in cases where parent mask segmentation is not perfect."
+          },
           "mask_output": {
-            "default": true,
+            "default": false,
             "title": "Mask Output",
             "type": "boolean",
             "description": "If True, expanded label is masked by parent label. Only used if masking_label_map is provided. Recommended to set as True, to avoid overwriting of children labels between neighboring parents. However, it may lead to expanded results to be cropped by parent mask; in this case, the parent mask can first be expanded."
