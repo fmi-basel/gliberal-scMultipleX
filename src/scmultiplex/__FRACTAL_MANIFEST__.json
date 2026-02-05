@@ -2239,14 +2239,9 @@
             "type": "string",
             "description": "Label name child objects (e.g. nuclei) to be cleaned."
           },
-          "parent_label_name": {
-            "title": "Parent Label Name",
-            "type": "string",
-            "description": "Label name of segmented objects that are parents of child_label_name. child_label_name objects will be masked and grouped by this object. For example, when parent_label_name = 'org', the nuclear segmentation is masked by the organoid parent and all nuclei belonging to the parent are loaded as a label image."
-          },
-          "parent_roi_table": {
+          "parent_roi_table_name": {
             "default": "org_ROI_table_linked",
-            "title": "Parent Roi Table",
+            "title": "Parent Roi Table Name",
             "type": "string",
             "description": "Name of the ROI table used to iterate over objects and load object regions. This is the ROI table that corresponds to the parent_label_name objects."
           },
@@ -2281,8 +2276,7 @@
           }
         },
         "required": [
-          "zarr_url",
-          "parent_label_name"
+          "zarr_url"
         ],
         "type": "object",
         "title": "Cleanup3dChildLabels"
