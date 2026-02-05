@@ -6,31 +6,24 @@
 #                                                                            #
 ##############################################################################
 import logging
+from pathlib import Path
 from typing import Optional, Union
 
 import numpy as np
-import pandas as pd
-from fractal_tasks_core.pyramids import build_pyramid
-from fractal_tasks_core.roi import (
-    array_to_bounding_box_table,
-    convert_indices_to_regions,
-    load_region,
-)
+from ngio import open_ome_zarr_container
+from ngio.utils import ngio_logger
 from pydantic import validate_call
 
 from scmultiplex.fractal.fractal_helper_functions import (
-    get_zattrs,
-    initialize_new_label,
-    load_label_rois,
-    save_masking_roi_table_from_df_list,
-    save_new_label_with_overlap,
+    roi_to_pixel_slices,
+    save_new_label_image_with_overlap,
 )
-from scmultiplex.meshing.FilterFunctions import mask_by_parent_object
 from scmultiplex.meshing.LabelFusionFunctions import (
     fill_holes_by_slice_multi_instance,
     run_expansion,
 )
 
+ngio_logger.setLevel("ERROR")
 logger = logging.getLogger(__name__)
 
 
@@ -128,56 +121,26 @@ def expand_labels(
                 f"Running expansion using set pixel expansion distance of {expand_by_pixels=}"
             )
 
-    # always use highest resolution label
-    level = 0
+    ome_zarr = open_ome_zarr_container(zarr_url)
 
-    # Read expansion label and ROI table
-    label_dask, roi_adata, roi_idlist, label_ngffmeta, label_pixmeta = load_label_rois(
-        zarr_url, label_name_to_expand, roi_table, level
+    # Load ROI tables
+    parent_roi_table = ome_zarr.get_table(roi_table, check_type="generic_roi_table")
+    parent_label_name = Path(parent_roi_table._meta.region.path).name
+
+    # Load label image to expand
+    masked_image = ome_zarr.get_masked_label(
+        label_name=label_name_to_expand, masking_label_name=parent_label_name
     )
-    roi_attrs = get_zattrs(f"{zarr_url}/tables/{roi_table}")
-
-    # Check ROI input types
-    table_type = roi_attrs["type"]
-    if table_type == "masking_roi_table":
-        if masking_label_map is None:
-            raise ValueError(
-                "Masking ROI table selected, but no corresponding label map supplied. "
-                "Enter masking_label_map in task input. "
-            )
-
-        logger.info(
-            f"Using masking ROI table to group input labels by {masking_label_map} segmentation with"
-            f"ROI table {roi_table}."
+    if mask_output:
+        parent_masked_image = ome_zarr.get_masked_label(
+            label_name=parent_label_name, masking_label_name=parent_label_name
         )
 
-        # ROIs to iterate over
-        instance_key = roi_attrs["instance_key"]  # e.g. "label"
-
-        # NGIO FIX, TEMP
-        # Check that ROI_table.obs has the right column and extract label_value
-        if instance_key not in roi_adata.obs.columns:
-            if roi_adata.obs.index.name == instance_key:
-                # Workaround for new ngio table
-                roi_adata.obs[instance_key] = roi_adata.obs.index
-            else:
-                raise ValueError(
-                    f"In _preprocess_input, {instance_key=} "
-                    f" missing in {roi_adata.obs.columns=}"
-                )
-
-        roi_labels = roi_adata.obs_vector(instance_key)
-
-    elif table_type == "roi_table":
-        logger.info(
-            f"Using ROI table {roi_table} for loading objects without masking. "
-        )
-    else:
-        raise ValueError(f"Unrecognized table type {table_type}.")
+    # Pixel sizes as list: [z,y,x]
+    pixel_size = masked_image.pixel_size
+    spacing = np.array([pixel_size.z, pixel_size.y, pixel_size.x])
 
     # Initialize parameters to save the newly calculated label map
-    # Save with same dimensions as child labels from which they are calculated
-
     if new_label_name is None:
         output_label_name = f"{label_name_to_expand}_expanded"
     else:
@@ -185,82 +148,24 @@ def expand_labels(
 
     output_roi_table_name = f"{output_label_name}_ROI_table"
 
-    shape = label_dask.shape
-    chunks = label_dask.chunksize
-
-    new_label3d_array = initialize_new_label(
-        zarr_url,
-        shape,
-        chunks,
-        np.uint32,
-        label_name_to_expand,
-        output_label_name,
-        logger,
-    )
-
-    logger.info(
-        f"New array saved as {output_label_name=} will have shape {shape} and chunks {chunks}."
-    )
-
-    # initialize new ROI table
-    bbox_dataframe_list = []
-
-    ##############
-    # Optionally load parent mask to filter children by parent ###
-    ##############
-
-    if masking_label_map:
-        # Load masking object segmentation to mask child objects
-        # Load well image as dask array for parent objects
-
-        (
-            mask_dask,
-            mask_adata,
-            mask_idlist,
-            mask_ngffmeta,
-            mask_pixmeta,
-        ) = load_label_rois(
-            zarr_url,
-            masking_label_map,
-            roi_table,
-            level,
-        )
+    # Initialize zarr with NGIO
+    ome_zarr.derive_label(name=output_label_name, overwrite=True)
 
     ##############
     # Apply expansion ###
     ##############
 
-    compute = True
-
-    total_label_count = len(roi_adata.obs_names)
-
-    logger.info(
-        f"Starting iteration over {total_label_count} detected objects in ROI table."
-    )
-
     # For each object in input ROI table...
-    for i, obsname in enumerate(roi_adata.obs_names):
+    for roi in parent_roi_table.rois():
 
-        if table_type == "masking_roi_table":
-            label_str = roi_labels[i]
-            region = convert_indices_to_regions(roi_idlist[i])
+        label_string = roi.name
+        label_int = int(label_string)
+        logger.info(f"Processing ROI label {label_string}")
 
-        elif table_type == "roi_table":
-            label_str = obsname
-            region = convert_indices_to_regions(roi_idlist[i])
-
-        # Load label image of object to expand as numpy array
-        seg = load_region(
-            data_zyx=label_dask,
-            region=region,
-            compute=compute,
-        )
-
-        if mask_input and table_type == "masking_roi_table":
-            # Mask objects by parent group_by object
-            seg, parent_mask = mask_by_parent_object(
-                seg, mask_dask, mask_idlist, i, label_str
-            )
+        if mask_input:
+            seg = masked_image.get_roi_masked(label=label_int)
+        else:
+            seg = masked_image.get_roi(label=label_int)
 
         ##############
         # Perform label expansion  ###
@@ -283,70 +188,37 @@ def expand_labels(
             expand_in_z=expand_in_z,
         )
 
-        if mask_output and table_type == "masking_roi_table":
+        if mask_output:
+            parent_mask = parent_masked_image.get_roi_masked(label=label_int)
+
+            parent_mask[parent_mask > 0] = 1  # Binarize
+
             seg_expanded = seg_expanded * parent_mask
 
-        origin_zyx = tuple(s.start for s in region)
-
-        bbox_df = array_to_bounding_box_table(
-            seg_expanded,
-            label_pixmeta,
-            origin_zyx=origin_zyx,
-        )
-
-        bbox_dataframe_list.append(bbox_df)
-
-        logger.info(f"Expanded label(s) in region {label_str} by {distance} pixels.")
+        logger.info(f"Expanded label(s) in region {label_string} by {distance} pixels.")
 
         ##############
         # Save labels ###
         ##############
-
-        # Store labels as new label map in zarr
-        # IF mask_output=False and expanded labels extend beyond parent label, note that pixels of overlap between
-        # children of neighboring parents will be overwritten by the last written object.
-
-        save_new_label_with_overlap(
-            seg_expanded,
-            new_label3d_array,
-            zarr_url,
-            output_label_name,
-            region,
-            compute,
+        # Save ROI to disk using dask _to_zarr, not ngio
+        region = roi_to_pixel_slices(roi, spacing)
+        save_new_label_image_with_overlap(
+            seg_expanded, zarr_url, output_label_name, region
         )
 
     ##############
     # Build pyramid and save new masking ROI table of expanded labels ###
     ##############
-    # Starting from on-disk highest-resolution data, build and write to disk a pyramid of coarser levels
-    build_pyramid(
-        zarrurl=f"{zarr_url}/labels/{output_label_name}",
-        overwrite=True,
-        num_levels=label_ngffmeta.num_levels,
-        coarsening_xy=label_ngffmeta.coarsening_xy,
-        chunksize=chunks,
-        aggregation_function=np.max,
-    )
 
-    logger.info(
-        f"Built a pyramid for the {zarr_url}/labels/{output_label_name} label image"
-    )
+    # Build pyramids
+    expanded_label_img = ome_zarr.get_label(name=output_label_name)
+    expanded_label_img.consolidate()
+    logger.info(f"Built pyramid for the {output_label_name} label image")
 
-    bbox_table = save_masking_roi_table_from_df_list(
-        bbox_dataframe_list,
-        zarr_url,
-        output_roi_table_name,
-        output_label_name,
-        overwrite=True,
-    )
-
-    logger.debug(
-        pd.DataFrame(
-            bbox_table.X,
-            index=bbox_table.obs_vector("label"),
-            columns=bbox_table.var_names,
-        )
-    )
+    # Make ROI table from expanded label image
+    masking_table = ome_zarr.build_masking_roi_table(output_label_name)
+    ome_zarr.add_table(output_roi_table_name, masking_table, overwrite=True)
+    logger.info(f"Saved new masking ROI table as {output_roi_table_name}")
 
     logger.info(f"End expand_labels task for {zarr_url}/labels/{label_name_to_expand}")
 
