@@ -34,8 +34,7 @@ def expand_labels(
     # Task-specific arguments
     label_name_to_expand: str,
     new_label_name: Optional[str] = None,
-    roi_table: str = "org_ROI_table_linked",
-    masking_label_map: Union[str, None] = None,
+    parent_roi_table_name: str = "",
     mask_input: bool = False,
     mask_output: bool = False,
     expand_by_pixels: Union[int, None] = None,
@@ -64,15 +63,11 @@ def expand_labels(
         label_name_to_expand: Label name of segmentation to be expanded.
         new_label_name: Optionally new name for expanded label.
             If left None, default is {label_name_to_expand}_expanded
-        roi_table: Name of the ROI table used to iterate over objects and load object regions. If a table of type
+        parent_roi_table_name: Name of the ROI table used to iterate over objects and load object regions. If a table of type
             "roi_table" is passed, e.g. well_ROI_table, all objects for each region in the table will be loaded
             and expanded simultaneously. If a table of type "masking_roi_table" is passed, e.g. a segmentation
             ROI table, the task iterates over these objects and loads only the children (i.e. label_name_to_expand) that
             belong to the parent object.
-        masking_label_map: Label name of segmented objects that are parents of label_name. This input is
-            mandatory if a roi table of type "masking_roi_table" is provided. It is the name of the label map
-            that corresponds to the input ROI table. The masking_label_map will be used to mask label_name_to_expand
-            objects, to only select children belonging to given parent.
         mask_input: If True, input non-expanded label is masked by parent label prior to expansion. If True, this
             selects children belonging to a given parent. However, this may crop input in cases where parent mask
             segmentation is not perfect.
@@ -124,7 +119,9 @@ def expand_labels(
     ome_zarr = open_ome_zarr_container(zarr_url)
 
     # Load ROI tables
-    parent_roi_table = ome_zarr.get_table(roi_table, check_type="generic_roi_table")
+    parent_roi_table = ome_zarr.get_table(
+        parent_roi_table_name, check_type="generic_roi_table"
+    )
     parent_label_name = Path(parent_roi_table._meta.region.path).name
 
     # Load label image to expand
