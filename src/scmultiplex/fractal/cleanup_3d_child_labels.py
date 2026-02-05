@@ -146,6 +146,9 @@ def cleanup_3d_child_labels(
         ##############
         # Repair uint16 clipped labels  ###
         ##############
+        # TODO: This assumes that order of loaded objects follows order of segmentation, so that child label IDs are
+        #  monotonically increasing for each parent ROI.
+
         if repair_uint16_clipped_labels:
 
             max_label = np.amax(seg)
