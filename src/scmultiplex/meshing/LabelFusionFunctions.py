@@ -6,10 +6,17 @@
 #                                                                            #
 ##############################################################################
 
+import dask
 import dask.array as da
 import numpy as np
 import pandas as pd
-from scipy.ndimage import binary_erosion, binary_fill_holes, distance_transform_edt
+from dask_image.ndmeasure import label as dask_label
+from scipy.ndimage import (
+    binary_erosion,
+    binary_fill_holes,
+    distance_transform_edt,
+    generate_binary_structure,
+)
 from skimage.draw import polygon
 from skimage.exposure import rescale_intensity
 from skimage.filters import gaussian, threshold_otsu
@@ -27,6 +34,7 @@ from scmultiplex.meshing.FilterFunctions import (
     remove_border,
     remove_xy_pad,
 )
+from scmultiplex.utils.ngio_utils import restore_squeezed_axes, squeeze_with_record
 
 
 def get_expandby_pixels(seg, expandby_factor):
@@ -121,6 +129,29 @@ def fuse_labels(seg, expandby_factor):
 
 
 def fill_holes_by_slice(seg):
+    """
+    Fill holes in each 2D slice of a 3D binary array.
+
+    This function processes a 3D array slice by slice along the first axis (Z-axis),
+    filling any holes in each 2D slice. Holes are defined as background regions
+    (zeros) that are completely surrounded by foreground (non-zero) pixels.
+
+    Parameters
+    ----------
+    seg : array_like
+        Input 3D binary array of shape (Z, Y, X). Must be exactly 3-dimensional. It can also be a 2D image with
+        shape (1, Y, X).
+
+        The array is expected to have non-zero values for foreground and zero for background.
+
+    Returns
+    -------
+    seg_filled : np.ndarray
+        A 3D array of the same shape as `seg` with holes filled in each slice.
+    """
+    if seg.ndim != 3:
+        raise ValueError(f"Input array must be 3D, got shape {seg.shape}")
+
     # Initialize empty array
     seg_filled = np.zeros_like(seg)
     # Iterate over each zslice in image
@@ -131,6 +162,31 @@ def fill_holes_by_slice(seg):
 
 
 def fill_holes_by_slice_multi_instance(seg):
+    """
+    Fill holes in each labeled object of a 3D segmentation array, slice by slice.
+
+    This function operates on a labeled 3D segmentation array where each non-zero
+    integer represents a distinct object instance. For each label, a binary mask
+    is created and holes are filled independently in each 2D slice (along the Z-axis).
+    The filled masks are then recombined into a single labeled output array.
+
+    This ensures that holes are filled **per instance**, preventing neighboring
+    objects from being merged.
+
+    Parameters
+    ----------
+    seg : array_like
+        Input 3D label map of shape (Z, Y, X). Must be exactly 3-dimensional.
+        It can also be a 2D image with shape (1, Y, X).
+        Zero is treated as background, and all positive integer values are treated
+        as separate object labels.
+
+    Returns
+    -------
+    filled_array : np.ndarray
+        A 3D labeled array of the same shape as `seg`, where holes have been
+        filled independently for each object label on a per-slice basis.
+    """
     unique_labels = list(set(seg.ravel()) - {0})  # drop 0 background
     filled_array = np.zeros_like(seg)
     for lab in unique_labels:
@@ -568,32 +624,165 @@ def select_label(seg, label_str):
     return seg
 
 
-def simple_fuse_labels(label_dask, connectivity, fill_holes):
+def simple_fuse_labels(label_dask, connectivity):
     dtype = label_dask.dtype
-    dtype_max = np.iinfo(dtype).max
+
+    # Remove axes of dimension 1
+    label_dask, axes = squeeze_with_record(label_dask)
+    rank = label_dask.ndim
 
     # Set all values > 0 to True
-    binary_array = label_dask > 0  # binary boolean array
-    binary_numpy = binary_array.compute()
+    binary_dask = label_dask > 0  # binary boolean array
 
-    # Default connectivity is maximum based on array dimensions
-    if connectivity is None:
-        connectivity = binary_numpy.ndim
+    if connectivity is not None:
+        if connectivity > binary_dask.ndim:
+            raise ValueError(
+                "Connectivity must not be greater than number of array dimensions. Check user input."
+            )
+        structure = generate_binary_structure(rank=rank, connectivity=connectivity)
+    else:
+        structure = None
 
-    # Apply skimage label function
-    fused_numpy, label_count = label(
-        binary_numpy, background=0, return_num=True, connectivity=connectivity
-    )
+    # Run Dask-based connected components
+    fused_dask, label_count = dask_label(binary_dask, structure=structure)
 
-    if label_count > dtype_max:
+    # Add back axes of dimension 1
+    fused_dask = restore_squeezed_axes(fused_dask, axes)
+
+    # Cast to original dtype lazily
+    fused_dask = fused_dask.astype(dtype)
+
+    return fused_dask, label_count, rank
+
+
+def get_label_mapping_from_block(
+    block1: np.ndarray,
+    block2: np.ndarray,
+) -> dict:
+    """
+    Build a mapping from nonzero values in a single block of array_1 to
+    the corresponding values in array_2, recording only the first occurrence
+    of each label within the block.
+
+    This function operates on NumPy array chunks and is intended to be
+    used with Dask's delayed computation to process large arrays without
+    loading the entire array into memory.
+
+    Parameters
+    ----------
+    block1 : np.ndarray
+        A chunk of the first array (e.g., a label array). Can be 2D or 3D.
+        Nonzero values are considered foreground labels; zeros are ignored.
+
+    block2 : np.ndarray
+        A chunk of the second array, of the same shape as `block1`.
+        Each nonzero pixel in `block1` is mapped to the corresponding value
+        in `block2`.
+
+    Returns
+    -------
+    mapping : dict
+        Dictionary mapping each unique nonzero value in `block1` to its
+        corresponding value in `block2` based on the first occurrence in the block.
+        Keys and values are Python integers.
+
+    Notes
+    -----
+    - Only the first occurrence of each key in the block is recorded.
+    - Works efficiently with small or large array chunks.
+    - Does not operate on full Dask arrays directly.
+
+    Example
+    -------
+    >> block1 = np.array([[0, 1], [2, 1]])
+    >> block2 = np.array([[0, 10], [20, 15]])
+    >> get_label_mapping_from_block(block1, block2)
+    {1: 10, 2: 20}
+    """
+    mapping = {}
+    pix_nonzero = np.nonzero(block1)  # tuple of arrays (z, y, x)
+
+    # Iterate over non-zero pixels
+    for idx in zip(*pix_nonzero):
+        key = block1[idx].item()
+        value = block2[idx].item()
+        if key not in mapping:
+            mapping[key] = value
+
+    return mapping
+
+
+def get_label_mapping_dask(
+    array_1: da.array,
+    array_2: da.array,
+) -> dict:
+    """
+    Build a global mapping from values in `array_1` to corresponding values
+    in `array_2` by processing large arrays in chunks with Dask.
+
+    Each unique nonzero value in `array_1` is mapped to its corresponding
+    value in `array_2` based on the first occurrence. Uses Dask delayed
+    computation to merge per-chunk mappings into a single global dictionary.
+
+    Parameters
+    ----------
+    array_1 : dask.array.Array
+        The first array (e.g., a label array). Nonzero values are considered
+        foreground labels; zeros are ignored.
+        Must be the same shape as `array_2`.
+
+    array_2 : dask.array.Array
+        The second array, of the same shape as `array_1`. Provides the values
+        corresponding to each label in `array_1`.
+
+    Returns
+    -------
+    global_mapping : dict
+        Dictionary mapping each unique nonzero value in `array_1` to the
+        corresponding value in `array_2` based on the first occurrence across
+        all chunks. Keys and values are Python integers.
+
+    Notes
+    -----
+    - This function is memory-efficient because it processes each chunk independently.
+    - Each chunk returns a dictionary of mappings, and the final global
+      mapping preserves the first occurrence across the entire array.
+    - Works for 2D or 3D arrays.
+    - Dask chunking must align between `array_1` and `array_2` so that corresponding
+      pixels are in the same chunk.
+    - Returns a fully computed Python dict; large arrays themselves are not loaded into memory.
+
+    Example
+    -------
+    >> a1 = da.from_array(np.array([[0, 1], [2, 1]]), chunks=(1, 2))
+    >> a2 = da.from_array(np.array([[0, 10], [20, 15]]), chunks=(1, 2))
+    >> get_label_mapping_dask(a1, a2)
+    {1: 10, 2: 20}
+    """
+    if array_1.chunks != array_2.chunks:
         raise ValueError(
-            f"Number of identified labels {label_count} exceeds {dtype} maximum of {dtype_max}."
+            f"Chunks of array_1 {array_1.chunks} and array_2 {array_2.chunks} do not match. "
+            "Dask arrays must have the same chunking for label mapping. Were unfused and fused images written by "
+            "different zarr pyramid writers?"
         )
+    # Convert Dask array chunks to delayed objects
+    blocks_1 = array_1.to_delayed().ravel()
+    blocks_2 = array_2.to_delayed().ravel()
 
-    if fill_holes:
-        fused_numpy = fill_holes_by_slice_multi_instance(fused_numpy)
+    # Apply per-block mapping function
+    delayed_dicts = [
+        dask.delayed(get_label_mapping_from_block)(b1, b2)
+        for b1, b2 in zip(blocks_1, blocks_2)
+    ]
 
-    # Convert back to dask to save on disk with same chunk sizes and dtype as input label map
-    fused_dask = da.from_array(fused_numpy, chunks=label_dask.chunksize).astype(dtype)
+    # Compute all chunk-level dicts
+    block_mappings = dask.compute(*delayed_dicts)
 
-    return fused_numpy, fused_dask, label_count, connectivity
+    # Merge all block dicts into a single global mapping
+    global_mapping = {}
+    for d in block_mappings:
+        for k, v in d.items():
+            if k not in global_mapping:
+                global_mapping[k] = v
+
+    return global_mapping

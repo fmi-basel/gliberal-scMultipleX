@@ -37,6 +37,7 @@ from scmultiplex.linking.OrganoidLinkingFunctions import (
     get_rotation_only_transform,
     get_sorted_label_centroids,
     is_identity_transform,
+    pad_to_match_maximum_xy_extent,
     resize_array_to_shape,
     select_rotating_euclidean_transform,
     transform_tform_to_scipy_affine,
@@ -49,7 +50,7 @@ logger = logging.getLogger(__name__)
 
 
 @validate_call
-def shift_by_nonrigid_shift(
+def shift_by_rigid_shift(
     *,
     # Fractal arguments
     zarr_url: str,
@@ -63,7 +64,7 @@ def shift_by_nonrigid_shift(
     image_suffix_to_add: Optional[str] = None,
     only_apply_rotation: bool = False,
     only_apply_if_rotation_present: bool = False,
-    registration_name: str = "nonrigid_2D",
+    registration_name: str = "rigid_2D",
     overwrite_folder: bool = False,
 ):
     """
@@ -186,10 +187,11 @@ def shift_by_nonrigid_shift(
 
     deltas = dst - src
     logger.info(
-        f"Detected average shift between centroids: {np.mean(deltas, axis=0)} [x,y]"
+        f"Quality control: Average shift between point cloud centroids = {np.mean(deltas, axis=0)} [x,y]"
     )
 
     # Calculate rigid Euclidean mapping from reference (src) to moving (dst) point cloud
+    logger.info("Computing 2D EuclideanTransform (rigid transformation)...")
     tform = estimate_transform("euclidean", src, dst)
     angle_deg, translation = get_euclidean_metrics(tform)
 
@@ -273,31 +275,43 @@ def shift_by_nonrigid_shift(
 
         new_label.set_array(label_volume_dask)
     else:
-        # Apply rigid transformation
-        chunk_size_z = reference_img.chunks[0]
-        logger.info(f"Loading xy slices by z chunk size {chunk_size_z}")
+        # Apply 2D rigid transformation by z slice in each z-block, resize, write each chunk to disk
+
+        # Note: cannot parallelize this transform with dask over chunks, because transform can shift or rotate
+        # image beyond chunk border.
+        # Instead, load all xy chunks for a small z-range (specified by z-chunking
+        # distance), apply transform, and save. This is valid since transform is only applied XY, not in Z.
+        # TODO: specify custom z extent in task input; currently z extent defaults to z-chunking of array.
+
+        logger.info(
+            f"Applying rigid transformation to reference image {reference_zarr_url}."
+        )
 
         # Get level 0 path of new label to save to
         label_level0_zarr_url = os.path.join(zarr_url, new_label.zarr_array.path)
 
-        # Apply 2D rigid transformation by z slice in each chunk, resize, write each chunk to disk
+        # Zero-pad reference image in the case that moving image is larger. This ensures that transformed reference
+        # image is not cropped when the transform shifts the image beyond image border.
+
+        chunk_size_z = reference_img.chunks[0]
         logger.info(
-            f"Resize each zchunk in XY from reference shape {reference_img.shape[-2:]} to moving shape {moving_img.shape[-2:]}."
+            f"Starting iteration over z-blocks of size "
+            f"[z={chunk_size_z}, y={reference_img.shape[-2]}, x={reference_img.shape[-1]}]..."
         )
 
-        logger.info(
-            f"Apply rigid transformation by zslice and by zchunk to reference image {reference_zarr_url}."
+        label_volume_dask = pad_to_match_maximum_xy_extent(
+            label_volume_dask, moving_img.shape[-3:]
         )
-        logger.info("Start apply and save to disk...")
 
-        # Loop over z chunks
+        # Loop over z blocks: this loads full z-block of reference label into memory from disk
         for z_start, z_stop, z_data in iterate_z_chunks(label_volume_dask):
 
             np_chunk_to_save = np.empty_like(
                 z_data
-            )  # init empty array same size as z chunk
-            # Loop over zslices in z chunk
+            )  # init empty array same size as z-block
+            # Loop over zslices in z-block
             for z, label_slice in enumerate(z_data):
+                # Apply transform to each z-slice of full well image
                 np_chunk_to_save[z] = affine_transform(
                     label_slice,  # source image
                     matrix=matrix,  # 2x2 rotation
@@ -317,19 +331,9 @@ def shift_by_nonrigid_shift(
                 image_url_level_0=label_level0_zarr_url,
             )
 
-        # for z, label_slice in enumerate(label_volume):
-        #     label_slice_transformed = affine_transform(
-        #         label_slice,  # source image
-        #         matrix=matrix,  # 2x2 rotation
-        #         offset=offset,  # translation
-        #         order=0,  # nearest-neighbor (good for labels)
-        #         mode="constant",  # fill outside with constant value
-        #         cval=0,  # the constant value to use (e.g. background label)
-        #     )
-        #
-        #     label_slice_transformed = resize_array_to_shape(label_slice_transformed, moving_img.shape[-2:])
-        #
-        #     save_z_slice_to_label(new_zslice=label_slice_transformed, zslice_index=z, image_url_level_0=label_level0_zarr_url)
+    logger.info(
+        f"End apply transform. Resized xy dimensions of transformed image {reference_img.shape[-2:]} to match destination shape {moving_img.shape[-2:]}."
+    )
 
     # Build pyramids for label image
     new_label.consolidate()
@@ -373,6 +377,6 @@ if __name__ == "__main__":
     from fractal_tasks_core.tasks._utils import run_fractal_task
 
     run_fractal_task(
-        task_function=shift_by_nonrigid_shift,
+        task_function=shift_by_rigid_shift,
         logger_name=logger.name,
     )

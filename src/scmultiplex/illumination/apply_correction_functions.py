@@ -26,9 +26,12 @@ def load_correction_adata(
     Output: anndata object of the z-illumination correction table.
     """
     # Load z-illumination correction table for this channel and perform checks
-    correction_adata = read_table_from_zarrurl(
+    correction_adata, zattrs = read_table_from_zarrurl(
         correction_tables_zarr_url, correction_table_name
     )
+
+    instance_key = zattrs["instance_key"]  # e.g. "label"
+
     # check that number of entries in anndata matches the z-stack size of image
     adata_z_count = correction_adata.X.shape[1]
     if adata_z_count != full_z_count:
@@ -37,8 +40,9 @@ def load_correction_adata(
             f"{adata_z_count} entries, while zarr image has {full_z_count} z-slices."
         )
 
-    correction_labels = correction_adata.obs["label"].to_numpy()
-    seg_labels = label_adata.obs["label"].to_numpy()
+    # TODO: mess with instance keys; take care when refactor to NGIO
+    correction_labels = correction_adata.obs[instance_key].to_numpy()
+    seg_labels = label_adata.obs[instance_key].to_numpy()
     if not np.all(np.isin(correction_labels, seg_labels)):
         raise ValueError(
             "Not all objects of illumination correction table are present in the input segmentation "

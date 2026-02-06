@@ -176,8 +176,8 @@ def apply_z_illumination_correction(
     output_image_group = zarr.group(output_zarr_url)
     output_image_group.attrs.put(img_group.attrs.asdict())
 
-    # Copy labels, plots, and meshes from origin zarr
-    folders_to_copy = ["labels", "plots", "meshes"]
+    # Copy labels, plots, registration, and meshes from origin zarr
+    folders_to_copy = ["labels", "plots", "meshes", "registration"]
 
     for folder in folders_to_copy:
         copy_folder_from_zarrurl(

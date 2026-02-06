@@ -1384,19 +1384,20 @@
             "type": "string",
             "description": "Optionally new name for expanded label. If left None, default is {label_name_to_expand}_expanded"
           },
-          "roi_table": {
-            "default": "org_ROI_table_linked",
-            "title": "Roi Table",
+          "parent_roi_table_name": {
+            "default": "",
+            "title": "Parent Roi Table Name",
             "type": "string",
             "description": "Name of the ROI table used to iterate over objects and load object regions. If a table of type \"roi_table\" is passed, e.g. well_ROI_table, all objects for each region in the table will be loaded and expanded simultaneously. If a table of type \"masking_roi_table\" is passed, e.g. a segmentation ROI table, the task iterates over these objects and loads only the children (i.e. label_name_to_expand) that belong to the parent object."
           },
-          "masking_label_map": {
-            "title": "Masking Label Map",
-            "type": "string",
-            "description": "Label name of segmented objects that are parents of label_name. This input is mandatory if a roi table of type \"masking_roi_table\" is provided. It is the name of the label map that corresponds to the input ROI table. The masking_label_map will be used to mask label_name_to_expand objects, to only select children belonging to given parent."
+          "mask_input": {
+            "default": false,
+            "title": "Mask Input",
+            "type": "boolean",
+            "description": "If True, input non-expanded label is masked by parent label prior to expansion. If True, this selects children belonging to a given parent. However, this may crop input in cases where parent mask segmentation is not perfect."
           },
           "mask_output": {
-            "default": true,
+            "default": false,
             "title": "Mask Output",
             "type": "boolean",
             "description": "If True, expanded label is masked by parent label. Only used if masking_label_map is provided. Recommended to set as True, to avoid overwriting of children labels between neighboring parents. However, it may lead to expanded results to be cropped by parent mask; in this case, the parent mask can first be expanded."
@@ -1773,7 +1774,6 @@
             "description": "Path or url to the individual OME-Zarr image to be processed."
           },
           "label_name_to_fuse": {
-            "default": "org",
             "title": "Label Name To Fuse",
             "type": "string",
             "description": "Label name of segmentation to be fused."
@@ -1786,17 +1786,24 @@
           "connectivity": {
             "title": "Connectivity",
             "type": "integer",
-            "description": "Maximum number of orthogonal hops to consider a pixel/voxel as a neighbor. Accepted values are ranging from 1 to input.ndim. If None, a full connectivity of input.ndim is used."
+            "description": "Connectivity determines which elements of the output array belong to the structure and thus considered neighbors of the central element during fusion. Accepted values are ranging from 1 to input.ndim. If None, defaults to a squared connectivity = 1, where only connected center faces are considered neighbors (diagonally connected components are considered separated). Maximum connectivity is at input.ndim, when any face, edge, or vertex is considered a neighbor. Follows default behavior of dask_image.ndmeasure.label, with structuring element generated using scipy.ndimage.generate_binary_structure(input.ndim, connectivity)."
+          },
+          "level": {
+            "default": 0,
+            "title": "Level",
+            "type": "integer",
+            "description": "Defaults to full resolution level 0. However, this may lead to out of memory for fusion of large 3D arrays. In this case, setting to a higher pyramid level (e.g. 4) will perform fusion using low-resolution pyramid. The level-0 array will then be relabelled according to this mapping. Note that low-res fusion may yield different results than full-res fusion, since fine spacing between neighboring objects may be lost in the low-level representation!"
           },
           "fill_holes": {
             "default": false,
             "title": "Fill Holes",
             "type": "boolean",
-            "description": "if True, the label image after fusion has holes filled by iterating over slices. Useful for filling any gaps between fused labels."
+            "description": "if True, the new label image (after fusion) has holes filled by iterating over z-slices. Useful for filling any gaps between fused labels."
           }
         },
         "required": [
-          "zarr_url"
+          "zarr_url",
+          "label_name_to_fuse"
         ],
         "type": "object",
         "title": "FuseTouchingLabels"
@@ -2227,14 +2234,9 @@
             "type": "string",
             "description": "Label name child objects (e.g. nuclei) to be cleaned."
           },
-          "parent_label_name": {
-            "title": "Parent Label Name",
-            "type": "string",
-            "description": "Label name of segmented objects that are parents of child_label_name. child_label_name objects will be masked and grouped by this object. For example, when parent_label_name = 'org', the nuclear segmentation is masked by the organoid parent and all nuclei belonging to the parent are loaded as a label image."
-          },
-          "parent_roi_table": {
+          "parent_roi_table_name": {
             "default": "org_ROI_table_linked",
-            "title": "Parent Roi Table",
+            "title": "Parent Roi Table Name",
             "type": "string",
             "description": "Name of the ROI table used to iterate over objects and load object regions. This is the ROI table that corresponds to the parent_label_name objects."
           },
@@ -2269,8 +2271,7 @@
           }
         },
         "required": [
-          "zarr_url",
-          "parent_label_name"
+          "zarr_url"
         ],
         "type": "object",
         "title": "Cleanup3dChildLabels"
@@ -2399,7 +2400,7 @@
       "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
     },
     {
-      "name": "scMultiplex Shift by Non-Rigid Shift",
+      "name": "scMultiplex Shift by Rigid Shift",
       "category": "Registration",
       "modality": "HCS",
       "tags": [
@@ -2407,9 +2408,9 @@
         "2D",
         "3D"
       ],
-      "docs_info": "### Purpose\n- Copy and shift 2D or 3D label image from reference round to moving round(s) using non-rigid transform calculated from 2D label images\n- Transform (rotation + translation) label using on the fly 2D (xy) non-rigid transformation of the linked 2D MIP label image\n- Same XY transform applied across all Z for 3D labels\n- 2D label image must be linked across rounds to have same number and matching ID's of objects\n- Allows user to propogate segmentation run only on reference round to subsequent rounds, using non-rigid registration\n- Useful for copying over organoid-level segmentation prior to more high-res registration on single-cell level\n- Can be more accurate than shift_by_shift task since takes into account rotation.\n- Adds 0 padding when chunks shifted beyond image canvas edge.\n\n### Outputs\n- A new **label image** saved as a label in moving rounds with '_shifted' suffix\n- A new corresponding **masking ROI table** saved as `{new_label_name}_ROI_table` in the moving rounds\n- Saves 2D non-rigid transform in 'registration' folder of moving image following NGFF coordinateTransformations specification: JSON file of sequence (rotation, translation) for forward transform from moving to reference image in physical units (y,x).\n\n### Limitations\n- Applies x,y translation and rotation only (non-rigid Euclidean transformation only; no scaling or warping)\n- No z transformation: assumes same x,y translations applied across z\n- Objects in 2D MIP image must be consensus linked, so that there is equal object number with matching IDs between rounds.\n",
+      "docs_info": "### Purpose\n- Copy and shift 2D or 3D label image from reference round to moving round(s) using rigid transform (EuclideanTransform) calculated from 2D label images\n- Transform (rotation + translation) label using on the fly 2D (xy) rigid transformation of the linked 2D MIP label image\n- Same XY transform applied across all Z for 3D labels\n- 2D label image must be linked across rounds to have same number and matching ID's of objects\n- Allows user to propogate segmentation run only on reference round to subsequent rounds, using rigid registration\n- Useful for copying over organoid-level segmentation prior to more high-res registration on single-cell level\n- Can be more accurate than shift_by_shift task since takes into account rotation.\n- Adds 0 padding when chunks shifted beyond image canvas edge.\n\n### Outputs\n- A new **label image** saved as a label in moving rounds with '_shifted' suffix\n- A new corresponding **masking ROI table** saved as `{new_label_name}_ROI_table` in the moving rounds\n- Saves 2D rigid transform in 'registration' folder of moving image following NGFF coordinateTransformations specification: JSON file of sequence (rotation, translation) for forward transform from moving to reference image in physical units (y,x).\n\n### Limitations\n- Applies x,y translation and rotation only (rigid Euclidean transformation only; no scaling or warping)\n- No z transformation: assumes same x,y translations applied across z\n- Objects in 2D MIP image must be consensus linked, so that there is equal object number with matching IDs between rounds.\n",
       "executable_non_parallel": "fractal/init_select_multiplexing_pairs.py",
-      "executable_parallel": "fractal/shift_by_nonrigid_shift.py",
+      "executable_parallel": "fractal/shift_by_rigid_shift.py",
       "meta_non_parallel": {
         "cpus_per_task": 1,
         "mem": 1000
@@ -2520,7 +2521,7 @@
             "description": "If true, EuclideanTransform is applied (both translation and rotation) to if non-zero rotation is detected in the image."
           },
           "registration_name": {
-            "default": "nonrigid_2D",
+            "default": "rigid_2D",
             "title": "Registration Name",
             "type": "string",
             "description": "Name of folder that contains warp map .npz files per moving object. Created as subfolder of 'registration' folder."
@@ -2538,7 +2539,7 @@
           "label_name_to_shift"
         ],
         "type": "object",
-        "title": "ShiftByNonrigidShift"
+        "title": "ShiftByRigidShift"
       },
       "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
     },
