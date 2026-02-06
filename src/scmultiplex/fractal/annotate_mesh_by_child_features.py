@@ -29,6 +29,7 @@ from scmultiplex.meshing.MeshFunctions import (
     read_stl_polydata,
     read_vtp_polydata,
 )
+from scmultiplex.meshing.MeshProjection import assign_vertices_to_nuclei
 
 logger = logging.getLogger(__name__)
 ngio_logger.setLevel("ERROR")
@@ -50,6 +51,7 @@ def annotate_mesh_by_child_features(
     parent_of_child_colname: str = "ROI_label",
     new_mesh_name: str,
     save_nonsurface_labels: bool = True,
+    maximum_distance: float = 20.0,
 ) -> dict[str, Any]:
     """
     Annotate parent mesh (.stl) vertices by child features, save as .vtp mesh.
@@ -91,6 +93,10 @@ def annotate_mesh_by_child_features(
             defined in the feature extraction task.
         new_mesh_name: Name of the new mesh folder where annotated .vtp meshes are saved.
         save_nonsurface_labels: If True, saves a .npy for each organoid id with list of label ids to remove.
+        maximum_distance: Only used if annotate_mesh_points_by_all_projected_cells is True. Sets distance cutoff
+            in same units as mesh (typically physical units, um) above which a nucleus is not mapped to mesh surface.
+            This prevents debris from object center to be mapped to surface. For example, if set to 20, cell centroids
+            that are more than 20 away from closest mesh point are not mapped to surface.
 
     """
     logger.info(
@@ -98,6 +104,16 @@ def annotate_mesh_by_child_features(
         f"Annotating meshes in {parent_mesh_name=} with features {annotate_by_features} from feature table "
         f"{child_feature_table_name=}."
     )
+
+    if (
+        annotate_mesh_points_by_closest_cell
+        == annotate_mesh_points_by_all_projected_cells
+    ):
+        raise ValueError(
+            "Exactly one of "
+            "'annotate_mesh_points_by_closest_cell' or "
+            "'annotate_mesh_points_by_all_projected_cells' must be True."
+        )
 
     # Zarr_url is the url of the reference round
     ome_zarr = open_ome_zarr_container(zarr_url)
@@ -137,6 +153,11 @@ def annotate_mesh_by_child_features(
     # Intialize dictionary in case saving nonsurface labels
     nonsurface_dict = {}
 
+    if annotate_mesh_points_by_closest_cell:
+        logger.info("Starting assignment of mesh points to closest cell centroid.")
+    elif annotate_mesh_points_by_all_projected_cells:
+        logger.info("Starting projection of cell centroids to mesh points.")
+
     # for every object in ROI table...
     for roi in parent_roi_table.rois():
         label_string = roi.name
@@ -175,6 +196,7 @@ def annotate_mesh_by_child_features(
             continue
 
         # numpy (N_cells, 3)
+        # physical units (um)
         feat_xyz = feat_sel_df[
             ["x_pos_pix", "y_pos_pix", "z_pos_pix_scaled"]
         ].to_numpy()
@@ -206,8 +228,22 @@ def annotate_mesh_by_child_features(
             distances, indices = tree.query(mesh_xyz)
 
         if annotate_mesh_points_by_all_projected_cells:
-            print("TBD")
 
+            vtk_polys = polydata.GetPolys()
+            # [num_points_in_face, idx0, idx1, idx2, num_points_in_face, idx3, idx4, idx5...]
+            polys_array = numpy_support.vtk_to_numpy(vtk_polys.GetData())  # 1D
+
+            if not np.all(polys_array[::4] == 3):
+                raise ValueError("Non-triangular faces detected.")
+
+            # Reshape to (-1, 4): [idx0, idx1, idx2]
+            mesh_faces = polys_array.reshape(-1, 4)[
+                :, 1:
+            ]  # drop first column num_points_in_face
+
+            indices, proj_vertex_ids = assign_vertices_to_nuclei(
+                mesh_xyz, mesh_faces, feat_xyz, max_dist=maximum_distance
+            )
         ##############
         # Annotate point data with feature values  ###
         ##############
@@ -278,7 +314,7 @@ def annotate_mesh_by_child_features(
         # Save name is the organoid label id
         save_name = f"{int(label_string)}.vtp"
         export_vtk_polydata(os.path.join(save_mesh_path, save_name), polydata)
-        logger.info(f"Saved mesh as {save_name}")
+        logger.info(f"Saved mesh as '{save_name}'")
 
         # Save nonsurface labels
         if save_nonsurface_labels and nonsurface_dict:
