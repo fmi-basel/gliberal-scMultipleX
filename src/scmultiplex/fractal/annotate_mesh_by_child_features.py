@@ -11,6 +11,7 @@ Annotate parent mesh vertices by child features.
 
 import logging
 import os
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -23,7 +24,11 @@ from scipy.spatial import cKDTree
 from vtkmodules.util import numpy_support
 
 from scmultiplex.fractal.fractal_helper_functions import extract_acq_info
-from scmultiplex.meshing.MeshFunctions import export_vtk_polydata, read_stl_polydata
+from scmultiplex.meshing.MeshFunctions import (
+    export_vtk_polydata,
+    read_stl_polydata,
+    read_vtp_polydata,
+)
 
 logger = logging.getLogger(__name__)
 ngio_logger.setLevel("ERROR")
@@ -103,6 +108,9 @@ def annotate_mesh_by_child_features(
         parent_roi_table_name, check_type="generic_roi_table"
     )
 
+    # Set input mesh directory
+    mesh_dir = Path(zarr_url) / "meshes" / parent_mesh_name
+
     logger.info(
         f"Reading features from round(s): {[extract_acq_info(url) for url in init_args.zarr_url_list]}"
     )
@@ -134,14 +142,21 @@ def annotate_mesh_by_child_features(
         label_string = roi.name
         label_dtyped = np.dtype(col_dtype).type(label_string)
 
-        mesh_fname = label_string + ".stl"
-        mesh_path = f"{zarr_url}/meshes/{parent_mesh_name}/{mesh_fname}"
-
-        # Check that mesh for corresponding label id exists, if not continue to next id
-        if os.path.isfile(mesh_path):
-            polydata = read_stl_polydata(mesh_path)
+        # Load parent object mesh
+        mesh_extensions = [".stl", ".vtk", ".vtp"]  # order of preference
+        for ext in mesh_extensions:
+            mesh_path = mesh_dir / f"{label_string}{ext}"
+            if mesh_path.is_file():
+                if ext == ".stl":
+                    polydata = read_stl_polydata(mesh_path)
+                else:
+                    polydata = read_vtp_polydata(mesh_path)
+                break
         else:
-            logger.warning(f"No mesh found for label {label_string}")
+            # No mesh found for any of the supported extensions
+            logger.warning(
+                f"No mesh found for label {label_string}. Supported file types: {mesh_extensions}"
+            )
             continue
 
         ##############
