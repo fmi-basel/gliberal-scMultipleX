@@ -7,12 +7,15 @@
 #                                                                            #
 ##############################################################################
 
+from pathlib import Path
+from typing import Optional
 
 import numpy as np
 import vtk
 from scipy.ndimage import find_objects
 from scipy.spatial.distance import cdist
 from tqdm import tqdm
+from vtk import vtkPolyData
 from vtkmodules.numpy_interface import dataset_adapter as dsa
 from vtkmodules.util import numpy_support
 from vtkmodules.vtkCommonCore import VTK_DOUBLE, vtkIdList
@@ -571,3 +574,40 @@ def read_vtp_polydata(fpath):
     reader.Update()
     polydata = reader.GetOutput()
     return polydata
+
+
+def load_mesh_as_polydata(
+    mesh_dir: Path,
+    label_string: str,
+) -> Optional[vtkPolyData]:
+    """
+    Load a mesh file for a given label and return it as polydata.
+
+    The function searches for a mesh file with supported extensions
+    (in order of preference: .stl, .vtk, .vtp) in the specified directory.
+    The first matching file found is loaded and returned as polydata.
+
+    Parameters
+    ----------
+    mesh_dir : pathlib.Path
+        Directory containing mesh files.
+    label_string : str
+        Base filename (without extension) identifying the mesh.
+
+    Returns
+    -------
+    polydata : object or None
+        Loaded polydata object if a mesh file is found; otherwise None.
+    """
+
+    # Load parent object mesh
+    mesh_extensions = [".stl", ".vtk", ".vtp"]  # order of preference
+    for ext in mesh_extensions:
+        mesh_path = mesh_dir / f"{label_string}{ext}"
+        if mesh_path.is_file():
+            if ext == ".stl":
+                return read_stl_polydata(mesh_path)
+            else:
+                return read_vtp_polydata(mesh_path)
+
+    return None

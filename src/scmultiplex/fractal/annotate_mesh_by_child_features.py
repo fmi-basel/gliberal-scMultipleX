@@ -24,11 +24,7 @@ from scipy.spatial import cKDTree
 from vtkmodules.util import numpy_support
 
 from scmultiplex.fractal.fractal_helper_functions import extract_acq_info
-from scmultiplex.meshing.MeshFunctions import (
-    export_vtk_polydata,
-    read_stl_polydata,
-    read_vtp_polydata,
-)
+from scmultiplex.meshing.MeshFunctions import export_vtk_polydata, load_mesh_as_polydata
 from scmultiplex.meshing.MeshProjection import assign_vertices_to_nuclei
 
 logger = logging.getLogger(__name__)
@@ -164,21 +160,13 @@ def annotate_mesh_by_child_features(
         label_dtyped = np.dtype(col_dtype).type(label_string)
 
         # Load parent object mesh
-        mesh_extensions = [".stl", ".vtk", ".vtp"]  # order of preference
-        for ext in mesh_extensions:
-            mesh_path = mesh_dir / f"{label_string}{ext}"
-            if mesh_path.is_file():
-                if ext == ".stl":
-                    polydata = read_stl_polydata(mesh_path)
-                else:
-                    polydata = read_vtp_polydata(mesh_path)
-                break
-        else:
+        polydata = load_mesh_as_polydata(mesh_dir, label_string)
+
+        if polydata is None:
             # No mesh found for any of the supported extensions
             logger.warning(
-                f"No mesh found for label {label_string}. Supported file types: {mesh_extensions}"
+                f"No mesh found for label {label_string}. Supported file types: [.stl, .vtk, .vtp]."
             )
-            continue
 
         ##############
         # Assign mesh points to nuclei  ###
