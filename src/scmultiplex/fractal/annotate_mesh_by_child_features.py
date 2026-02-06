@@ -179,6 +179,8 @@ def annotate_mesh_by_child_features(
             ["x_pos_pix", "y_pos_pix", "z_pos_pix_scaled"]
         ].to_numpy()
 
+        label_array = feat_sel_df.index.to_numpy()
+
         # get mesh points
         vtk_points = polydata.GetPoints()
         points_array = numpy_support.vtk_to_numpy(
@@ -221,6 +223,15 @@ def annotate_mesh_by_child_features(
             annot_feat_sel_df = annot_feat_df[
                 annot_feat_df[parent_of_child_colname] == label_dtyped
             ]
+
+            annot_label_array = annot_feat_sel_df.index.to_numpy()
+
+            if not np.array_equal(label_array, annot_label_array):
+                raise ValueError(
+                    f"Child label order does not match across rounds. "
+                    f"\nReference labels: {label_array} "
+                    f"\nRound {round_id} labels: {annot_label_array}"
+                )
 
             # For user-specified features to color by...
             for col in annotate_by_features:
