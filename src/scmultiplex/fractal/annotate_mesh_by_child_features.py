@@ -167,6 +167,7 @@ def annotate_mesh_by_child_features(
             logger.warning(
                 f"No mesh found for label {label_string}. Supported file types: [.stl, .vtk, .vtp]."
             )
+            continue
 
         ##############
         # Assign mesh points to nuclei  ###

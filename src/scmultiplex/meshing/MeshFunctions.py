@@ -8,7 +8,7 @@
 ##############################################################################
 
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 import numpy as np
 import vtk
@@ -577,7 +577,7 @@ def read_vtp_polydata(fpath):
 
 
 def load_mesh_as_polydata(
-    mesh_dir: Path,
+    mesh_dir: Union[str, Path],
     label_string: str,
 ) -> Optional[vtkPolyData]:
     """
@@ -589,18 +589,19 @@ def load_mesh_as_polydata(
 
     Parameters
     ----------
-    mesh_dir : pathlib.Path
+    mesh_dir : str or pathlib.Path
         Directory containing mesh files.
     label_string : str
         Base filename (without extension) identifying the mesh.
 
     Returns
     -------
-    polydata : object or None
+    polydata : vtkPolyData or None
         Loaded polydata object if a mesh file is found; otherwise None.
     """
 
-    # Load parent object mesh
+    mesh_dir = Path(mesh_dir)
+
     mesh_extensions = [".stl", ".vtk", ".vtp"]  # order of preference
     for ext in mesh_extensions:
         mesh_path = mesh_dir / f"{label_string}{ext}"
