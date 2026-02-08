@@ -1288,8 +1288,8 @@
             "type": "string",
             "description": "Path or url to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
           },
-          "label_image": {
-            "title": "Label Image",
+          "label_name": {
+            "title": "Label Name",
             "type": "string",
             "description": "Name of the label image to use for measurements. Needs to exist in OME-Zarr file"
           },
@@ -1306,11 +1306,11 @@
             "type": "object",
             "description": "Dictionary of channels to measure. Keys are the names that will be added as prefixes to the measurements, values are another dictionary containing either wavelength_id or channel_label information to allow Fractal to find the correct channel (but not both). Example: {\"C01\": {\"wavelength_id\": \"A01_C01\"}. To only measure morphology, provide an empty dict"
           },
-          "input_ROI_table": {
+          "input_roi_table_name": {
             "default": "well_ROI_table",
-            "title": "Input Roi Table",
+            "title": "Input Roi Table Name",
             "type": "string",
-            "description": "Name of the ROI table to loop over. Needs to exist as a ROI table in the OME-Zarr file. The label that corresponds to this ROI table to used for masking."
+            "description": "Name of the ROI table to loop over. Needs to exist as a ROI table in the OME-Zarr file. If it is a masking ROI table, masking of input is performed. Always mask input."
           },
           "level": {
             "default": 0,
@@ -1345,7 +1345,7 @@
         },
         "required": [
           "zarr_url",
-          "label_image",
+          "label_name",
           "output_table_name"
         ],
         "type": "object",
