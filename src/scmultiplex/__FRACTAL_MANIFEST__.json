@@ -2020,18 +2020,30 @@
             "title": "Init Args",
             "description": "Intialization arguments provided by `init_select_reference_knowing_all`. They contain the all zarr_urls submitted, both ref and moving."
           },
+          "annotate_mesh_points_by_closest_cell": {
+            "default": false,
+            "title": "Annotate Mesh Points By Closest Cell",
+            "type": "boolean",
+            "description": "If True, each mesh point is assigned to the closest child label centroid by Euclidean distance (L2 norm). This prioritizes cells closer to mesh surface and thus may miss cells deeper in tissue."
+          },
+          "annotate_mesh_points_by_all_projected_cells": {
+            "default": false,
+            "title": "Annotate Mesh Points By All Projected Cells",
+            "type": "boolean",
+            "description": "If True, all cell centroids are projected to mesh surface and expanded via Voronoi tesselation. This ensures no cells are missed, but simplifies stratefied epithelium to a 2D plane. While cell boundaries are not accurate, neighborhood relations are preserved."
+          },
           "parent_mesh_name": {
             "title": "Parent Mesh Name",
             "type": "string",
             "description": "Mesh folder name on which annotation is performed. Must contain .stl format meshes whose filename corresponds to label name in ROI table."
           },
-          "parent_roi_table": {
-            "title": "Parent Roi Table",
+          "parent_roi_table_name": {
+            "title": "Parent Roi Table Name",
             "type": "string",
             "description": "Name of the ROI table that corresponds to labels of meshed objects, only used for indexing objects in for loop."
           },
-          "child_feature_table": {
-            "title": "Child Feature Table",
+          "child_feature_table_name": {
+            "title": "Child Feature Table Name",
             "type": "string",
             "description": "Name of the feature table extracted from child objects. Assumes that it contains columns called ['x_pos_pix', 'y_pos_pix', 'z_pos_pix_scaled'] for the x,y,z centroids of each object. Assumes that these centroid units and scaling matches the mesh point units and scaling."
           },
@@ -2059,14 +2071,20 @@
             "title": "Save Nonsurface Labels",
             "type": "boolean",
             "description": "If True, saves a .npy for each organoid id with list of label ids to remove."
+          },
+          "maximum_distance": {
+            "default": 20.0,
+            "title": "Maximum Distance",
+            "type": "number",
+            "description": "Only used if annotate_mesh_points_by_all_projected_cells is True. Sets distance cutoff in same units as mesh (typically physical units, um) above which a nucleus is not mapped to mesh surface. This prevents debris from object center to be mapped to surface. For example, if set to 20, cell centroids that are more than 20 away from closest mesh point are not mapped to surface."
           }
         },
         "required": [
           "zarr_url",
           "init_args",
           "parent_mesh_name",
-          "parent_roi_table",
-          "child_feature_table",
+          "parent_roi_table_name",
+          "child_feature_table_name",
           "annotate_by_features",
           "new_mesh_name"
         ],
@@ -2164,13 +2182,13 @@
             "type": "string",
             "description": "Mesh folder name on which annotation is performed. Must contain .vtp format meshes whose filename corresponds to label name in ROI table. Usually these are grouped child labels per parent object."
           },
-          "parent_roi_table": {
-            "title": "Parent Roi Table",
+          "parent_roi_table_name": {
+            "title": "Parent Roi Table Name",
             "type": "string",
             "description": "Name of the ROI table that corresponds to labels of meshed objects, only used for indexing objects in for loop."
           },
-          "child_feature_table": {
-            "title": "Child Feature Table",
+          "child_feature_table_name": {
+            "title": "Child Feature Table Name",
             "type": "string",
             "description": "Name of the feature table extracted from child objects. Assumes that it contains columns called ['x_pos_pix', 'y_pos_pix', 'z_pos_pix_scaled'] for the x,y,z centroids of each object. Assumes that these centroid units and scaling matches the mesh point units and scaling."
           },
@@ -2198,8 +2216,8 @@
           "zarr_url",
           "init_args",
           "grouped_mesh_name",
-          "parent_roi_table",
-          "child_feature_table",
+          "parent_roi_table_name",
+          "child_feature_table_name",
           "annotate_by_features",
           "new_mesh_name"
         ],
