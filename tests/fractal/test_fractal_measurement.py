@@ -80,9 +80,9 @@ def test_2D_fractal_measurements(
         with pytest.raises(ValueError):
             scmultiplex_feature_measurements(
                 zarr_url=zarr_url,
-                input_ROI_table=input_ROI_table,
+                input_roi_table_name=input_ROI_table,
                 input_channels=input_channels,
-                label_image=label_image,
+                label_name=label_image,
                 label_level=label_level,
                 level=level,
                 output_table_name=output_table_name,
@@ -92,9 +92,9 @@ def test_2D_fractal_measurements(
     else:
         scmultiplex_feature_measurements(
             zarr_url=zarr_url,
-            input_ROI_table=input_ROI_table,
+            input_roi_table_name=input_ROI_table,
             input_channels=input_channels,
-            label_image=label_image,
+            label_name=label_image,
             label_level=label_level,
             level=level,
             output_table_name=output_table_name,
@@ -173,9 +173,9 @@ def test_3D_fractal_measurements(
         with pytest.raises(ValueError):
             scmultiplex_feature_measurements(
                 zarr_url=zarr_url,
-                input_ROI_table=input_ROI_table,
+                input_roi_table_name=input_ROI_table,
                 input_channels=input_channels,
-                label_image=label_image,
+                label_name=label_image,
                 label_level=label_level,
                 level=level,
                 output_table_name=output_table_name,
@@ -185,9 +185,9 @@ def test_3D_fractal_measurements(
     else:
         scmultiplex_feature_measurements(
             zarr_url=zarr_url,
-            input_ROI_table=input_ROI_table,
+            input_roi_table_name=input_ROI_table,
             input_channels=input_channels,
-            label_image=label_image,
+            label_name=label_image,
             label_level=label_level,
             level=level,
             output_table_name=output_table_name,
@@ -252,9 +252,9 @@ def test_masked_measurements_test(
 
     scmultiplex_feature_measurements(
         zarr_url=zarr_url,
-        input_ROI_table=input_ROI_table,
+        input_roi_table_name=input_ROI_table,
         input_channels=input_channels,
-        label_image=label_image,
+        label_name=label_image,
         label_level=label_level,
         level=level,
         output_table_name=output_table_name,
@@ -312,9 +312,9 @@ def test_masked_measurements_with_orgs_and_nuc(
 
     scmultiplex_feature_measurements(
         zarr_url=zarr_url,
-        input_ROI_table=input_ROI_table,
+        input_roi_table_name=input_ROI_table,
         input_channels=input_channels,
-        label_image=label_image,
+        label_name=label_image,
         label_level=label_level,
         level=level,
         output_table_name=output_table_name,
@@ -354,9 +354,9 @@ def test_empty_label(
 
     scmultiplex_feature_measurements(
         zarr_url=zarr_url,
-        input_ROI_table=input_ROI_table,
+        input_roi_table_name=input_ROI_table,
         input_channels=input_channels,
-        label_image=label_image,
+        label_name=label_image,
         label_level=label_level,
         level=level,
         output_table_name=output_table_name,
@@ -396,9 +396,9 @@ def test_overwrite(
     label_image = "nuclei"
     scmultiplex_feature_measurements(
         zarr_url=zarr_url,
-        input_ROI_table=input_ROI_table,
+        input_roi_table_name=input_ROI_table,
         input_channels=input_channels,
-        label_image=label_image,
+        label_name=label_image,
         label_level=label_level,
         level=level,
         output_table_name=output_table_name,
@@ -410,9 +410,9 @@ def test_overwrite(
     if overwrite:
         scmultiplex_feature_measurements(
             zarr_url=zarr_url,
-            input_ROI_table=input_ROI_table,
+            input_roi_table_name=input_ROI_table,
             input_channels=input_channels,
-            label_image=label_image,
+            label_name=label_image,
             label_level=label_level,
             level=level,
             output_table_name=output_table_name,
@@ -425,9 +425,9 @@ def test_overwrite(
         with pytest.raises(OverwriteNotAllowedError):
             scmultiplex_feature_measurements(
                 zarr_url=zarr_url,
-                input_ROI_table=input_ROI_table,
+                input_roi_table_name=input_ROI_table,
                 input_channels=input_channels,
-                label_image=label_image,
+                label_name=label_image,
                 label_level=label_level,
                 level=level,
                 output_table_name=output_table_name,
