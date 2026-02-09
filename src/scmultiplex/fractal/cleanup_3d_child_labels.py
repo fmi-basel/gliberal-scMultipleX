@@ -107,6 +107,9 @@ def cleanup_3d_child_labels(
     detected_clipped_values = False
     start_label = 65536
 
+    # Initialize zarr with NGIO
+    ome_zarr.derive_label(name=output_label_name, overwrite=True)
+
     if remove_nonsurface_labels:
         # Load label info to remove
         registration_save_path = os.path.join(
