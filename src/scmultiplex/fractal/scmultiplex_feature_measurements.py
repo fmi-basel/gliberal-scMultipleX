@@ -27,6 +27,7 @@ from fractal_tasks_core.channels import (
     get_channel_from_image_zarr,
 )
 from fractal_tasks_core.tables import write_table
+from fractal_tasks_core.upscale_array import upscale_array
 from ngio import open_ome_zarr_container
 from ngio.utils import ngio_logger
 from pydantic import validate_call
@@ -103,8 +104,6 @@ def scmultiplex_feature_measurements(  # noqa: C901
         )
 
     # TODO: consider not always masking input by ROI table and instead make optional (ie. load region but without masking)
-
-    # TODO: test, and update integration tests if needed!!
 
     # Load OME Zarr container
     ome_zarr = open_ome_zarr_container(zarr_url)
@@ -216,6 +215,22 @@ def scmultiplex_feature_measurements(  # noqa: C901
                     img = np.squeeze(img, axis=0)
 
                 calc_morphology = first_channel and measure_morphology
+
+                if seg.shape != img.shape:
+                    logger.info(
+                        f"Upscaling label image from {seg.shape} to match channel image shape of {img.shape}"
+                    )
+                    seg = upscale_array(
+                        array=seg,
+                        target_shape=img.shape,
+                        axis=None,
+                        pad_with_zeros=True,
+                    )
+
+                if seg.shape != img.shape:
+                    raise ValueError(
+                        f"Image shape {img.shape} does not match segmentation shape {seg.shape}"
+                    )
 
                 new_df, new_info_df = get_regionprops_measurements(
                     seg,
