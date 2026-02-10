@@ -13,6 +13,7 @@ Wrapper of scMultipleX measurements for Fractal
 """
 
 import logging
+import warnings
 from pathlib import Path
 from typing import Dict, Union
 
@@ -37,6 +38,7 @@ from scmultiplex.features.feature_wrapper import get_regionprops_measurements
 __OME_NGFF_VERSION__ = fractal_tasks_core.__OME_NGFF_VERSION__
 
 logger = logging.getLogger(__name__)
+warnings.filterwarnings("ignore", category=FutureWarning)
 ngio_logger.setLevel("ERROR")
 
 
@@ -88,6 +90,8 @@ def scmultiplex_feature_measurements(  # noqa: C901
             per well, but measure per FOV)
         overwrite: If `True`, overwrite the task output.
     """
+    logger.info(f"Running feature extraction on OME-Zarr image {zarr_url=}")
+
     if input_channels is None and not measure_morphology:
         raise ValueError(
             "You need to either add input_channels to make measurements on "
@@ -178,6 +182,8 @@ def scmultiplex_feature_measurements(  # noqa: C901
         first_channel = True
 
         roi_string = roi.name
+
+        logger.info(f"Processing ROI label {roi_string}...")
 
         extra_values = {
             "ROI_table_name": input_roi_table_name,
