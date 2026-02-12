@@ -1082,20 +1082,23 @@ def get_ROI_table_with_translation(
     Returns:
         Fractal ROI table with 3 additional columns for calculated translations
     """
+    colnames = ["translation_z", "translation_y", "translation_x"]
 
     shift_table = pd.DataFrame(new_shifts).T
-    shift_table.columns = ["translation_z", "translation_y", "translation_x"]
+    shift_table.columns = colnames
     shift_table = shift_table.rename_axis("FieldIndex")
 
     new_roi_table = ROI_table.to_df().copy()  # as pandas
-    new_roi_table[["translation_z", "translation_y", "translation_x"]] = shift_table
 
-    if len(new_roi_table) != len(ROI_table):
-        raise ValueError(
-            "New ROI table with registration info has a "
-            f"different length ({len(new_roi_table)=}) "
-            f"from the original ROI table ({len(ROI_table)=})"
-        )
+    # Remove any legacy translation columns (including _x/_y suffixes)
+    new_roi_table = new_roi_table.loc[
+        :, ~new_roi_table.columns.str.startswith("translation_")
+    ]
+
+    new_roi_table[colnames] = shift_table
+
+    if not shift_table.index.equals(new_roi_table.index):
+        raise ValueError("Index mismatch between ROI_table and new_shifts.")
 
     adata = ad.AnnData(X=new_roi_table.astype(np.float32))
     adata.obs_names = new_roi_table.index
