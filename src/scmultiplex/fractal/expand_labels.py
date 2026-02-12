@@ -122,19 +122,29 @@ def expand_labels(
     parent_roi_table = ome_zarr.get_table(
         parent_roi_table_name, check_type="generic_roi_table"
     )
-    parent_label_name = Path(parent_roi_table._meta.region.path).name
 
-    # Load label image to expand
-    masked_image = ome_zarr.get_masked_label(
-        label_name=label_name_to_expand, masking_label_name=parent_label_name
-    )
-    if mask_output:
-        parent_masked_image = ome_zarr.get_masked_label(
-            label_name=parent_label_name, masking_label_name=parent_label_name
+    table_type = Path(parent_roi_table._meta.type).name
+    # Set masking to True if input is a masking_roi_table
+    masking = table_type == "masking_roi_table"
+
+    if masking:
+        logger.info("Masking ROI table detected.")
+        parent_label_name = Path(parent_roi_table._meta.region.path).name
+
+        # Load label image to expand
+        label_image = ome_zarr.get_masked_label(
+            label_name=label_name_to_expand, masking_label_name=parent_label_name
         )
+        if mask_output:
+            parent_masked_image = ome_zarr.get_masked_label(
+                label_name=parent_label_name, masking_label_name=parent_label_name
+            )
+    else:
+        logger.info("No masking ROI table detected.")
+        label_image = ome_zarr.get_label(name=label_name_to_expand)
 
     # Pixel sizes as list: [z,y,x]
-    pixel_size = masked_image.pixel_size
+    pixel_size = label_image.pixel_size
     spacing = np.array([pixel_size.z, pixel_size.y, pixel_size.x])
 
     # Initialize parameters to save the newly calculated label map
@@ -152,17 +162,24 @@ def expand_labels(
     # Apply expansion ###
     ##############
 
+    logger.info(
+        f"Starting label expansion for {len(parent_roi_table.rois())} detected ROIs..."
+    )
+
     # For each object in input ROI table...
     for roi in parent_roi_table.rois():
-
         label_string = roi.name
-        label_int = int(label_string)
-        logger.info(f"Processing ROI label {label_string}")
+        logger.info(f"Processing ROI label name '{label_string}'")
 
-        if mask_input:
-            seg = masked_image.get_roi_masked(label=label_int)
+        # Load numpy of segmentation images
+        if masking and mask_input:
+            label_int = int(label_string)
+            seg = label_image.get_roi_masked(label=label_int)  # z,y,x
+        elif masking:
+            label_int = int(label_string)
+            seg = label_image.get_roi(label=label_int)  # do not mask by parent
         else:
-            seg = masked_image.get_roi(label=label_int)
+            seg = label_image.get_roi(roi=roi)  # e.g. well or FoV ROI table
 
         ##############
         # Perform label expansion  ###
@@ -185,7 +202,7 @@ def expand_labels(
             expand_in_z=expand_in_z,
         )
 
-        if mask_output:
+        if masking and mask_output:
             parent_mask = parent_masked_image.get_roi_masked(label=label_int)
 
             parent_mask[parent_mask > 0] = 1  # Binarize
