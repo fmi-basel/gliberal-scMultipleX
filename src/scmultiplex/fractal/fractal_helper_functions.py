@@ -1086,9 +1086,10 @@ def get_ROI_table_with_translation(
     shift_table = pd.DataFrame(new_shifts).T
     shift_table.columns = ["translation_z", "translation_y", "translation_x"]
     shift_table = shift_table.rename_axis("FieldIndex")
-    new_roi_table = ROI_table.to_df().merge(
-        shift_table, left_index=True, right_index=True
-    )
+
+    new_roi_table = ROI_table.to_df().copy()  # as pandas
+    new_roi_table[["translation_z", "translation_y", "translation_x"]] = shift_table
+
     if len(new_roi_table) != len(ROI_table):
         raise ValueError(
             "New ROI table with registration info has a "
