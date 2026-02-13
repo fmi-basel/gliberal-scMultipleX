@@ -2201,7 +2201,7 @@
             "description": "List of strings. Each string is a column name of the child feature table and will be added to the .vtp mesh as a point annotation. Input should exactly match naming in child_feature_table columns. instance_key of child feature (e.g. \"label\") is added as column internally, so can be used as annotation feature as well."
           },
           "parent_of_child_colname": {
-            "default": "ROI_label",
+            "default": "ROI_name",
             "title": "Parent Of Child Colname",
             "type": "string",
             "description": "Name of column for parent label id's of child objects, e.g. the organoid id of the parent organoid. This column is assumed to be within obs of the child_feature_table. Usually this is defined in the feature extraction task."
