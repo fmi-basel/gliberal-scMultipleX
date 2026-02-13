@@ -15,6 +15,7 @@ import warnings
 from typing import Any
 
 import numpy as np
+import pandas as pd
 from anndata._core.aligned_df import ImplicitModificationWarning
 from fractal_tasks_core.tasks.io_models import InitArgsRegistrationConsensus
 from ngio import open_ome_zarr_container
@@ -42,7 +43,7 @@ def annotate_child_mesh(
     parent_roi_table_name: str,
     child_feature_table_name: str,
     annotate_by_features: list[str],
-    parent_of_child_colname: str = "ROI_label",
+    parent_of_child_colname: str = "ROI_name",
     new_mesh_name: str,
 ) -> dict[str, Any]:
     """
@@ -109,6 +110,11 @@ def annotate_child_mesh(
     reference_feat_df = features_dict[ref_round_id]
     col_dtype = reference_feat_df[parent_of_child_colname].dtype
 
+    convert_label_to_numeric = pd.api.types.is_numeric_dtype(col_dtype)
+
+    if convert_label_to_numeric:
+        logger.info(f"Detected numeric datatype in column {parent_of_child_colname=}.")
+
     # Initializing saving location
     save_mesh_path = f"{zarr_url}/meshes/{new_mesh_name}"
     os.makedirs(save_mesh_path, exist_ok=True)
@@ -120,7 +126,11 @@ def annotate_child_mesh(
     # for every object in ROI table...
     for roi in parent_roi_table.rois():
         label_string = roi.name
-        label_dtyped = np.dtype(col_dtype).type(label_string)
+
+        if convert_label_to_numeric:
+            label_value = col_dtype.type(label_string)
+        else:
+            label_value = label_string
 
         # TODO: do not hard code file type
         mesh_fname = label_string + ".vtp"
@@ -167,7 +177,7 @@ def annotate_child_mesh(
 
             # Select all features that correspond to specific parent object
             annot_feat_sel_df = annot_feat_df[
-                annot_feat_df[parent_of_child_colname] == label_dtyped
+                annot_feat_df[parent_of_child_colname] == label_value
             ]
 
             if annot_feat_sel_df.empty:
