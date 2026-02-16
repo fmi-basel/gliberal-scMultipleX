@@ -145,9 +145,6 @@ def fuse_touching_labels(
         # fused_label_count = label_count.compute()
         fused_label_count = "NA"
 
-    logger.info(f"Fused dask array shape: {dask_to_save.shape}")
-    logger.info(f"Fused dask chunks: {dask_to_save.chunks}")
-
     logger.info("Finished building dask graphs.")
 
     # Save new fused label image and masking ROI table
@@ -158,8 +155,18 @@ def fuse_touching_labels(
 
     new_label_container = ome_zarr.derive_label(name=output_label_name, overwrite=True)
 
-    logger.info(f"Target shape: {new_label_container.shape}")
-    logger.info(f"Target chunks: {new_label_container.chunks}")
+    # Rechunk if necessary
+    target_chunks = new_label_container.chunks
+    if dask_to_save.chunks != target_chunks:
+        logger.info(
+            "Rechunk: Rechunking final fused dask array to match target chunks..."
+        )
+        logger.info(f"Rechunk: Dask array shape before rechunk: {fused_dask.shape}")
+        logger.info(f"Rechunk: Dask array chunks before rechunk: {fused_dask.chunks}")
+        logger.info(f"Rechunk: Target shape: {new_label_container.shape}")
+        logger.info(f"Rechunk: Target chunks: {target_chunks}")
+        dask_to_save = dask_to_save.rechunk(target_chunks)
+        logger.info(f"Rechunk: Dask array chunks after rechunk: {dask_to_save.chunks}")
 
     logger.info("Computing and saving zarr...")
     new_label_container.set_array(dask_to_save)

@@ -5,6 +5,7 @@
 # Author: Nicole Repina              <nicole.repina@fmi.ch>                  #
 #                                                                            #
 ##############################################################################
+import logging
 
 import dask
 import dask.array as da
@@ -35,6 +36,8 @@ from scmultiplex.meshing.FilterFunctions import (
     remove_xy_pad,
 )
 from scmultiplex.utils.ngio_utils import restore_squeezed_axes, squeeze_with_record
+
+logger = logging.getLogger(__name__)
 
 
 def get_expandby_pixels(seg, expandby_factor):
@@ -625,6 +628,8 @@ def select_label(seg, label_str):
 
 
 def simple_fuse_labels(label_dask, connectivity):
+    input_chunking = label_dask.chunks
+    input_shape = label_dask.shape
     dtype = label_dask.dtype
 
     # Remove axes of dimension 1
@@ -651,6 +656,20 @@ def simple_fuse_labels(label_dask, connectivity):
 
     # Cast to original dtype lazily
     fused_dask = fused_dask.astype(dtype)
+
+    # Rechunk if necessary
+    if fused_dask.chunks != input_chunking:
+        logger.info("Rechunk: Rechunking fused dask array to match input chunks...")
+        logger.info(
+            f"Rechunk: Fused dask array shape before rechunk: {fused_dask.shape}"
+        )
+        logger.info(f"Rechunk: Fused dask chunks before rechunk: {fused_dask.chunks}")
+        logger.info(f"Rechunk: Input shape: {input_shape}")
+        logger.info(f"Rechunk: Input chunks: {input_chunking}")
+        fused_dask = fused_dask.rechunk(input_chunking)
+        logger.info(
+            f"Rechunk: Fused dask array chunks after rechunk: {fused_dask.chunks}"
+        )
 
     return fused_dask, label_count, rank
 
