@@ -145,6 +145,9 @@ def fuse_touching_labels(
         # fused_label_count = label_count.compute()
         fused_label_count = "NA"
 
+    logger.info(f"Fused dask array shape: {dask_to_save.shape}")
+    logger.info(f"Fused dask chunks: {dask_to_save.chunks}")
+
     logger.info("Finished building dask graphs.")
 
     # Save new fused label image and masking ROI table
@@ -154,6 +157,9 @@ def fuse_touching_labels(
         output_label_name = new_label_name
 
     new_label_container = ome_zarr.derive_label(name=output_label_name, overwrite=True)
+
+    logger.info(f"Target shape: {new_label_container.shape}")
+    logger.info(f"Target chunks: {new_label_container.chunks}")
 
     logger.info("Computing and saving zarr...")
     new_label_container.set_array(dask_to_save)
