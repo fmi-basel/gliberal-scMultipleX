@@ -157,12 +157,15 @@ def fuse_touching_labels(
 
     # Rechunk if necessary
     target_chunks = new_label_container.chunks
-    if dask_to_save.chunks != target_chunks:
+    if (
+        dask_to_save.shape == new_label_container.shape
+        and dask_to_save.chunks != target_chunks
+    ):
         logger.info(
             "Rechunk: Rechunking final fused dask array to match target chunks..."
         )
-        logger.info(f"Rechunk: Dask array shape before rechunk: {fused_dask.shape}")
-        logger.info(f"Rechunk: Dask array chunks before rechunk: {fused_dask.chunks}")
+        logger.info(f"Rechunk: Dask array shape before rechunk: {dask_to_save.shape}")
+        logger.info(f"Rechunk: Dask array chunks before rechunk: {dask_to_save.chunks}")
         logger.info(f"Rechunk: Target shape: {new_label_container.shape}")
         logger.info(f"Rechunk: Target chunks: {target_chunks}")
         dask_to_save = dask_to_save.rechunk(target_chunks)
