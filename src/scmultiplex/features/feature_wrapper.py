@@ -129,6 +129,116 @@ def get_regionprops_measurements(
     return df_well, df_obs
 
 
+def get_regionprops_pixel_measurements(
+    label_img: np.array,
+    img: np.array,
+    intensity_threshold: int,
+    calculate_area: bool,
+    is_2D: bool,
+    spacing: Union[tuple, None],
+    channel_prefix: Union[str, None] = None,
+    extra_values: Dict[str, Any] = {},
+):
+    """
+    Measure per-object pixel-based properties from a labeled image and an
+    associated intensity image.
+
+    For each labeled object, computes spatial coordinates and the number of
+    pixels whose intensity exceeds a specified threshold. Optionally includes
+    the total number of pixels in the object. Measurements are returned as a
+    DataFrame, along with a separate observation DataFrame containing labels
+    and any additional metadata.
+
+    :param label_img: 2D or 3D numpy array containing labeled objects where
+                      each unique nonzero integer represents one object.
+
+    :param img: 2D or 3D numpy array containing the intensity image used for
+                threshold-based measurements. Must have the same dimensions
+                as ``label_img``.
+
+    :param intensity_threshold: Intensity threshold used to count pixels
+                                within each object. Pixels with intensity
+                                greater than this value are included.
+
+    :param calculate_area: Boolean indicating whether to include the total
+                           number of pixels/voxels in each labeled object
+                           (``n_pixels_total``).
+
+    :param is_2D: Boolean indicating whether the input image is 2D or 3D.
+
+    :param spacing: Tuple describing voxel spacing in (z, y, x) order for
+                    3D images, or corresponding spatial dimensions for 2D
+                    images. Used for coordinate calculations.
+
+    :param channel_prefix: Optional string prefix added to measurement column
+                           names. Useful when combining measurements from
+                           multiple image channels. Defaults to None.
+
+    :param extra_values: Dictionary of column names (keys) and constant values
+                         (values) that will be added to each row in the
+                         observations DataFrame.
+
+    :return: Tuple of two pandas DataFrames:
+
+             - df_well: Numeric measurements for each labeled object,
+               including coordinates, threshold-based pixel counts, and
+               optionally object size.
+             - df_obs: Observation metadata for each object, including labels
+               and any additional user-provided values.
+    """
+
+    regionproperties = regionprops(
+        label_img,
+        img,
+        spacing=spacing,
+    )
+
+    measurement_rows = []
+    observation_rows = []
+
+    for labeled_obj in regionproperties:
+        obs_info = {
+            "label": int(labeled_obj["label"]),
+        }
+
+        # Add extra values to the obs_info
+        for extra_key, extra_val in extra_values.items():
+            obs_info[extra_key] = extra_val
+
+        observation_rows.append(obs_info)
+
+        label_info = {
+            # Always include the labels in the core measurements to allow
+            # merging with df_obs
+            "label": int(labeled_obj["label"]),
+        }
+
+        # Always include coordinates
+        coordinate_measurements = get_coordinates(labeled_obj, spacing, is_2D)
+        label_info.update(coordinate_measurements)
+
+        # Measure area (number of pixels) in object, only for first channel
+        if calculate_area:
+            area_measurements = {
+                "n_pixels_total": int(labeled_obj.num_pixels),
+            }
+            label_info.update(area_measurements)
+
+        # Measure number pixels above threshold
+        intensity_measurements = get_pixel_measurements(
+            labeled_obj, channel_prefix, intensity_threshold
+        )
+
+        label_info.update(intensity_measurements)
+
+        measurement_rows.append(label_info)
+
+    df_well = pd.DataFrame(measurement_rows)
+    df_obs = pd.DataFrame(observation_rows)
+
+    return df_well, df_obs
+
+
 def get_intensity_measurements(labeled_obj, channel_prefix, spacing, is_2D):
     intensity_measurements = {
         "mean_intensity": labeled_obj["mean_intensity"],
@@ -164,6 +274,34 @@ def get_intensity_measurements(labeled_obj, channel_prefix, spacing, is_2D):
         intensity_measurements["z_massDisp_pix"] = (
             corrected_weighted_centroid[-3] - labeled_obj["centroid"][-3]
         )
+
+    # channel prefix addition is optional
+    if channel_prefix is not None:
+        intensity_measurements_pref = {
+            channel_prefix + "." + str(key): val
+            for key, val in intensity_measurements.items()
+        }
+    else:
+        intensity_measurements_pref = intensity_measurements
+
+    return intensity_measurements_pref
+
+
+def get_pixel_measurements(
+    labeled_obj,
+    channel_prefix,
+    intensity_threshold,
+):
+    # Load pixels belonging to this label only
+    region_intensities = labeled_obj.intensity_image[labeled_obj.image]
+
+    # Count number of pixels above this threshold
+    n_pixels_above_threshold = np.sum(region_intensities > intensity_threshold)
+
+    intensity_measurements = {
+        "n_pixels_above_threshold": int(n_pixels_above_threshold),
+        "intensity_threshold": intensity_threshold,
+    }
 
     # channel prefix addition is optional
     if channel_prefix is not None:
