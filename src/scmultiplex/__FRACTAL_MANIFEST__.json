@@ -3241,6 +3241,11 @@
             "type": "string",
             "description": "Path or url to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
           },
+          "init_args": {
+            "title": "Init Args",
+            "type": "object",
+            "description": "Missing description"
+          },
           "label_name": {
             "title": "Label Name",
             "type": "string",
@@ -3286,6 +3291,7 @@
         },
         "required": [
           "zarr_url",
+          "init_args",
           "label_name",
           "output_table_name",
           "input_channels"

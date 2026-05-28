@@ -40,6 +40,7 @@ def scmultiplex_pixel_measurements(  # noqa: C901
     *,
     # Default arguments for fractal tasks:
     zarr_url: str,
+    init_args: dict,
     # Task-specific arguments:
     label_name: str,
     output_table_name: str,
@@ -176,6 +177,7 @@ def scmultiplex_pixel_measurements(  # noqa: C901
         # Feature extraction using seg + channel images
         for c in channel_dict.keys():
             i = channel_dict[c]
+            logger.info(f"Processing channel {i}...")
             intensity_threshold = intensity_dict[c]
 
             # Load numpy of channel image
