@@ -102,8 +102,6 @@ def scmultiplex_feature_measurements(  # noqa: C901
 
     # TODO: consider not always masking input by ROI table and instead make optional (ie. load region but without masking)
 
-    # TODO throw error if channel is not found!! Or pass
-
     # Load OME Zarr container
     ome_zarr = open_ome_zarr_container(zarr_url)
 
@@ -146,11 +144,10 @@ def scmultiplex_feature_measurements(  # noqa: C901
                     label=input_channels[name].label,
                 )
             except ChannelNotFoundError as e:
-                logger.warning(
-                    "Channel not found, exit from the task.\n"
+                raise ValueError(
+                    f"Channel {name} defined with {input_channels[name]} not found. \n"
                     f"Original error: {str(e)}"
                 )
-                return {}
 
             channel_index = channel.index
             channel_dict[name] = channel_index
@@ -190,7 +187,6 @@ def scmultiplex_feature_measurements(  # noqa: C901
 
         logger.info(f"Processing ROI label {roi_string}...")
 
-        # TODO: change ROI_name to ROI_index
         extra_values = {
             "ROI_table_name": input_roi_table_name,
             "ROI_name": roi_string,
