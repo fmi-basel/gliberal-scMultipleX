@@ -9,7 +9,6 @@ from scmultiplex.features.FeatureFunctions import (
     aspect_ratio,
     centroid_weighted_correct,
     circularity,
-    concavity_count,
     convex_hull_area_resid,
     convex_hull_centroid_dif,
     disconnected_component,
@@ -261,17 +260,17 @@ def get_intensity_measurements(labeled_obj, channel_prefix, spacing, is_2D):
     else:
         corrected_weighted_centroid = labeled_obj
     corrected_weighted_centroid = centroid_weighted_correct(labeled_obj)
-    intensity_measurements["x_pos_weighted_pix"] = corrected_weighted_centroid[-1]
-    intensity_measurements["y_pos_weighted_pix"] = corrected_weighted_centroid[-2]
-    intensity_measurements["x_massDisp_pix"] = (
+    intensity_measurements["x_pos_weighted"] = corrected_weighted_centroid[-1]
+    intensity_measurements["y_pos_weighted"] = corrected_weighted_centroid[-2]
+    intensity_measurements["x_massDisp"] = (
         corrected_weighted_centroid[-1] - labeled_obj["centroid"][-1]
     )
-    intensity_measurements["y_massDisp_pix"] = (
+    intensity_measurements["y_massDisp"] = (
         corrected_weighted_centroid[-2] - labeled_obj["centroid"][-2]
     )
     if not is_2D:
-        intensity_measurements["z_pos_weighted_pix"] = corrected_weighted_centroid[-3]
-        intensity_measurements["z_massDisp_pix"] = (
+        intensity_measurements["z_pos_weighted"] = corrected_weighted_centroid[-3]
+        intensity_measurements["z_massDisp"] = (
             corrected_weighted_centroid[-3] - labeled_obj["centroid"][-3]
         )
 
@@ -348,15 +347,12 @@ def get_morphology_measurements(
     if is_2D:
         spacing_2d = spacing_to2d(spacing)
         morphology_2D_only = {
-            "area_pix": labeled_obj["area"],
+            "area": labeled_obj["area"],
             "perimeter": labeled_obj["perimeter"],
             "concavity": convex_hull_area_resid(labeled_obj),
             "asymmetry": convex_hull_centroid_dif(labeled_obj, spacing_2d),
             "eccentricity": labeled_obj["eccentricity"],
             "circularity": circularity(labeled_obj),
-            "concavity_count": concavity_count(
-                labeled_obj, min_area_fraction=min_area_fraction
-            ),
             "disconnected_components": disconnected_component(labeled_obj.image),
         }
         morphology_measurements.update(morphology_2D_only)
@@ -375,16 +371,16 @@ def get_morphology_measurements(
 
 def get_coordinates(labeled_obj, spacing, is_2D):
     coordinate_measurements = {
-        "x_pos_pix": labeled_obj["centroid"][-1],
-        "y_pos_pix": labeled_obj["centroid"][-2],
+        "x_pos": labeled_obj["centroid"][-1],
+        "y_pos": labeled_obj["centroid"][-2],
     }
 
     if not is_2D:
         coordinate_measurements_3D = {
-            "z_pos_pix_scaled": labeled_obj["centroid"][-3],
-            "z_pos_pix_img": labeled_obj["centroid"][-3]
+            "z_pos": labeled_obj["centroid"][-3],
+            "z_pos_pix": labeled_obj["centroid"][-3]
             / spacing_anisotropy_scalar(spacing),
-            "volume_pix": labeled_obj["area"],
+            "volume": labeled_obj["area"],
         }
         coordinate_measurements.update(coordinate_measurements_3D)
 

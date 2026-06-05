@@ -78,7 +78,7 @@ def annotate_mesh_by_child_features(
         parent_roi_table_name: Name of the ROI table that corresponds to labels of meshed objects, only used for indexing
             objects in for loop.
         child_feature_table_name: Name of the feature table extracted from child objects. Assumes that it contains columns
-            called ['x_pos_pix', 'y_pos_pix', 'z_pos_pix_scaled'] for the x,y,z centroids of each object. Assumes that
+            called ['x_pos', 'y_pos', 'z_pos'] for the x,y,z centroids of each object. Assumes that
             these centroid units and scaling matches the mesh point units and scaling.
         annotate_by_features: List of strings. Each string is a column name of the child feature table and will be added
             to the .vtp mesh as a point annotation. Input should exactly match naming in child_feature_table
@@ -195,9 +195,7 @@ def annotate_mesh_by_child_features(
 
         # numpy (N_cells, 3)
         # physical units (um)
-        feat_xyz = feat_sel_df[
-            ["x_pos_pix", "y_pos_pix", "z_pos_pix_scaled"]
-        ].to_numpy()
+        feat_xyz = feat_sel_df[["x_pos", "y_pos", "z_pos"]].to_numpy()
 
         label_array = feat_sel_df.index.to_numpy()
 

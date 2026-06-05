@@ -61,9 +61,7 @@ def annotate_child_mesh(
             filename corresponds to label name in ROI table. Usually these are grouped child labels per parent object.
         parent_roi_table_name: Name of the ROI table that corresponds to labels of meshed objects, only used for indexing
             objects in for loop.
-        child_feature_table_name: Name of the feature table extracted from child objects. Assumes that it contains columns
-            called ['x_pos_pix', 'y_pos_pix', 'z_pos_pix_scaled'] for the x,y,z centroids of each object. Assumes that
-            these centroid units and scaling matches the mesh point units and scaling.
+        child_feature_table_name: Name of the feature table extracted from child objects.
         annotate_by_features: List of strings. Each string is a column name of the child feature table and will be added
             to the .vtp mesh as a point annotation. Input should exactly match naming in child_feature_table
             columns. instance_key of child feature (e.g. "label") is added as column internally, so can be used
