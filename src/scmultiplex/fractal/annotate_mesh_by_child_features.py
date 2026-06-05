@@ -78,7 +78,7 @@ def annotate_mesh_by_child_features(
         parent_roi_table_name: Name of the ROI table that corresponds to labels of meshed objects, only used for indexing
             objects in for loop.
         child_feature_table_name: Name of the feature table extracted from child objects. Assumes that it contains columns
-            called ['x_pos_pix', 'y_pos_pix', 'z_pos_pix_scaled'] for the x,y,z centroids of each object. Assumes that
+            called ['x_pos', 'y_pos', 'z_pos'] for the x,y,z centroids of each object. Assumes that
             these centroid units and scaling matches the mesh point units and scaling.
         annotate_by_features: List of strings. Each string is a column name of the child feature table and will be added
             to the .vtp mesh as a point annotation. Input should exactly match naming in child_feature_table
@@ -141,6 +141,11 @@ def annotate_mesh_by_child_features(
     reference_feat_df = features_dict[ref_round_id]
     col_dtype = reference_feat_df[parent_of_child_colname].dtype
 
+    convert_label_to_numeric = pd.api.types.is_numeric_dtype(col_dtype)
+
+    if convert_label_to_numeric:
+        logger.info(f"Detected numeric datatype in column {parent_of_child_colname=}.")
+
     # Initializing saving location
     save_mesh_path = f"{zarr_url}/meshes/{new_mesh_name}"
     os.makedirs(save_mesh_path, exist_ok=True)
@@ -157,7 +162,11 @@ def annotate_mesh_by_child_features(
     # for every object in ROI table...
     for roi in parent_roi_table.rois():
         label_string = roi.name
-        label_dtyped = np.dtype(col_dtype).type(label_string)
+
+        if convert_label_to_numeric:
+            label_value = col_dtype.type(label_string)
+        else:
+            label_value = label_string
 
         # Load parent object mesh
         polydata = load_mesh_as_polydata(mesh_dir, label_string)
@@ -175,7 +184,7 @@ def annotate_mesh_by_child_features(
 
         # select features table that correspond to specific parent object
         feat_sel_df = reference_feat_df[
-            reference_feat_df[parent_of_child_colname] == label_dtyped
+            reference_feat_df[parent_of_child_colname] == label_value
         ]
 
         if feat_sel_df.empty:
@@ -186,9 +195,7 @@ def annotate_mesh_by_child_features(
 
         # numpy (N_cells, 3)
         # physical units (um)
-        feat_xyz = feat_sel_df[
-            ["x_pos_pix", "y_pos_pix", "z_pos_pix_scaled"]
-        ].to_numpy()
+        feat_xyz = feat_sel_df[["x_pos", "y_pos", "z_pos"]].to_numpy()
 
         label_array = feat_sel_df.index.to_numpy()
 
@@ -246,7 +253,7 @@ def annotate_mesh_by_child_features(
 
             # Select all features that correspond to specific parent object
             annot_feat_sel_df = annot_feat_df[
-                annot_feat_df[parent_of_child_colname] == label_dtyped
+                annot_feat_df[parent_of_child_colname] == label_value
             ]
 
             annot_label_array = annot_feat_sel_df.index.to_numpy()
@@ -269,7 +276,7 @@ def annotate_mesh_by_child_features(
                 else:
                     # Get column as Numpy array
                     col_array = annot_feat_sel_df.loc[
-                        annot_feat_sel_df[parent_of_child_colname] == label_dtyped, col
+                        annot_feat_sel_df[parent_of_child_colname] == label_value, col
                     ].to_numpy()
 
                 if len(feat_xyz) != len(col_array):
@@ -327,7 +334,7 @@ def annotate_mesh_by_child_features(
 
 
 if __name__ == "__main__":
-    from fractal_tasks_core.tasks._utils import run_fractal_task
+    from fractal_task_tools.task_wrapper import run_fractal_task
 
     run_fractal_task(
         task_function=annotate_mesh_by_child_features,

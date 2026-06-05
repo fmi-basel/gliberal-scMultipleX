@@ -31,9 +31,7 @@ def load_organoid_measurement(organoid: OrganoidRecord, org_seg_ch):
 
 
 def load_linking_data(organoid: OrganoidRecord, rx_name: str, org_seg_ch):
-    link_org = organoid.well.get_measurement(
-        f"linking_ovr_{org_seg_ch}_{rx_name}toR0"
-    )
+    link_org = organoid.well.get_measurement(f"linking_ovr_{org_seg_ch}_{rx_name}toR0")
     link_org_dict = link_org.set_index("R0_label").T.to_dict("index")["RX_label"]
     return link_org, link_org_dict
 
@@ -164,9 +162,7 @@ def link_nuclei(organoid, segname, rx_name, RX, z_anisotropy, org_seg_ch, nuc_se
         if not R0_df_ovr.loc[R0_id, "flag_tile_border"]:
             if R0_df_org["abs_min"][0] != 0:
                 try:
-                    R0_df = organoid.get_measurement(
-                        f"regionprops_nuc_{nuc_seg_ch}"
-                    )
+                    R0_df = organoid.get_measurement(f"regionprops_nuc_{nuc_seg_ch}")
                     R0_raw = organoid.get_raw_data(org_seg_ch)
                     R0_seg = organoid.get_segmentation(segname)
                 except Exception as e:
@@ -203,19 +199,19 @@ def link_nuclei(organoid, segname, rx_name, RX, z_anisotropy, org_seg_ch, nuc_se
                 R0_numpy = R0_df[
                     [
                         "nuc_id",
-                        "x_pos_pix",
-                        "y_pos_pix",
-                        "z_pos_pix_scaled",
-                        "volume_pix",
+                        "x_pos",
+                        "y_pos",
+                        "z_pos",
+                        "volume",
                     ]
                 ].to_numpy()
                 RX_numpy = RX_df[
                     [
                         "nuc_id",
-                        "x_pos_pix",
-                        "y_pos_pix",
-                        "z_pos_pix_scaled",
-                        "volume_pix",
+                        "x_pos",
+                        "y_pos",
+                        "z_pos",
+                        "volume",
                     ]
                 ].to_numpy()
 

@@ -11,10 +11,16 @@
 """
 Fractal task list.
 """
-from fractal_tasks_core.dev.task_models import CompoundTask, ParallelTask
+from fractal_task_tools.task_models import CompoundTask, ParallelTask
 
 # executable relative to base folder to src/scmultiplex folder
 # TODO: check CPU and GPU usage for each task and allocate more accurate values
+
+AUTHORS = "Nicole Repina, Enrico Tagliavini, Tim-Oliver Buchholz, Joel Luethi"
+DOCS_LINK = "https://github.com/fmi-basel/gliberal-scMultipleX"
+INPUT_MODELS = [
+    ["fractal_tasks_core", "channels.py", "ChannelInputModel"],
+]
 
 TASK_LIST = [
     CompoundTask(
@@ -275,5 +281,16 @@ TASK_LIST = [
         category="Registration",
         modality="HCS",
         tags=["multiplexing", "3D"],
+    ),
+    CompoundTask(
+        name="scMultiplex Pixel Measurements",
+        executable_init="fractal/init_select_many_rounds.py",
+        executable="fractal/scmultiplex_pixel_measurements.py",
+        meta_init={"cpus_per_task": 1, "mem": 1000},
+        meta={"cpus_per_task": 4, "mem": 16000},
+        category="Measurement",
+        modality="HCS",
+        tags=["2D", "3D", "intensity"],
+        docs_info="file:task_info/scmultiplex_pixel_measurements.md",
     ),
 ]

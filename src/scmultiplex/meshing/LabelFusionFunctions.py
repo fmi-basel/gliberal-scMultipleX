@@ -5,6 +5,7 @@
 # Author: Nicole Repina              <nicole.repina@fmi.ch>                  #
 #                                                                            #
 ##############################################################################
+import logging
 
 import dask
 import dask.array as da
@@ -34,7 +35,8 @@ from scmultiplex.meshing.FilterFunctions import (
     remove_border,
     remove_xy_pad,
 )
-from scmultiplex.utils.ngio_utils import restore_squeezed_axes, squeeze_with_record
+
+logger = logging.getLogger(__name__)
 
 
 def get_expandby_pixels(seg, expandby_factor):
@@ -625,32 +627,53 @@ def select_label(seg, label_str):
 
 
 def simple_fuse_labels(label_dask, connectivity):
+    input_chunking = label_dask.chunks
+    input_shape = label_dask.shape
     dtype = label_dask.dtype
-
-    # Remove axes of dimension 1
-    label_dask, axes = squeeze_with_record(label_dask)
     rank = label_dask.ndim
 
     # Set all values > 0 to True
     binary_dask = label_dask > 0  # binary boolean array
 
-    if connectivity is not None:
+    if connectivity is None:
+        structure = None
+    else:
+
         if connectivity > binary_dask.ndim:
             raise ValueError(
                 "Connectivity must not be greater than number of array dimensions. Check user input."
             )
         structure = generate_binary_structure(rank=rank, connectivity=connectivity)
-    else:
-        structure = None
+
+        # Structuring element always has shape: (3, 3, 3)
+        # If input image is a 2D image (1,y,x), the structuring element is adjusted...
+        # ...so that only its middle z-slice has True values; above and below is set to False
+        if input_shape[0] == 1:
+            # Keep center Z slice, zero out everything else along first axis
+            center = structure.shape[0] // 2  # center index along Z
+            tmp = np.zeros_like(structure, dtype=bool)
+            tmp[center, :, :] = structure[center, :, :]  # copy center Z slice
+            structure = tmp
 
     # Run Dask-based connected components
     fused_dask, label_count = dask_label(binary_dask, structure=structure)
 
-    # Add back axes of dimension 1
-    fused_dask = restore_squeezed_axes(fused_dask, axes)
-
     # Cast to original dtype lazily
     fused_dask = fused_dask.astype(dtype)
+
+    # Rechunk if necessary
+    if fused_dask.chunks != input_chunking:
+        logger.info("Rechunk: Rechunking fused dask array to match input chunks...")
+        logger.info(
+            f"Rechunk: Fused dask array shape before rechunk: {fused_dask.shape}"
+        )
+        logger.info(f"Rechunk: Fused dask chunks before rechunk: {fused_dask.chunks}")
+        logger.info(f"Rechunk: Input shape: {input_shape}")
+        logger.info(f"Rechunk: Input chunks: {input_chunking}")
+        fused_dask = fused_dask.rechunk(input_chunking)
+        logger.info(
+            f"Rechunk: Fused dask array chunks after rechunk: {fused_dask.chunks}"
+        )
 
     return fused_dask, label_count, rank
 

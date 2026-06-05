@@ -2,12 +2,24 @@ from fractal_tasks_core.channels import ChannelInputModel
 from pydantic import BaseModel
 
 
+class FeatureChannelInputModel(ChannelInputModel):
+    """
+    Extended version of ChannelInputModel with an additional attribute.
+
+    Attributes:
+        threshold_intensity: Intensity threshold above which to classify pixels as positive.
+    """
+
+    threshold_intensity: int = 0
+
+
 class ZIlluminationChannelInputModel(ChannelInputModel):
     """
     Extended version of ChannelInputModel with an additional attribute.
 
     Attributes:
-        z_illum_table: Stores illumination correction data for different z-levels.
+        z_correction_table: Name of table that stores illumination correction data for different z-levels.
+        background_intensity: Background intensity to subtract prior to applying z-correction.
     """
 
     z_correction_table: str = None

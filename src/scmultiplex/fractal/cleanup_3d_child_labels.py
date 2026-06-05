@@ -107,6 +107,9 @@ def cleanup_3d_child_labels(
     detected_clipped_values = False
     start_label = 65536
 
+    # Initialize zarr with NGIO
+    ome_zarr.derive_label(name=output_label_name, overwrite=True)
+
     if remove_nonsurface_labels:
         # Load label info to remove
         registration_save_path = os.path.join(
@@ -232,8 +235,8 @@ def cleanup_3d_child_labels(
             if len(segids_toremove) > 0:
                 logger.info(
                     f"Volume filtering removed {len(segids_toremove)} cell(s) from object {label_string} "
-                    f"that have a volume below the calculated {np.round(volume_cutoff,1)} pixel threshold"
-                    f"\n Removed labels have a mean volume of {np.round(removed_size_mean,1)} and are the "
+                    f"that have a volume below the calculated {np.round(volume_cutoff, 1)} pixel threshold"
+                    f"\n Removed labels have a mean volume of {np.round(removed_size_mean, 1)} and are the "
                     f"label id(s): "
                     f"\n {segids_toremove}"
                 )
@@ -287,7 +290,7 @@ def cleanup_3d_child_labels(
 
 
 if __name__ == "__main__":
-    from fractal_tasks_core.tasks._utils import run_fractal_task
+    from fractal_task_tools.task_wrapper import run_fractal_task
 
     run_fractal_task(
         task_function=cleanup_3d_child_labels,
