@@ -21,7 +21,7 @@ def tiny_zenodo_zarrs(testdata_path: Path) -> list[str]:
     """
 
     # 1 Download Zarrs from Zenodo
-    DOI = "10.5281/zenodo.10519143"
+    DOI = "10.5281/zenodo.20559997"
     DOI_slug = DOI.replace("/", "_").replace(".", "_")
     platenames = [
         "20200812-CardiomyocyteDifferentiation14-Cycle1.zarr",
@@ -100,9 +100,6 @@ def metadata_tiny_zenodo() -> dict[str, dict]:
 def column_names() -> dict[str, list]:
     return {
         "columns_2D_common": [
-            "ROI_table_name",
-            "ROI_name",
-            "index",
             "x_pos",
             "y_pos",
         ],
@@ -115,8 +112,8 @@ def column_names() -> dict[str, list]:
             "equivDiam",
             "extent",
             "solidity",
-            "majorAxisLength",
-            "minorAxisLength",
+            "axis_major_length",
+            "axis_minor_length",
             "minmajAxisRatio",
             "aspectRatio_equivalentDiameter",
             "area",
@@ -128,9 +125,9 @@ def column_names() -> dict[str, list]:
             "disconnected_components",
         ],
         "columns_2D_intensity": [
-            "{Ch}.mean_intensity",
-            "{Ch}.max_intensity",
-            "{Ch}.min_intensity",
+            "{Ch}.intensity_mean",
+            "{Ch}.intensity_max",
+            "{Ch}.intensity_min",
             "{Ch}.percentile25",
             "{Ch}.percentile50",
             "{Ch}.percentile75",
@@ -146,9 +143,6 @@ def column_names() -> dict[str, list]:
             "{Ch}.y_massDisp",
         ],
         "columns_3D_common": [
-            "ROI_table_name",
-            "ROI_name",
-            "index",
             "x_pos",
             "y_pos",
             "z_pos",
@@ -164,8 +158,8 @@ def column_names() -> dict[str, list]:
             "equivDiam",
             "extent",
             "solidity",
-            "majorAxisLength",
-            "minorAxisLength",
+            "axis_major_length",
+            "axis_minor_length",
             "minmajAxisRatio",
             "aspectRatio_equivalentDiameter",
             "imgdim_z",
@@ -173,9 +167,9 @@ def column_names() -> dict[str, list]:
             "surface_area",
         ],
         "columns_3D_intensity": [
-            "{Ch}.mean_intensity",
-            "{Ch}.max_intensity",
-            "{Ch}.min_intensity",
+            "{Ch}.intensity_mean",
+            "{Ch}.intensity_max",
+            "{Ch}.intensity_min",
             "{Ch}.percentile25",
             "{Ch}.percentile50",
             "{Ch}.percentile75",

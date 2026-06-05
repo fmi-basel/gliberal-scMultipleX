@@ -138,7 +138,7 @@ def aspect_ratio(prop):
 
 
 def minor_major_axis_ratio(prop):
-    """Return the ratio of minor to major axis"""
+    """Return the ratio of major to minor axis"""
     if prop.major_axis_length == 0:
         return np.float64("NaN")
     else:
