@@ -1,37 +1,117 @@
 ![Asset 14scMultiplex](https://user-images.githubusercontent.com/25291742/227540510-b00e0b8e-241e-492f-9b67-0d01bb4250e2.png)
 
-# Overview
+# scMultipleX
 
-scMultipleX is a software package for feature extraction of microscopy imaging data. It provides workflows for feature extraction of segmentated objects (e.g. organoids) and single cells, and for linking of objects and cells over multiplexing rounds. It supports 2D and 3D imaging data, and single-round or multiplexed experiments. scMultipleX uses [Prefect](https://docs.prefect.io/) (v1.4) for parallelized processing, and assumes input data pre-proprecessed with [Drogon](https://github.com/fmi-basel/job-system-workflows).
+`scMultipleX` provides functions for image processing workflows for high-content, multiplexed, and volumetric microscopy datasets.
 
-The workflow consists of the following tasks:
-- **Task 0 Build Experiment:** Initialize output data storage structure with [FAIM-HCS](https://github.com/fmi-faim/faim-hcs) (v0.1.1)
-- **Task 1 Feature Extraction:** Perform 2D object-level and 3D single-cell-level feature extraction and nuclear to membrane linking
-- **Task 2 Organoid Multiplex:** Link objects across multiplexing rounds
-- **Task 3 Nuclear Multiplex:** Link nuclei within objects across multiplexing rounds
-- **Task 4 Aggregate Features:** Output measured features for each round and objects type (e.g. organoids, nuclei, membranes)
-- **Task 5 Combine Nuclear and Membrane Features:** Output combined nuclear and membrane features based on nuclear to membrane linking
-- **Task 6 Aggregate Organoid Multiplex:** Output measured object features across multiplexing rounds
-- **Task 7 Aggregate Nuclear Multiplex:** Output measured nuclear features across multiplexing rounds
+The package supports workflows for segmentation post-processing, object linking across multiplexing rounds, registration, intensity correction, feature extraction, mesh generation, and 3D shape analysis.
 
-# Documentation
+scMultipleX functions are wrapped as [Fractal](https://fractal-analytics-platform.github.io/) based on the OME-Zarr image format.
+It enables users to build reproducible image-processing workflows from modular tasks and execute them locally or on compute clusters.
 
-See scMultipleX GitHub [Wiki](https://github.com/fmi-basel/gliberal-scMultipleX/wiki).
+The tasks provided by scMultipleX are located under:
 
-# Making releases
-
-To make new releases, just create a Github release and create a semantic version tag upon release (e.g. v0.9.0). Make sure you include the "v" before the version number. The CI will add the whl files to the release for easier addition to Fractal server & making sure the package is listed on the Fractal task overview.
-
-Alternatively, you can tag a specific commit in main (e.g. with v0.9.0) and push that tag to Github. The CI will take care of making a Github release and pushing it to PyPI.
-```
-git tag v0.9.0
-git push origin v0.9.0
+```text
+src/scmultiplex/fractal/
 ```
 
-# Contributors and License
+and can be collected and executed within a Fractal deployment alongside tasks from the Fractal ecosystem.
+
+
+## Main Functionality
+
+### Segmentation and Label Processing
+
+Tasks for preparing and cleaning label images:
+
+- Build label images
+- Expand labels
+- Fuse touching labels
+- Clean up 3D cell segmentations
+- Clean up child labels in 3D
+- Segment images by intensity threshold
+- Convert 3D images to maximum-intensity projections
+
+### Object Linking and Relabeling
+
+Tasks for linking related objects across segmentations or imaging rounds:
+
+- Calculate object linking
+- Calculate linking consensus
+- Relabel objects using linking consensus
+- Link parent and child objects, such as nuclei within cells or organoids
+
+### Registration and Multiplexing
+
+Tasks for aligning multiplexed imaging rounds:
+
+- Calculate Warpfield registration for 3D pixel-based registration
+- Apply Warpfield registration
+- Calculate and shift images by rigid transformation (translation and rotation)
+- Post-registration cleanup
+- Detect clipped ROIs across rounds
+
+### Illumination Correction
+
+Tasks for correcting Z-dependent illumination effects:
+
+- Calculate z-illumination correction
+- Apply z-illumination correction
+
+### Feature Measurements
+
+Tasks for extracting quantitative measurements from segmented objects:
+
+- Morphology measurements
+- Intensity measurements
+- Pixel-threshold measurements
+- Measurements within masked parent ROIs
+- Regionprops-based 2D and 3D feature tables
+
+### Mesh and 3D Shape Analysis
+
+Tasks for generating and analyzing 3D surface meshes:
+
+- Generate multiscale surface meshes
+- Measure mesh-based features
+- Calculate spherical harmonics from label images
+- Annotate child meshes
+- Annotate meshes using child-object features
+
+### Fractal Workflow Initialization
+
+Helper tasks for selecting images and defining parallelization lists:
+
+- Select single imaging rounds
+- Select multiple imaging rounds
+- Select multiplexing pairs
+- Select reference rounds
+- Select illumination-correction rounds
+
+## Installation
+
+### From source
+
+```bash
+git clone https://github.com/fmi-basel/gliberal-scMultipleX.git
+cd gliberal-scMultipleX
+pip install -e .
+```
+
+### With dependencies
+
+```bash
+pip install -e ".[spherical-harmonics, warpfield]"
+```
+
+## License
+
+BSD 3-Clause License.
+
+## Contributors
+
+Developed in the Liberali Lab at the Friedrich Miescher Institute for Biomedical Research (FMI), Basel, Switzerland by [@nrepina](https://github.com/nrepina), with development support from [@jluethi](https://github.com/jluethi), [@lorenzocerrone](https://github.com/lorenzocerrone), [@enricotagliavini](https://github.com/enricotagliavini), and [@tibuch](https://github.com/tibuch).
 
 Unless otherwise stated in each individual module, all scMultipleX components are released according to a BSD 3-Clause License, and Copyright is with Friedrich Miescher Institute for Biomedical Research.
 
-scMultipleX was conceived in the Prisca Liberali Lab at the Friedrich Miescher Institute for Biomedical Research, Switzerland. The project lead and development is with [@nrepina](https://github.com/nrepina), and refactor and development support is with [@enricotagliavini](https://github.com/enricotagliavini) and [@tibuch](https://github.com/tibuch).
-
-The nuclear multiplexed linking algorithm is built on [PlatyMatch](https://github.com/juglab/PlatyMatch) ([DOI](https://doi.org/10.1007/978-3-030-66415-2_30)) by Manan Lalit in the Florian Jug lab at the Human Technopole, Italy.
+Point-cloud based multiplexed linking is built on [PlatyMatch](https://github.com/juglab/PlatyMatch) ([DOI](https://doi.org/10.1007/978-3-030-66415-2_30)) by Manan Lalit in the Florian Jug lab at the Human Technopole, Italy.
