@@ -5,7 +5,7 @@ import anndata as ad
 import pandas as pd
 import pytest
 from fractal_tasks_core.channels import ChannelInputModel
-from fractal_tasks_core.zarr_utils import OverwriteNotAllowedError
+from ngio.utils import NgioValueError
 from pandas.testing import assert_frame_equal
 
 from scmultiplex.fractal.scmultiplex_feature_measurements import (
@@ -38,22 +38,20 @@ def load_features_for_well(table_path):
     return df
 
 
-# Inputs: input_ROI_table, measure_morphology, allow_duplicate_labels, expected to run
+# Inputs: input_ROI_table, measure_morphology, expected to run
 inputs_2D = [
-    ("well_ROI_table", multi_input_channels, False, False, True),
-    ("well_ROI_table", None, True, False, True),
-    ("well_ROI_table", {}, True, False, True),
-    ("well_ROI_table", multi_input_channels, True, False, True),
-    ("FOV_ROI_table", single_input_channels, False, False, False),
-    ("FOV_ROI_table", single_input_channels, False, True, True),
-    ("FOV_ROI_table", single_input_channels, True, True, True),
-    ("well_ROI_table", None, False, False, False),  # Testing no channels, no labels
+    ("well_ROI_table", multi_input_channels, False, True),
+    ("well_ROI_table", None, True, True),
+    ("well_ROI_table", {}, True, True),
+    ("well_ROI_table", multi_input_channels, True, True),
+    ("FOV_ROI_table", single_input_channels, False, False),
+    ("well_ROI_table", None, False, False),  # Testing no channels, no labels
 ]
 
 
 @pytest.mark.filterwarnings("ignore:Transforming to str index.")
 @pytest.mark.parametrize(
-    "input_ROI_table,input_channels,measure_morphology,allow_duplicate_labels,expected_to_run,",
+    "input_ROI_table,input_channels,measure_morphology,expected_to_run,",
     inputs_2D,
 )
 def test_2D_fractal_measurements(
@@ -63,7 +61,6 @@ def test_2D_fractal_measurements(
     input_ROI_table,
     input_channels,
     measure_morphology,
-    allow_duplicate_labels,
     expected_to_run,
 ):
     zarr_url = f"{tiny_zenodo_zarrs_base_path}/{image_path_2D}"
@@ -87,7 +84,6 @@ def test_2D_fractal_measurements(
                 level=level,
                 output_table_name=output_table_name,
                 measure_morphology=measure_morphology,
-                allow_duplicate_labels=allow_duplicate_labels,
             )
     else:
         scmultiplex_feature_measurements(
@@ -99,7 +95,6 @@ def test_2D_fractal_measurements(
             level=level,
             output_table_name=output_table_name,
             measure_morphology=measure_morphology,
-            allow_duplicate_labels=allow_duplicate_labels,
         )
 
         # Check & verify the output_table
@@ -135,11 +130,11 @@ def test_2D_fractal_measurements(
         assert_frame_equal(df, df_expected)
 
 
-# Inputs: input_ROI_table, measure_morphology, allow_duplicate_labels, expected to run
+# Inputs: input_ROI_table, measure_morphology, expected to run
 inputs_3D = [
-    ("well_ROI_table", multi_input_channels, False, False, True),
-    ("well_ROI_table", multi_input_channels, True, False, True),
-    ("FOV_ROI_table", single_input_channels, False, True, True),
+    ("well_ROI_table", multi_input_channels, False, True),
+    ("well_ROI_table", multi_input_channels, True, True),
+    ("FOV_ROI_table", single_input_channels, False, True),
 ]
 
 
@@ -149,7 +144,7 @@ inputs_3D = [
 )
 @pytest.mark.filterwarnings("ignore:divide by zero encountered in double_scalars")
 @pytest.mark.parametrize(
-    "input_ROI_table,input_channels,measure_morphology,allow_duplicate_labels,expected_to_run,",
+    "input_ROI_table,input_channels,measure_morphology,expected_to_run,",
     inputs_3D,
 )
 def test_3D_fractal_measurements(
@@ -159,7 +154,6 @@ def test_3D_fractal_measurements(
     input_ROI_table,
     input_channels,
     measure_morphology,
-    allow_duplicate_labels,
     expected_to_run,
 ):
     zarr_url = f"{tiny_zenodo_zarrs_base_path}/{image_path_3D}"
@@ -180,7 +174,6 @@ def test_3D_fractal_measurements(
                 level=level,
                 output_table_name=output_table_name,
                 measure_morphology=measure_morphology,
-                allow_duplicate_labels=allow_duplicate_labels,
             )
     else:
         scmultiplex_feature_measurements(
@@ -192,7 +185,6 @@ def test_3D_fractal_measurements(
             level=level,
             output_table_name=output_table_name,
             measure_morphology=measure_morphology,
-            allow_duplicate_labels=allow_duplicate_labels,
         )
 
         # Check & verify the output_table
@@ -238,7 +230,6 @@ def test_masked_measurements_with_orgs_and_nuc(
     label image than the labels to be measured. See
     https://github.com/fmi-basel/gliberal-scMultipleX/pull/122 for details.
     """
-    allow_duplicate_labels = False
     zarr_url = f"{linking_zenodo_zarrs[0]}/C/02/0"
     input_ROI_table = "org_ROI_table"
     measure_morphology = True
@@ -257,7 +248,6 @@ def test_masked_measurements_with_orgs_and_nuc(
         level=level,
         output_table_name=output_table_name,
         measure_morphology=measure_morphology,
-        allow_duplicate_labels=allow_duplicate_labels,
     )
 
     # Check that there are measurement for all 20 nuclei (before #122,
@@ -321,7 +311,6 @@ def test_overwrite(
     input_ROI_table = "well_ROI_table"
     input_channels = multi_input_channels
     measure_morphology = False
-    allow_duplicate_labels = False
     zarr_url = f"{tiny_zenodo_zarrs_base_path}/{image_path_2D}"
     try:
         output_table_name = f"table_overwrite_{overwrite}"
@@ -341,7 +330,6 @@ def test_overwrite(
         level=level,
         output_table_name=output_table_name,
         measure_morphology=measure_morphology,
-        allow_duplicate_labels=allow_duplicate_labels,
         overwrite=True,
     )
 
@@ -355,12 +343,11 @@ def test_overwrite(
             level=level,
             output_table_name=output_table_name,
             measure_morphology=measure_morphology,
-            allow_duplicate_labels=allow_duplicate_labels,
             overwrite=overwrite,
         )
 
     else:
-        with pytest.raises(OverwriteNotAllowedError):
+        with pytest.raises(NgioValueError):
             scmultiplex_feature_measurements(
                 zarr_url=zarr_url,
                 input_roi_table_name=input_ROI_table,
@@ -370,38 +357,5 @@ def test_overwrite(
                 level=level,
                 output_table_name=output_table_name,
                 measure_morphology=measure_morphology,
-                allow_duplicate_labels=allow_duplicate_labels,
                 overwrite=overwrite,
             )
-
-
-# # The error I want to be raised isn't defined yet
-# def test_label_image_does_not_exist():
-#     input_ROI_table = "well_ROI_table"
-#     input_channels = multi_input_channels
-#     measure_morphology = False
-#     allow_duplicate_labels = False
-#     overwrite=True
-#     component = component_2D
-#     output_table_name = "Test"
-#     # Clear prior runs
-#     clear_tables_prior_run(output_table_name, component=component)
-
-#     # Prepare fractal task
-#     label_image = "nuclei_wrong"
-#     with pytest.raises(NotYetDefinedError):
-#         scmultiplex_feature_measurements(
-#             input_paths=input_paths,
-#             output_path=input_paths[0],
-#             metadata=metadata_2D,
-#             component=component,
-#             input_ROI_table=input_ROI_table,
-#             input_channels=input_channels,
-#             label_image=label_image,
-#             label_level=label_level,
-#             level=level,
-#             output_table_name=output_table_name,
-#             measure_morphology=measure_morphology,
-#             allow_duplicate_labels=allow_duplicate_labels,
-#             overwrite=overwrite,
-#         )

@@ -11,8 +11,8 @@ repos:
       - id: flake8
         args: [ "--ignore=E203,E501,W504,W503,E731,C901", "--max-complexity=15"]
         additional_dependencies: [ flake8-typing-imports==1.16.0 ]
-  - repo: https://github.com/myint/autoflake
-    rev: v1.4
+  - repo: https://github.com/PyCQA/autoflake
+    rev: v2.3.1
     hooks:
       - id: autoflake
         args: [ "--in-place", "--remove-all-unused-imports" ]

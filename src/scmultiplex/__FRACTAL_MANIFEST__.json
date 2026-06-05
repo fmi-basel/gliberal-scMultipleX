@@ -1330,12 +1330,6 @@
             "type": "boolean",
             "description": "Set to True to measure morphology features"
           },
-          "allow_duplicate_labels": {
-            "default": false,
-            "title": "Allow Duplicate Labels",
-            "type": "boolean",
-            "description": "Set to True to allow saving measurement tables with non-unique label values. Can happen when segmentation is run on a different ROI than the measurements (e.g. segment per well, but measure per FOV)"
-          },
           "overwrite": {
             "default": true,
             "title": "Overwrite",

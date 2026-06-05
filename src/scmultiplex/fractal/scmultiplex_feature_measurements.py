@@ -17,25 +17,20 @@ import warnings
 from pathlib import Path
 from typing import Dict, Union
 
-import anndata as ad
-import fractal_tasks_core
 import numpy as np
 import pandas as pd
-import zarr
 from fractal_tasks_core.channels import (
     ChannelInputModel,
     ChannelNotFoundError,
     get_channel_from_image_zarr,
 )
-from fractal_tasks_core.tables import write_table
 from fractal_tasks_core.upscale_array import upscale_array
 from ngio import open_ome_zarr_container
+from ngio.tables import FeatureTable
 from ngio.utils import ngio_logger
 from pydantic import validate_call
 
 from scmultiplex.features.feature_wrapper import get_regionprops_measurements
-
-__OME_NGFF_VERSION__ = fractal_tasks_core.__OME_NGFF_VERSION__
 
 logger = logging.getLogger(__name__)
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -55,7 +50,7 @@ def scmultiplex_feature_measurements(  # noqa: C901
     level: int = 0,
     label_level: int = 0,
     measure_morphology: bool = True,
-    allow_duplicate_labels: bool = False,
+    table_backend: str = "anndata",  # TODO: Refactor to Enum with new task tools
     overwrite: bool = True,
 ):
     """
@@ -84,10 +79,8 @@ def scmultiplex_feature_measurements(  # noqa: C901
             Only tested for level 0
         label_level: Resolution of the label image to load for measurements.
         measure_morphology: Set to True to measure morphology features
-        allow_duplicate_labels: Set to True to allow saving measurement
-            tables with non-unique label values. Can happen when segmentation
-            is run on a different ROI than the measurements (e.g. segment
-            per well, but measure per FOV)
+        table_backend: Feature table backend. Valid values are anndata, csv
+            and json.
         overwrite: If `True`, overwrite the task output.
     """
     logger.info(f"Running feature extraction on OME-Zarr image {zarr_url=}")
@@ -303,41 +296,29 @@ def scmultiplex_feature_measurements(  # noqa: C901
         # Check that labels are unique
         # Typical issue: Ran segmentation per well, but measurement per FOV
         # => splits labels into multiple measurements
-        if not allow_duplicate_labels:
-            total_measurements = len(df_well["label"])
-            unique_labels = len(df_well["label"].unique())
-            if not total_measurements == unique_labels:
-                raise ValueError(
-                    "Measurement contains non-unique labels: \n"
-                    f"{total_measurements =}, {unique_labels =}, "
-                )
+        total_measurements = len(df_well["label"])
+        unique_labels = len(df_well["label"].unique())
+        if not total_measurements == unique_labels:
+            raise ValueError(
+                "Measurement contains non-unique labels: \n"
+                f"{total_measurements=}, {unique_labels=}, "
+            )
 
         df_well.drop(labels=["label"], axis=1, inplace=True)
-
-        # Convert all to float (warning: some would be int, in principle)
-        measurement_dtype = np.float32
-        df_well = df_well.astype(measurement_dtype)
-        df_well.index = df_well.index.map(str)
-        # Convert to anndata
-        measurement_table = ad.AnnData(df_well)
-        measurement_table.obs = df_info_well
+        measurements_dtype = np.float32
+        df_well = df_well.astype(measurements_dtype)
+        df_combined = pd.concat([df_well, df_info_well], axis=1)
     else:
         # Create empty anndata table
-        measurement_table = ad.AnnData()
+        df_combined = pd.DataFrame()
 
-    # Write to zarr group
-    image_group = zarr.group(f"{zarr_url}")
-    write_table(
-        image_group,
-        output_table_name,
-        measurement_table,
+    ngio_table = FeatureTable(dataframe=df_combined, reference_label=label_name)
+
+    ome_zarr.add_table(
+        name=output_table_name,
+        table=ngio_table,
+        backend=table_backend,
         overwrite=overwrite,
-        table_attrs=dict(
-            type="feature_table",
-            fractal_table_version="1",
-            region=dict(path=f"../labels/{label_name}"),
-            instance_key="label",
-        ),
     )
 
     logger.info(f"End feature_measurement task for {zarr_url}/labels/{label_name}")
