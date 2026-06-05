@@ -47,8 +47,6 @@ def scmultiplex_feature_measurements(  # noqa: C901
     output_table_name: str,
     input_channels: Union[Dict[str, ChannelInputModel], None] = None,
     input_roi_table_name: str = "well_ROI_table",
-    level: int = 0,
-    label_level: int = 0,
     measure_morphology: bool = True,
     table_backend: str = "anndata",  # TODO: Refactor to Enum with new task tools
     overwrite: bool = True,
@@ -75,9 +73,6 @@ def scmultiplex_feature_measurements(  # noqa: C901
             "A01_C01"}. To only measure morphology, provide an empty dict
         input_roi_table_name: Name of the ROI table to loop over. Needs to exist
             as a ROI table in the OME-Zarr file. If it is a masking ROI table, masking of input is performed. Always mask input.
-        level: Resolution of the intensity image to load for measurements.
-            Only tested for level 0
-        label_level: Resolution of the label image to load for measurements.
         measure_morphology: Set to True to measure morphology features
         table_backend: Feature table backend. Valid values are anndata, csv
             and json.
@@ -91,18 +86,7 @@ def scmultiplex_feature_measurements(  # noqa: C901
             "or set measure_morphology to True"
         )
 
-    # Level-related constraint
-    logger.info(f"This workflow acts at {level=}")
-    if level != 0 or label_level != 0:
-        # TODO: Test whether this constraint can be lifted
-        logger.warning(
-            f"Measuring at {level=} & {label_level=}: It's not recommended "
-            "to measure at lower resolutions"
-        )
-
     # TODO: consider not always masking input by ROI table and instead make optional (ie. load region but without masking)
-
-    # TODO throw error if channel is not found!! Or pass
 
     # Load OME Zarr container
     ome_zarr = open_ome_zarr_container(zarr_url)
@@ -146,11 +130,10 @@ def scmultiplex_feature_measurements(  # noqa: C901
                     label=input_channels[name].label,
                 )
             except ChannelNotFoundError as e:
-                logger.warning(
-                    "Channel not found, exit from the task.\n"
+                raise ValueError(
+                    f"Channel {name} defined with {input_channels[name]} not found. \n"
                     f"Original error: {str(e)}"
                 )
-                return {}
 
             channel_index = channel.index
             channel_dict[name] = channel_index
@@ -190,7 +173,6 @@ def scmultiplex_feature_measurements(  # noqa: C901
 
         logger.info(f"Processing ROI label {roi_string}...")
 
-        # TODO: change ROI_name to ROI_index
         extra_values = {
             "ROI_table_name": input_roi_table_name,
             "ROI_name": roi_string,
