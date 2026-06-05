@@ -11,10 +11,16 @@
 """
 Fractal task list.
 """
-from fractal_tasks_core.dev.task_models import CompoundTask, ParallelTask
+from fractal_task_tools.task_models import CompoundTask, ParallelTask
 
 # executable relative to base folder to src/scmultiplex folder
 # TODO: check CPU and GPU usage for each task and allocate more accurate values
+
+AUTHORS = "Nicole Repina, Enrico Tagliavini, Tim-Oliver Buchholz, Joel Luethi"
+DOCS_LINK = "https://github.com/fmi-basel/gliberal-scMultipleX"
+INPUT_MODELS = [
+    ["fractal_tasks_core", "channels.py", "ChannelInputModel"],
+]
 
 TASK_LIST = [
     CompoundTask(

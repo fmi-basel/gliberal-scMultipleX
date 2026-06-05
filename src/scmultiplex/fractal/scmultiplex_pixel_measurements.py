@@ -252,7 +252,7 @@ def scmultiplex_pixel_measurements(  # noqa: C901
             if not total_measurements == unique_labels:
                 raise ValueError(
                     "Measurement contains non-unique labels: \n"
-                    f"{total_measurements =}, {unique_labels =}, "
+                    f"{total_measurements=}, {unique_labels=}, "
                 )
 
         df_well.drop(labels=["label"], axis=1, inplace=True)
@@ -289,7 +289,7 @@ def scmultiplex_pixel_measurements(  # noqa: C901
 
 
 if __name__ == "__main__":
-    from fractal_tasks_core.tasks._utils import run_fractal_task
+    from fractal_task_tools.task_wrapper import run_fractal_task
 
     run_fractal_task(
         task_function=scmultiplex_pixel_measurements,
