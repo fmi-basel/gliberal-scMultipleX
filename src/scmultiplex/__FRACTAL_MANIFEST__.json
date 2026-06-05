@@ -1330,6 +1330,12 @@
             "type": "boolean",
             "description": "Set to True to measure morphology features"
           },
+          "table_backend": {
+            "default": "anndata",
+            "title": "Table Backend",
+            "type": "string",
+            "description": "Feature table backend. Valid values are anndata, csv and json."
+          },
           "overwrite": {
             "default": true,
             "title": "Overwrite",

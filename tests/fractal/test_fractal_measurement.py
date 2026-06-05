@@ -19,7 +19,6 @@ multi_input_channels = {
 }
 single_input_channels = {"C01": ChannelInputModel(wavelength_id="A01_C01")}
 
-# TODO: Test measurements for level != 0? Not well supported yet
 level = 0
 label_level = 0
 
@@ -56,7 +55,6 @@ inputs_2D = [
 )
 def test_2D_fractal_measurements(
     tiny_zenodo_zarrs_base_path,
-    metadata_tiny_zenodo,
     column_names,
     input_ROI_table,
     input_channels,
@@ -149,7 +147,6 @@ inputs_3D = [
 )
 def test_3D_fractal_measurements(
     tiny_zenodo_zarrs_base_path,
-    metadata_tiny_zenodo,
     column_names,
     input_ROI_table,
     input_channels,
@@ -269,7 +266,6 @@ inputs_empty = [
 @pytest.mark.parametrize("input_channels,measure_morphology", inputs_empty)
 def test_empty_label(
     tiny_zenodo_zarrs_base_path,
-    metadata_tiny_zenodo,
     input_channels,
     measure_morphology,
 ):
@@ -305,7 +301,6 @@ def test_empty_label(
 @pytest.mark.parametrize("overwrite", [True, False])
 def test_overwrite(
     tiny_zenodo_zarrs_base_path,
-    metadata_tiny_zenodo,
     overwrite: bool,
 ):
     input_ROI_table = "well_ROI_table"
