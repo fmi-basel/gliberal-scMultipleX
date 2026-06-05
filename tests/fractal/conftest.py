@@ -21,7 +21,7 @@ def tiny_zenodo_zarrs(testdata_path: Path) -> list[str]:
     """
 
     # 1 Download Zarrs from Zenodo
-    DOI = "10.5281/zenodo.10519143"
+    DOI = "10.5281/zenodo.20559997"
     DOI_slug = DOI.replace("/", "_").replace(".", "_")
     platenames = [
         "20200812-CardiomyocyteDifferentiation14-Cycle1.zarr",
