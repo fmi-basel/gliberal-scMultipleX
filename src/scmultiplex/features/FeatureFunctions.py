@@ -77,7 +77,7 @@ def convex_hull_area_resid(prop_2D):
     """Return the normalized difference in area between the convex hull and area of the object
     Normalize to the area of the convex hull, becomes fraction of object composed of concavities (divots & indentations)
     """
-    return (prop_2D.convex_area - prop_2D.area) / prop_2D.convex_area
+    return (prop_2D.area_convex - prop_2D.area) / prop_2D.area_convex
 
 
 # from Ark
@@ -102,7 +102,7 @@ def convex_hull_centroid_dif(prop_2D, spacing):
     )
 
     # Convex hull image has same size as bounding box
-    convex_image = prop_2D.convex_image
+    convex_image = prop_2D.image_convex
     convex_moments = moments(convex_image)
     convex_centroid = np.array(
         [
@@ -134,15 +134,15 @@ def circularity(prop_2D):
 
 def aspect_ratio(prop):
     """Return the ratio of major axis length to equivalent diameter"""
-    return prop.major_axis_length / prop.equivalent_diameter
+    return prop.axis_major_length / prop.equivalent_diameter_area
 
 
 def minor_major_axis_ratio(prop):
     """Return the ratio of major to minor axis"""
-    if prop.major_axis_length == 0:
+    if prop.axis_major_length == 0:
         return np.float64("NaN")
     else:
-        return prop.minor_axis_length / prop.major_axis_length
+        return prop.axis_minor_length / prop.axis_major_length
 
 
 def concavity_count(prop_2D, min_area_fraction=0.005):
@@ -151,7 +151,7 @@ def concavity_count(prop_2D, min_area_fraction=0.005):
     a concavity
     """
     object_image = prop_2D.image
-    convex_image = prop_2D.convex_image
+    convex_image = prop_2D.image_convex
     object_area = prop_2D.area
 
     diff_img = convex_image ^ object_image  # bitwise XOR

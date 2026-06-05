@@ -46,10 +46,10 @@ def test_2D_fractal_measurements(
     zarr_url = f"{tiny_zenodo_zarrs_base_path}/{image_path_2D}"
     try:
         output_table_name = (
-            f"table_{input_ROI_table}_{len(input_channels)}_{measure_morphology}_0_0"
+            f"table_{input_ROI_table}_{len(input_channels)}_{measure_morphology}"
         )
     except TypeError:
-        output_table_name = f"table_{input_ROI_table}_0_{measure_morphology}_0_0"
+        output_table_name = f"table_{input_ROI_table}_0_{measure_morphology}"
 
     # Prepare fractal task
     label_image = "nuclei"
@@ -133,7 +133,7 @@ def test_3D_fractal_measurements(
     expected_to_run,
 ):
     zarr_url = f"{tiny_zenodo_zarrs_base_path}/{image_path_3D}"
-    output_table_name = f"table_{input_ROI_table}_{measure_morphology}_0_0"
+    output_table_name = f"table_{input_ROI_table}_{measure_morphology}"
 
     # Prepare fractal task
     label_image = "nuclei"
@@ -242,7 +242,7 @@ def test_empty_label(
     input_ROI_table = "well_ROI_table"
     zarr_url = f"{tiny_zenodo_zarrs_base_path}/{image_path_2D}"
     output_table_name = (
-        f"empty_{input_ROI_table}_{len(input_channels)}_{measure_morphology}_0_0"
+        f"empty_{input_ROI_table}_{len(input_channels)}_{measure_morphology}"
     )
 
     # Prepare fractal task
@@ -280,7 +280,7 @@ def test_overwrite(
     try:
         output_table_name = f"table_overwrite_{overwrite}"
     except TypeError:
-        output_table_name = f"table_{input_ROI_table}_0_{measure_morphology}_0_0"
+        output_table_name = f"table_{input_ROI_table}_0_{measure_morphology}"
 
     # Prepare fractal task
     label_image = "nuclei"

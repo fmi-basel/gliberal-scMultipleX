@@ -240,9 +240,9 @@ def get_regionprops_pixel_measurements(
 
 def get_intensity_measurements(labeled_obj, channel_prefix, spacing, is_2D):
     intensity_measurements = {
-        "mean_intensity": labeled_obj["mean_intensity"],
-        "max_intensity": labeled_obj["max_intensity"],
-        "min_intensity": labeled_obj["min_intensity"],
+        "intensity_mean": labeled_obj["intensity_mean"],
+        "intensity_max": labeled_obj["intensity_max"],
+        "intensity_min": labeled_obj["intensity_min"],
         "percentile25": labeled_obj["fixed_percentiles"][0],
         "percentile50": labeled_obj["fixed_percentiles"][1],
         "percentile75": labeled_obj["fixed_percentiles"][2],
@@ -332,8 +332,8 @@ def get_morphology_measurements(
     # Sometimes, major & minor axis calculations fail with a
     # ValueError: math domain error
     try:
-        morphology_measurements["majorAxisLength"] = labeled_obj["major_axis_length"]
-        morphology_measurements["minorAxisLength"] = labeled_obj["minor_axis_length"]
+        morphology_measurements["axis_major_length"] = labeled_obj["axis_major_length"]
+        morphology_measurements["axis_minor_length"] = labeled_obj["axis_minor_length"]
         morphology_measurements["minmajAxisRatio"] = minor_major_axis_ratio(labeled_obj)
         morphology_measurements["aspectRatio_equivalentDiameter"] = aspect_ratio(
             labeled_obj
