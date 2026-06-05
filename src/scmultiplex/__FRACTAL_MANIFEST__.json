@@ -2045,7 +2045,7 @@
           "child_feature_table_name": {
             "title": "Child Feature Table Name",
             "type": "string",
-            "description": "Name of the feature table extracted from child objects. Assumes that it contains columns called ['x_pos_pix', 'y_pos_pix', 'z_pos_pix_scaled'] for the x,y,z centroids of each object. Assumes that these centroid units and scaling matches the mesh point units and scaling."
+            "description": "Name of the feature table extracted from child objects. Assumes that it contains columns called ['x_pos', 'y_pos', 'z_pos'] for the x,y,z centroids of each object. Assumes that these centroid units and scaling matches the mesh point units and scaling."
           },
           "annotate_by_features": {
             "items": {
@@ -2190,7 +2190,7 @@
           "child_feature_table_name": {
             "title": "Child Feature Table Name",
             "type": "string",
-            "description": "Name of the feature table extracted from child objects. Assumes that it contains columns called ['x_pos_pix', 'y_pos_pix', 'z_pos_pix_scaled'] for the x,y,z centroids of each object. Assumes that these centroid units and scaling matches the mesh point units and scaling."
+            "description": "Name of the feature table extracted from child objects."
           },
           "annotate_by_features": {
             "items": {
