@@ -125,9 +125,14 @@ def scmultiplex_feature_measurements(  # noqa: C901
     if masking:
         masking_label_name = Path(roi_table._meta.region.path).name
 
-        channel_image = ome_zarr.get_masked_image(masking_label_name=masking_label_name)
+        channel_image = ome_zarr.get_masked_image(
+            masking_label_name=masking_label_name,
+            masking_table_name=input_roi_table_name,
+        )
         label_image = ome_zarr.get_masked_label(
-            label_name=label_name, masking_label_name=masking_label_name
+            label_name=label_name,
+            masking_label_name=masking_label_name,
+            masking_table_name=input_roi_table_name,
         )
 
     else:
