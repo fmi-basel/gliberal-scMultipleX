@@ -103,8 +103,8 @@ def column_names() -> dict[str, list]:
             "ROI_table_name",
             "ROI_name",
             "index",
-            "x_pos_pix",
-            "y_pos_pix",
+            "x_pos",
+            "y_pos",
         ],
         "columns_2D_morphology": [
             "is_touching_border_xy",
@@ -119,13 +119,12 @@ def column_names() -> dict[str, list]:
             "minorAxisLength",
             "minmajAxisRatio",
             "aspectRatio_equivalentDiameter",
-            "area_pix",
+            "area",
             "perimeter",
             "concavity",
             "asymmetry",
             "eccentricity",
             "circularity",
-            "concavity_count",
             "disconnected_components",
         ],
         "columns_2D_intensity": [
@@ -141,20 +140,20 @@ def column_names() -> dict[str, list]:
             "{Ch}.stdev",
             "{Ch}.skew",
             "{Ch}.kurtosis",
-            "{Ch}.x_pos_weighted_pix",
-            "{Ch}.y_pos_weighted_pix",
-            "{Ch}.x_massDisp_pix",
-            "{Ch}.y_massDisp_pix",
+            "{Ch}.x_pos_weighted",
+            "{Ch}.y_pos_weighted",
+            "{Ch}.x_massDisp",
+            "{Ch}.y_massDisp",
         ],
         "columns_3D_common": [
             "ROI_table_name",
             "ROI_name",
             "index",
-            "x_pos_pix",
-            "y_pos_pix",
-            "z_pos_pix_scaled",
-            "z_pos_pix_img",
-            "volume_pix",
+            "x_pos",
+            "y_pos",
+            "z_pos",
+            "z_pos_pix",
+            "volume",
         ],
         "columns_3D_morphology": [
             "is_touching_border_xy",
@@ -186,43 +185,14 @@ def column_names() -> dict[str, list]:
             "{Ch}.stdev",
             "{Ch}.skew",
             "{Ch}.kurtosis",
-            "{Ch}.x_pos_weighted_pix",
-            "{Ch}.y_pos_weighted_pix",
-            "{Ch}.x_massDisp_pix",
-            "{Ch}.y_massDisp_pix",
-            "{Ch}.z_pos_weighted_pix",
-            "{Ch}.z_massDisp_pix",
+            "{Ch}.x_pos_weighted",
+            "{Ch}.y_pos_weighted",
+            "{Ch}.x_massDisp",
+            "{Ch}.y_massDisp",
+            "{Ch}.z_pos_weighted",
+            "{Ch}.z_massDisp",
         ],
     }
-
-
-# @pytest.fixture(scope="function")
-# def zenodo_zarr_metadata(testdata_path: Path):
-#     metadata_3D = {
-#         "plate": ["plate.zarr"],
-#         "well": ["plate.zarr/B/03"],
-#         "image": ["plate.zarr/B/03/0/"],
-#         "num_levels": 6,
-#         "coarsening_xy": 2,
-#         "original_paths": [str(testdata_path / "10_5281_zenodo_7059515/")],
-#         "image_extension": "png",
-#     }
-
-#     metadata_2D = {
-#         "plate": ["plate.zarr"],
-#         "well": ["plate_mip.zarr/B/03/"],
-#         "image": ["plate_mip.zarr/B/03/0/"],
-#         "num_levels": 6,
-#         "coarsening_xy": 2,
-#         "original_paths": [str(testdata_path / "10_5281_zenodo_7059515/")],
-#         "image_extension": "png",
-#         "replicate_zarr": {
-#             "suffix": "mip",
-#             "sources": {"plate_mip": "/this/should/not/be/used/"},
-#         },
-#     }
-
-#     return [metadata_3D, metadata_2D]
 
 
 @pytest.fixture(scope="session")
