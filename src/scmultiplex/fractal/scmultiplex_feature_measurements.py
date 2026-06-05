@@ -199,7 +199,7 @@ def scmultiplex_feature_measurements(  # noqa: C901
 
         extra_values = {
             "ROI_table_name": input_roi_table_name,
-            "ROI_name": roi_string,
+            "ROI_index": roi_string,
         }
 
         # Load numpy of segmentation images
