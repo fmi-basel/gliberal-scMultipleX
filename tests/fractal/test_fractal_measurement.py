@@ -15,9 +15,6 @@ multi_input_channels = {
 }
 single_input_channels = {"C01": ChannelInputModel(wavelength_id="A01_C01")}
 
-level = 0
-label_level = 0
-
 image_path_2D = "20200812-CardiomyocyteDifferentiation14-Cycle1_mip.zarr/B/03/0"
 image_path_3D = "20200812-CardiomyocyteDifferentiation14-Cycle1.zarr/B/03/0"
 
@@ -48,11 +45,11 @@ def test_2D_fractal_measurements(
 ):
     zarr_url = f"{tiny_zenodo_zarrs_base_path}/{image_path_2D}"
     try:
-        output_table_name = f"table_{input_ROI_table}_{len(input_channels)}_{measure_morphology}_{level}_{label_level}"
-    except TypeError:
         output_table_name = (
-            f"table_{input_ROI_table}_0_{measure_morphology}_{level}_{label_level}"
+            f"table_{input_ROI_table}_{len(input_channels)}_{measure_morphology}_0_0"
         )
+    except TypeError:
+        output_table_name = f"table_{input_ROI_table}_0_{measure_morphology}_0_0"
 
     # Prepare fractal task
     label_image = "nuclei"
@@ -63,8 +60,6 @@ def test_2D_fractal_measurements(
                 input_roi_table_name=input_ROI_table,
                 input_channels=input_channels,
                 label_name=label_image,
-                label_level=label_level,
-                level=level,
                 output_table_name=output_table_name,
                 measure_morphology=measure_morphology,
             )
@@ -74,8 +69,6 @@ def test_2D_fractal_measurements(
             input_roi_table_name=input_ROI_table,
             input_channels=input_channels,
             label_name=label_image,
-            label_level=label_level,
-            level=level,
             output_table_name=output_table_name,
             measure_morphology=measure_morphology,
         )
@@ -140,9 +133,7 @@ def test_3D_fractal_measurements(
     expected_to_run,
 ):
     zarr_url = f"{tiny_zenodo_zarrs_base_path}/{image_path_3D}"
-    output_table_name = (
-        f"table_{input_ROI_table}_{measure_morphology}_{level}_{label_level}"
-    )
+    output_table_name = f"table_{input_ROI_table}_{measure_morphology}_0_0"
 
     # Prepare fractal task
     label_image = "nuclei"
@@ -153,8 +144,6 @@ def test_3D_fractal_measurements(
                 input_roi_table_name=input_ROI_table,
                 input_channels=input_channels,
                 label_name=label_image,
-                label_level=label_level,
-                level=level,
                 output_table_name=output_table_name,
                 measure_morphology=measure_morphology,
             )
@@ -164,8 +153,6 @@ def test_3D_fractal_measurements(
             input_roi_table_name=input_ROI_table,
             input_channels=input_channels,
             label_name=label_image,
-            label_level=label_level,
-            level=level,
             output_table_name=output_table_name,
             measure_morphology=measure_morphology,
         )
@@ -226,8 +213,6 @@ def test_masked_measurements_with_orgs_and_nuc(
         input_roi_table_name=input_ROI_table,
         input_channels=input_channels,
         label_name=label_image,
-        label_level=label_level,
-        level=level,
         output_table_name=output_table_name,
         measure_morphology=measure_morphology,
     )
@@ -256,7 +241,9 @@ def test_empty_label(
 ):
     input_ROI_table = "well_ROI_table"
     zarr_url = f"{tiny_zenodo_zarrs_base_path}/{image_path_2D}"
-    output_table_name = f"empty_{input_ROI_table}_{len(input_channels)}_{measure_morphology}_{level}_{label_level}"
+    output_table_name = (
+        f"empty_{input_ROI_table}_{len(input_channels)}_{measure_morphology}_0_0"
+    )
 
     # Prepare fractal task
     label_image = "empty"
@@ -266,8 +253,6 @@ def test_empty_label(
         input_roi_table_name=input_ROI_table,
         input_channels=input_channels,
         label_name=label_image,
-        label_level=label_level,
-        level=level,
         output_table_name=output_table_name,
         measure_morphology=measure_morphology,
     )
@@ -295,9 +280,7 @@ def test_overwrite(
     try:
         output_table_name = f"table_overwrite_{overwrite}"
     except TypeError:
-        output_table_name = (
-            f"table_{input_ROI_table}_0_{measure_morphology}_{level}_{label_level}"
-        )
+        output_table_name = f"table_{input_ROI_table}_0_{measure_morphology}_0_0"
 
     # Prepare fractal task
     label_image = "nuclei"
@@ -306,8 +289,6 @@ def test_overwrite(
         input_roi_table_name=input_ROI_table,
         input_channels=input_channels,
         label_name=label_image,
-        label_level=label_level,
-        level=level,
         output_table_name=output_table_name,
         measure_morphology=measure_morphology,
         overwrite=True,
@@ -319,8 +300,6 @@ def test_overwrite(
             input_roi_table_name=input_ROI_table,
             input_channels=input_channels,
             label_name=label_image,
-            label_level=label_level,
-            level=level,
             output_table_name=output_table_name,
             measure_morphology=measure_morphology,
             overwrite=overwrite,
@@ -333,8 +312,6 @@ def test_overwrite(
                 input_roi_table_name=input_ROI_table,
                 input_channels=input_channels,
                 label_name=label_image,
-                label_level=label_level,
-                level=level,
                 output_table_name=output_table_name,
                 measure_morphology=measure_morphology,
                 overwrite=overwrite,

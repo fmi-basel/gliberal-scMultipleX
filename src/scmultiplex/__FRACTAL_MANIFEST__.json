@@ -1312,18 +1312,6 @@
             "type": "string",
             "description": "Name of the ROI table to loop over. Needs to exist as a ROI table in the OME-Zarr file. If it is a masking ROI table, masking of input is performed. Always mask input."
           },
-          "level": {
-            "default": 0,
-            "title": "Level",
-            "type": "integer",
-            "description": "Resolution of the intensity image to load for measurements. Only tested for level 0"
-          },
-          "label_level": {
-            "default": 0,
-            "title": "Label Level",
-            "type": "integer",
-            "description": "Resolution of the label image to load for measurements."
-          },
           "measure_morphology": {
             "default": true,
             "title": "Measure Morphology",
