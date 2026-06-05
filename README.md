@@ -6,8 +6,8 @@
 
 The package supports workflows for segmentation post-processing, object linking across multiplexing rounds, registration, intensity correction, feature extraction, mesh generation, and 3D shape analysis.
 
-scMultipleX functions are wrapped as [Fractal](https://fractal-analytics-platform.github.io/) based on the OME-Zarr image format.
-It enables users to build reproducible image-processing workflows from modular tasks and execute them locally or on compute clusters.
+scMultipleX functions are wrapped as [Fractal](https://fractal-analytics-platform.github.io/) tasks based on the OME-Zarr image format.
+scMultipleX tasks enable users to build reproducible image-processing workflows from modular tasks and execute them locally or on compute clusters.
 
 The tasks provided by scMultipleX are located under:
 
@@ -28,7 +28,6 @@ Tasks for preparing and cleaning label images:
 - Expand labels
 - Fuse touching labels
 - Clean up 3D cell segmentations
-- Clean up child labels in 3D
 - Segment images by intensity threshold
 - Convert 3D images to maximum-intensity projections
 
@@ -114,4 +113,8 @@ Developed in the Liberali Lab at the Friedrich Miescher Institute for Biomedical
 
 Unless otherwise stated in each individual module, all scMultipleX components are released according to a BSD 3-Clause License, and Copyright is with Friedrich Miescher Institute for Biomedical Research.
 
-Point-cloud based multiplexed linking is built on [PlatyMatch](https://github.com/juglab/PlatyMatch) ([DOI](https://doi.org/10.1007/978-3-030-66415-2_30)) by Manan Lalit in the Florian Jug lab at the Human Technopole, Italy.
+Point-cloud based multiplexed linking is built on [PlatyMatch](https://github.com/juglab/PlatyMatch) ([DOI](https://doi.org/10.1007/978-3-030-66415-2_30)) by Manan Lalit.
+
+Warpfield registration is based on [Warpfield](https://github.com/danionella/warpfield/tree/main) ([DOI](https://doi.org/10.1038/s41467-023-43741-x)).
+
+Spherical harmonic computation is based on [aisc-shparam](https://github.com/AllenCell/aics-shparam).
