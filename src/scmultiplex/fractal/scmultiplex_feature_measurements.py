@@ -109,6 +109,8 @@ def scmultiplex_feature_measurements(  # noqa: C901
 
     # TODO: consider not always masking input by ROI table and instead make optional (ie. load region but without masking)
 
+    # TODO throw error if channel is not found!! Or pass
+
     # Load OME Zarr container
     ome_zarr = open_ome_zarr_container(zarr_url)
 
@@ -158,10 +160,15 @@ def scmultiplex_feature_measurements(  # noqa: C901
     else:
         logger.info("Feature extraction only on label map.")
 
-    # Pixel sizes as list: [z,y,x]
-    pixel_size = label_image.pixel_size
-
     # Check whether input image is 2D or 3D
+    if input_channels:
+        # Read spacing meta from channel images
+        # Pixel sizes as list: [z,y,x]
+        pixel_size = channel_image.pixel_size
+    else:
+        # Read pixel spacing from label image
+        pixel_size = label_image.pixel_size
+
     if label_image.shape[0] == 1:  # if z-dimension is 1, it is actually a 2D image
         is_2d = True
         spacing = (pixel_size.y, pixel_size.x)
