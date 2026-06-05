@@ -100,9 +100,6 @@ def metadata_tiny_zenodo() -> dict[str, dict]:
 def column_names() -> dict[str, list]:
     return {
         "columns_2D_common": [
-            "ROI_table_name",
-            "ROI_name",
-            "index",
             "x_pos",
             "y_pos",
         ],
@@ -146,9 +143,6 @@ def column_names() -> dict[str, list]:
             "{Ch}.y_massDisp",
         ],
         "columns_3D_common": [
-            "ROI_table_name",
-            "ROI_name",
-            "index",
             "x_pos",
             "y_pos",
             "z_pos",

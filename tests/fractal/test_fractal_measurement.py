@@ -1,8 +1,4 @@
-import warnings
-from pathlib import Path
-
-import anndata as ad
-import pandas as pd
+import ngio
 import pytest
 from fractal_tasks_core.channels import ChannelInputModel
 from ngio.utils import NgioValueError
@@ -24,17 +20,6 @@ label_level = 0
 
 image_path_2D = "20200812-CardiomyocyteDifferentiation14-Cycle1_mip.zarr/B/03/0"
 image_path_3D = "20200812-CardiomyocyteDifferentiation14-Cycle1.zarr/B/03/0"
-
-
-def load_features_for_well(table_path):
-    with warnings.catch_warnings():
-        adata = ad.read_zarr(table_path)
-    df = adata.to_df()
-    df_labels = adata.obs
-    df_labels["index"] = df_labels.index
-    df["index"] = df.index
-    df = pd.merge(df_labels, df, on="index")
-    return df
 
 
 # Inputs: input_ROI_table, measure_morphology, expected to run
@@ -96,8 +81,8 @@ def test_2D_fractal_measurements(
         )
 
         # Check & verify the output_table
-        ad_path = Path(zarr_url) / "tables" / output_table_name
-        df = load_features_for_well(ad_path)
+        ome_zarr = ngio.open_ome_zarr_container(zarr_url)
+        df = ome_zarr.get_table(output_table_name).dataframe
 
         if input_ROI_table == "well_ROI_table":
             assert len(df) == 1493
@@ -105,6 +90,7 @@ def test_2D_fractal_measurements(
             assert len(df) == 1504
 
         expected_columns = []
+        meta_colums = ["ROI_table_name", "ROI_name"]
         if measure_morphology:
             expected_columns = (
                 column_names["columns_2D_common"].copy()
@@ -112,19 +98,19 @@ def test_2D_fractal_measurements(
             )
         else:
             expected_columns = column_names["columns_2D_common"].copy()
+
         # Add intensity columns
         if input_channels:
             for channel in input_channels.keys():
                 for feature in column_names["columns_2D_intensity"]:
                     expected_columns.append(feature.format(Ch=channel))
 
+        expected_columns = expected_columns + meta_colums
+
         assert list(df.columns) == expected_columns
 
         # Load expected table & compare
-        expected_table_path = (
-            Path(zarr_url) / "tables" / f"expected_{output_table_name}"
-        )
-        df_expected = load_features_for_well(expected_table_path)
+        df_expected = ome_zarr.get_table(f"expected_{output_table_name}").dataframe
         assert_frame_equal(df, df_expected)
 
 
@@ -185,14 +171,15 @@ def test_3D_fractal_measurements(
         )
 
         # Check & verify the output_table
-        ad_path = Path(zarr_url) / "tables" / output_table_name
-        df = load_features_for_well(ad_path)
+        ome_zarr = ngio.open_ome_zarr_container(zarr_url)
+        df = ome_zarr.get_table(output_table_name).dataframe
 
         if input_ROI_table == "well_ROI_table":
             assert len(df) == 1632
         elif input_ROI_table == "FOV_ROI_table":
             assert len(df) == 1632
 
+        meta_colums = ["ROI_table_name", "ROI_name"]
         if measure_morphology:
             expected_columns = (
                 column_names["columns_3D_common"].copy()
@@ -204,13 +191,11 @@ def test_3D_fractal_measurements(
         for channel in input_channels.keys():
             for feature in column_names["columns_3D_intensity"]:
                 expected_columns.append(feature.format(Ch=channel))
+        expected_columns = expected_columns + meta_colums
         assert list(df.columns) == expected_columns
 
         # Load expected table & compare
-        expected_table_path = (
-            Path(zarr_url) / "tables" / f"expected_{output_table_name}"
-        )
-        df_expected = load_features_for_well(expected_table_path)
+        df_expected = ome_zarr.get_table(f"expected_{output_table_name}").dataframe
         assert_frame_equal(df, df_expected)
 
 
@@ -250,8 +235,8 @@ def test_masked_measurements_with_orgs_and_nuc(
     # Check that there are measurement for all 20 nuclei (before #122,
     # there was only 1 measurements)
     # Check & verify the output_table
-    ad_path = Path(zarr_url) / "tables" / output_table_name
-    df = load_features_for_well(ad_path)
+    ome_zarr = ngio.open_ome_zarr_container(zarr_url)
+    df = ome_zarr.get_table(output_table_name).dataframe
     assert len(df) == 20
 
 
@@ -288,10 +273,10 @@ def test_empty_label(
     )
 
     # Check & verify the output_table
-    ad_path = Path(zarr_url) / "tables" / output_table_name
-    adata = ad.read_zarr(ad_path)
-    assert len(adata) == 0
-    assert adata.shape == (0, 0)
+    ome_zarr = ngio.open_ome_zarr_container(zarr_url)
+    df = ome_zarr.get_table(output_table_name).dataframe
+    assert len(df) == 0
+    assert df.shape == (0, 0)
 
 
 @pytest.mark.filterwarnings("ignore:Transforming to str index.")
