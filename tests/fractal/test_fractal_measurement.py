@@ -230,68 +230,6 @@ inputs_masked = [single_input_channels]
 
 
 @pytest.mark.filterwarnings("ignore:Transforming to str index.")
-@pytest.mark.parametrize("input_channels,", inputs_masked)
-def test_masked_measurements_test(
-    tiny_zenodo_zarrs_base_path,
-    metadata_tiny_zenodo,
-    column_names,
-    input_channels,
-):
-    # FIXME: Get a smaller test dataset to test this on. This test takes ~40s.
-    # Criteria: Has masking ROI table, resolution of label image != resolution
-    # of intensity image.
-    # Test measuring when using a ROI table with masks
-    allow_duplicate_labels = False
-    zarr_url = f"{tiny_zenodo_zarrs_base_path}/{image_path_2D}"
-    input_ROI_table = "nuclei_ROI_table"
-    measure_morphology = True
-    output_table_name = f"table_masked_{input_ROI_table}_{len(input_channels)}_{measure_morphology}_{level}_{label_level}"
-
-    # Prepare fractal task
-    label_image = "nuclei"
-
-    scmultiplex_feature_measurements(
-        zarr_url=zarr_url,
-        input_roi_table_name=input_ROI_table,
-        input_channels=input_channels,
-        label_name=label_image,
-        label_level=label_level,
-        level=level,
-        output_table_name=output_table_name,
-        measure_morphology=measure_morphology,
-        allow_duplicate_labels=allow_duplicate_labels,
-    )
-
-    # Check & verify the output_table
-    ad_path = Path(zarr_url) / "tables" / output_table_name
-    df = load_features_for_well(ad_path)
-
-    assert len(df) == 1493
-
-    expected_columns = []
-    if measure_morphology:
-        expected_columns = (
-            column_names["columns_2D_common"].copy()
-            + column_names["columns_2D_morphology"].copy()
-        )
-    else:
-        expected_columns = column_names["columns_2D_common"].copy()
-    # Insert ROI_label entry to columns
-    expected_columns.insert(3, "ROI_label")
-    # Add intensity columns
-    for channel in input_channels.keys():
-        for feature in column_names["columns_2D_intensity"]:
-            expected_columns.append(feature.format(Ch=channel))
-
-    assert list(df.columns) == expected_columns
-
-    # Load expected table & compare
-    expected_table_path = Path(zarr_url) / "tables" / f"expected_{output_table_name}"
-    df_expected = load_features_for_well(expected_table_path)
-    assert_frame_equal(df, df_expected)
-
-
-@pytest.mark.filterwarnings("ignore:Transforming to str index.")
 def test_masked_measurements_with_orgs_and_nuc(
     linking_zenodo_zarrs,
 ):

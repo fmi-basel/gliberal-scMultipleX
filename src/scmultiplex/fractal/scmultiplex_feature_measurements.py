@@ -197,9 +197,10 @@ def scmultiplex_feature_measurements(  # noqa: C901
 
         logger.info(f"Processing ROI label {roi_string}...")
 
+        # TODO: change ROI_name to ROI_index
         extra_values = {
             "ROI_table_name": input_roi_table_name,
-            "ROI_index": roi_string,
+            "ROI_name": roi_string,
         }
 
         # Load numpy of segmentation images
