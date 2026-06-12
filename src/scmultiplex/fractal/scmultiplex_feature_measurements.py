@@ -281,9 +281,12 @@ def scmultiplex_feature_measurements(  # noqa: C901
         total_measurements = len(df_well["label"])
         unique_labels = len(df_well["label"].unique())
         if not total_measurements == unique_labels:
-            raise ValueError(
-                "Measurement contains non-unique labels: \n"
-                f"{total_measurements=}, {unique_labels=}, "
+            duplicated_labels = df_well["label"].value_counts().loc[lambda x: x > 1]
+
+            logger.warning(
+                "Measurement contains non-unique labels:\n"
+                f"{total_measurements=}, {unique_labels=}\n"
+                f"Duplicated labels and their occurrence counts:\n{duplicated_labels.to_string()}"
             )
 
         df_well.drop(labels=["label"], axis=1, inplace=True)
