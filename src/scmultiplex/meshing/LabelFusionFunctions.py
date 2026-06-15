@@ -412,30 +412,33 @@ def threshold_image(image, intensity_threshold):
     return image_thresholded
 
 
-def select_largest_component(label_image):
+def select_largest_component(label_image, connectivity=3):
     """
-    Select largest connected component of label image. Discard all smaller components.
-    Return binary (0/1) image.
+    Select largest connected component from a binary or label image.
+    Discard all smaller disconnected components.
+    Return binary 0/1 image.
     """
-    rois = regionprops(label_image)
+
+    # Convert to binary mask first
+    binary = label_image > 0
+
+    # Connected-component labeling
+    cc = label(binary, connectivity=connectivity)
+
+    rois = regionprops(cc)
     roi_count = len(rois)
 
-    if roi_count > 1:
-        label_with_largest_volume = 0
-        largest_volume = 0
-        for r in rois:
-            rlabel = r.label
-            rvolume = r.area
-            if rvolume > largest_volume:
-                largest_volume = rvolume
-                label_with_largest_volume = rlabel
+    if roi_count == 0:
+        return binary.astype(np.uint8), roi_count
 
-        label_image[label_image != label_with_largest_volume] = 0
+    # Find largest connected component
+    largest_region = max(rois, key=lambda r: r.area)
+    largest_label = largest_region.label
 
-    # binarize all images
-    label_image[label_image > 0] = 1
+    # Keep only largest component
+    largest_component = cc == largest_label
 
-    return label_image, roi_count
+    return largest_component.astype(np.uint8), roi_count
 
 
 def run_label_fusion(
