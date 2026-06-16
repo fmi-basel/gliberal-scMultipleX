@@ -33,7 +33,7 @@ from scmultiplex.aics_shparam import shparam, shtools
 from scmultiplex.fractal.fractal_helper_functions import format_roi_table, get_zattrs
 from scmultiplex.meshing.MeshFunctions import export_stl_polydata
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("spherical_harmonics_from_labelimage")
 
 
 @validate_call
@@ -229,7 +229,4 @@ def spherical_harmonics_from_labelimage(
 if __name__ == "__main__":
     from fractal_task_tools.task_wrapper import run_fractal_task
 
-    run_fractal_task(
-        task_function=spherical_harmonics_from_labelimage,
-        logger_name=logger.name,
-    )
+    run_fractal_task(task_function=spherical_harmonics_from_labelimage)

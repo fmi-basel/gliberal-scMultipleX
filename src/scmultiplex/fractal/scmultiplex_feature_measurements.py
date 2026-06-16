@@ -32,7 +32,7 @@ from pydantic import validate_call
 
 from scmultiplex.features.feature_wrapper import get_regionprops_measurements
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("scmultiplex_feature_measurements")
 warnings.filterwarnings("ignore", category=FutureWarning)
 ngio_logger.setLevel("ERROR")
 
@@ -337,7 +337,4 @@ def scmultiplex_feature_measurements(  # noqa: C901
 if __name__ == "__main__":
     from fractal_task_tools.task_wrapper import run_fractal_task
 
-    run_fractal_task(
-        task_function=scmultiplex_feature_measurements,
-        logger_name=logger.name,
-    )
+    run_fractal_task(task_function=scmultiplex_feature_measurements)

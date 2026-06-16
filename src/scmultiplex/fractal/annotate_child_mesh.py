@@ -28,7 +28,7 @@ from scmultiplex.meshing.MeshFunctions import export_vtk_polydata, load_mesh_as_
 
 warnings.filterwarnings("ignore", category=ImplicitModificationWarning)
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("annotate_child_mesh")
 ngio_logger.setLevel("ERROR")
 
 
@@ -234,7 +234,4 @@ def annotate_child_mesh(
 if __name__ == "__main__":
     from fractal_tasks_core.tasks._utils import run_fractal_task
 
-    run_fractal_task(
-        task_function=annotate_child_mesh,
-        logger_name=logger.name,
-    )
+    run_fractal_task(task_function=annotate_child_mesh)

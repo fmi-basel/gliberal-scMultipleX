@@ -33,7 +33,7 @@ from scmultiplex.illumination.calculate_correction_functions import (
 )
 from scmultiplex.meshing.LabelFusionFunctions import select_label
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("calculate_z_illumination_correction")
 
 
 @validate_call
@@ -307,7 +307,4 @@ def calculate_z_illumination_correction(
 if __name__ == "__main__":
     from fractal_task_tools.task_wrapper import run_fractal_task
 
-    run_fractal_task(
-        task_function=calculate_z_illumination_correction,
-        logger_name=logger.name,
-    )
+    run_fractal_task(task_function=calculate_z_illumination_correction)

@@ -27,7 +27,7 @@ from scmultiplex.fractal.fractal_helper_functions import extract_acq_info
 from scmultiplex.meshing.MeshFunctions import export_vtk_polydata, load_mesh_as_polydata
 from scmultiplex.meshing.MeshProjection import assign_vertices_to_nuclei
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("annotate_mesh_by_child_features")
 ngio_logger.setLevel("ERROR")
 
 
@@ -345,7 +345,4 @@ def annotate_mesh_by_child_features(
 if __name__ == "__main__":
     from fractal_task_tools.task_wrapper import run_fractal_task
 
-    run_fractal_task(
-        task_function=annotate_mesh_by_child_features,
-        logger_name=logger.name,
-    )
+    run_fractal_task(task_function=annotate_mesh_by_child_features)

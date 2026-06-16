@@ -32,7 +32,7 @@ from scmultiplex.meshing.MeshFunctions import (
     read_stl_polydata,
 )
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("scmultiplex_mesh_measurements")
 
 
 @validate_call
@@ -318,7 +318,4 @@ def scmultiplex_mesh_measurements(
 if __name__ == "__main__":
     from fractal_task_tools.task_wrapper import run_fractal_task
 
-    run_fractal_task(
-        task_function=scmultiplex_mesh_measurements,
-        logger_name=logger.name,
-    )
+    run_fractal_task(task_function=scmultiplex_mesh_measurements)

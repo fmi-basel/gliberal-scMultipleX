@@ -27,7 +27,7 @@ from scmultiplex.linking.OrganoidLinkingFunctions import group_by_roi_name_from_
 
 # Configure logging
 ngio_logger.setLevel("ERROR")
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("detect_clipped_rois_across_rounds")
 
 
 @validate_call
@@ -168,7 +168,4 @@ def detect_clipped_rois_across_rounds(
 if __name__ == "__main__":
     from fractal_task_tools.task_wrapper import run_fractal_task
 
-    run_fractal_task(
-        task_function=detect_clipped_rois_across_rounds,
-        logger_name=logger.name,
-    )
+    run_fractal_task(task_function=detect_clipped_rois_across_rounds)

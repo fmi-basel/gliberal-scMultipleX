@@ -39,7 +39,7 @@ from scmultiplex.linking.NucleiLinkingFunctions import (
     run_relabel_dask,
 )
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("relabel_by_linking_consensus")
 
 
 @validate_call
@@ -268,7 +268,4 @@ def relabel_by_linking_consensus(
 if __name__ == "__main__":
     from fractal_task_tools.task_wrapper import run_fractal_task
 
-    run_fractal_task(
-        task_function=relabel_by_linking_consensus,
-        logger_name=logger.name,
-    )
+    run_fractal_task(task_function=relabel_by_linking_consensus)
