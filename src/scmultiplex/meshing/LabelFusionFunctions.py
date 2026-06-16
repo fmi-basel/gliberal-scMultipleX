@@ -304,12 +304,14 @@ def find_edges(
     # Convert to 8-bit image
     outer_stack = (outer_stack * 255).astype(np.uint8)
     # Filter out small objects that are smaller than radius of expansion and convert to labelmap
-    outer_stack = label(remove_small_objects(outer_stack, min_size))
+    outer_stack = label(remove_small_objects(outer_stack, max_size=min_size - 1))
 
     if segment_lumen:
         lumen_stack = (lumen_stack * 255).astype(np.uint8)
         # TODO remove hard-coded size factor here; allowing lumen debris to be 20x smaller than small object size
-        lumen_stack = label(remove_small_objects(lumen_stack, min_size / 20))
+        lumen_stack = label(
+            remove_small_objects(lumen_stack, max_size=(min_size - 1 / 20))
+        )
         return outer_stack, lumen_stack, padded_zslice_count
 
     return outer_stack, padded_zslice_count
@@ -383,7 +385,7 @@ def clean_binary_image(
 
         # Remove small objects prior to expansion
         zslice = zslice > 0
-        zslice = remove_small_objects(zslice, small_objects_threshold)
+        zslice = remove_small_objects(zslice, max_size=small_objects_threshold - 1)
         zslice = zslice.astype(int)
 
         if fill_holes:
@@ -397,7 +399,7 @@ def clean_binary_image(
             zslice,
             disk(expandby_pix),
         )  # dilate mask to original size
-        zslice = remove_small_objects(zslice, small_objects_threshold)
+        zslice = remove_small_objects(zslice, max_size=small_objects_threshold - 1)
         zslice = (zslice * 255).astype(np.uint8)  # convert 0-255
         zslice = gaussian(zslice, sigma=sigma2d, preserve_range=False)  # output is 0-1
         cleaned[i, :, :] = zslice
@@ -412,30 +414,33 @@ def threshold_image(image, intensity_threshold):
     return image_thresholded
 
 
-def select_largest_component(label_image):
+def select_largest_component(label_image, connectivity=3):
     """
-    Select largest connected component of label image. Discard all smaller components.
-    Return binary (0/1) image.
+    Select largest connected component from a binary or label image.
+    Discard all smaller disconnected components.
+    Return binary 0/1 image.
     """
-    rois = regionprops(label_image)
+
+    # Convert to binary mask first
+    binary = label_image > 0
+
+    # Connected-component labeling
+    cc = label(binary, connectivity=connectivity)
+
+    rois = regionprops(cc)
     roi_count = len(rois)
 
-    if roi_count > 1:
-        label_with_largest_volume = 0
-        largest_volume = 0
-        for r in rois:
-            rlabel = r.label
-            rvolume = r.area
-            if rvolume > largest_volume:
-                largest_volume = rvolume
-                label_with_largest_volume = rlabel
+    if roi_count == 0:
+        return binary.astype(np.uint8), roi_count
 
-        label_image[label_image != label_with_largest_volume] = 0
+    # Find largest connected component
+    largest_region = max(rois, key=lambda r: r.area)
+    largest_label = largest_region.label
 
-    # binarize all images
-    label_image[label_image > 0] = 1
+    # Keep only largest component
+    largest_component = cc == largest_label
 
-    return label_image, roi_count
+    return largest_component.astype(np.uint8), roi_count
 
 
 def run_label_fusion(

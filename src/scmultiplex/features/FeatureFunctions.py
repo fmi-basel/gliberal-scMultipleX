@@ -134,15 +134,15 @@ def circularity(prop_2D):
 
 def aspect_ratio(prop):
     """Return the ratio of major axis length to equivalent diameter"""
-    return prop.major_axis_length / prop.equivalent_diameter
+    return prop.axis_major_length / prop.equivalent_diameter_area
 
 
 def minor_major_axis_ratio(prop):
     """Return the ratio of major to minor axis"""
-    if prop.major_axis_length == 0:
+    if prop.axis_major_length == 0:
         return np.float64("NaN")
     else:
-        return prop.minor_axis_length / prop.major_axis_length
+        return prop.axis_minor_length / prop.axis_major_length
 
 
 def concavity_count(prop_2D, min_area_fraction=0.005):

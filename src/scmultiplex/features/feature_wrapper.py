@@ -30,9 +30,10 @@ def get_regionprops_measurements(
     spacing: Union[tuple, None],
     is_2D: bool,
     measure_morphology=False,
+    measure_surface_area=False,
     min_area_fraction=0.005,
     channel_prefix: Union[str, None] = None,
-    extra_values: Dict[str, Any] = {},
+    extra_values: Union[Dict[str, Any], None] = None,
 ):
     """
     :param label_img: 2D or 3D numpy array of labeled objects
@@ -41,6 +42,7 @@ def get_regionprops_measurements(
     :param spacing: Tuple of the spacing in z, y, x.
     :param is_2D: Boolean indicating if the image is 2D or 3D
     :param measure_morphology: Boolean indicating if morphology measurements should be made
+    :param measure_surface_area: Boolean indicating if surface area measurements should be made
     :param min_area_fraction: Minimum area fraction for concavity count
     :param channel_prefix: String to prefix to the column names of
                            intensity measurements. Defaults to None => no prefix
@@ -56,31 +58,28 @@ def get_regionprops_measurements(
     # Set the global spacing. Is used in surface_area_marchingcube
     set_spacing(spacing)
 
+    if extra_values is None:
+        extra_values = {}
+
+    extra_properties = [
+        fixed_percentiles,
+        skewness,
+        kurtos,
+        stdv,
+    ]
+
+    if measure_surface_area:
+        extra_properties.append(surface_area_marchingcube)
+
+    regionprops_kwargs = {
+        "extra_properties": tuple(extra_properties),
+        "spacing": spacing,
+    }
+
     if img is None:
-        regionproperties = regionprops(
-            label_img,
-            extra_properties=(
-                fixed_percentiles,
-                skewness,
-                kurtos,
-                stdv,
-                surface_area_marchingcube,
-            ),
-            spacing=spacing,
-        )
+        regionproperties = regionprops(label_img, **regionprops_kwargs)
     else:
-        regionproperties = regionprops(
-            label_img,
-            img,
-            extra_properties=(
-                fixed_percentiles,
-                skewness,
-                kurtos,
-                stdv,
-                surface_area_marchingcube,
-            ),
-            spacing=spacing,
-        )
+        regionproperties = regionprops(label_img, img, **regionprops_kwargs)
 
     measurement_rows = []
     observation_rows = []
@@ -108,7 +107,12 @@ def get_regionprops_measurements(
 
         if measure_morphology:
             morphology_measurements = get_morphology_measurements(
-                labeled_obj, label_img.shape, spacing, is_2D, min_area_fraction
+                labeled_obj,
+                label_img.shape,
+                spacing,
+                is_2D,
+                min_area_fraction,
+                measure_surface_area,
             )
 
             label_info.update(morphology_measurements)
@@ -315,7 +319,12 @@ def get_pixel_measurements(
 
 
 def get_morphology_measurements(
-    labeled_obj, img_shape, spacing, is_2D, min_area_fraction
+    labeled_obj,
+    img_shape,
+    spacing,
+    is_2D,
+    min_area_fraction,
+    measure_surface_area,
 ):
     morphology_measurements = {
         "is_touching_border_xy": is_touching_border_xy(
@@ -362,8 +371,13 @@ def get_morphology_measurements(
             "is_touching_border_z": is_touching_border_z(
                 labeled_obj, img_shape=img_shape
             ),
-            "surface_area": labeled_obj["surface_area_marchingcube"],
         }
+
+        if measure_surface_area:
+            morphology_3d_only["surface_area"] = labeled_obj[
+                "surface_area_marchingcube"
+            ]
+
         morphology_measurements.update(morphology_3d_only)
 
     return morphology_measurements

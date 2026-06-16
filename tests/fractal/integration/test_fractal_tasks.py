@@ -1325,6 +1325,7 @@ def test_masking_feature_measurements(linking_zenodo_zarrs, name=name_3d):
         input_channels=channels,
         input_roi_table_name="org_ROI_table",
         measure_morphology=True,
+        measure_surface_area=True,
     )
 
     # Load expected table & compare

@@ -195,7 +195,9 @@ def annotate_mesh_by_child_features(
 
         # numpy (N_cells, 3)
         # physical units (um)
-        feat_xyz = feat_sel_df[["x_pos", "y_pos", "z_pos"]].to_numpy()
+        feat_xyz = feat_sel_df[
+            ["x_pos_pix", "y_pos_pix", "z_pos_pix_scaled"]
+        ].to_numpy()
 
         label_array = feat_sel_df.index.to_numpy()
 
@@ -254,7 +256,14 @@ def annotate_mesh_by_child_features(
             # Select all features that correspond to specific parent object
             annot_feat_sel_df = annot_feat_df[
                 annot_feat_df[parent_of_child_colname] == label_value
-            ]
+            ].copy()
+
+            # Add index column (e.g. "label") as column to df with same name, if does not already exist
+            # Checks should handle different NGIO naming versions
+            index_name = annot_feat_sel_df.index.name
+
+            if index_name is not None and index_name not in annot_feat_sel_df.columns:
+                annot_feat_sel_df[index_name] = annot_feat_sel_df.index
 
             annot_label_array = annot_feat_sel_df.index.to_numpy()
 
@@ -322,7 +331,7 @@ def annotate_mesh_by_child_features(
                 zarr_url, "registration", "nonsurface_labels"
             )
             os.makedirs(registration_folder_path, exist_ok=True)
-            filename = "nonsurface_labels_to_remove.npz"
+            filename = f"nonsurface_labels_to_remove_mesh-{parent_mesh_name}_child-{child_feature_table_name}_dist-{int(maximum_distance)}.npz"
             registration_save_path = os.path.join(registration_folder_path, filename)
             # Save to .npz file
             np.savez(registration_save_path, **save_dict)

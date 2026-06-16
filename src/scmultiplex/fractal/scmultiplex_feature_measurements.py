@@ -48,7 +48,9 @@ def scmultiplex_feature_measurements(  # noqa: C901
     input_channels: Union[Dict[str, ChannelInputModel], None] = None,
     input_roi_table_name: str = "well_ROI_table",
     measure_morphology: bool = True,
+    measure_surface_area: bool = False,
     table_backend: str = "anndata",  # TODO: Refactor to Enum with new task tools
+    allow_duplicate_labels: bool = False,
     overwrite: bool = True,
 ):
     """
@@ -73,9 +75,16 @@ def scmultiplex_feature_measurements(  # noqa: C901
             "A01_C01"}. To only measure morphology, provide an empty dict
         input_roi_table_name: Name of the ROI table to loop over. Needs to exist
             as a ROI table in the OME-Zarr file. If it is a masking ROI table, masking of input is performed. Always mask input.
-        measure_morphology: Set to True to measure morphology features
+        measure_morphology: Set to True to measure morphology features. If False, only centroid and area/volume are
+            measured.
+        measure_surface_area: Set to True to measure 3D surface area. Marching cube algorithm can be computationally
+            intensive for large volumes, so surface area measurement is optional.
         table_backend: Feature table backend. Valid values are anndata, csv
             and json.
+        allow_duplicate_labels: Set to True to allow saving measurement
+            tables with non-unique label values. Can happen when segmentation
+            is run on a different ROI than the measurements (e.g. segment
+            per well, but measure per FOV)
         overwrite: If `True`, overwrite the task output.
     """
     logger.info(f"Running feature extraction on OME-Zarr image {zarr_url=}")
@@ -209,6 +218,7 @@ def scmultiplex_feature_measurements(  # noqa: C901
                     img = np.squeeze(img, axis=0)
 
                 calc_morphology = first_channel and measure_morphology
+                calc_surface_area = first_channel and measure_surface_area
 
                 if seg.shape != img.shape:
                     logger.info(
@@ -232,6 +242,7 @@ def scmultiplex_feature_measurements(  # noqa: C901
                     spacing=spacing,
                     is_2D=is_2d,
                     measure_morphology=calc_morphology,
+                    measure_surface_area=calc_surface_area,
                     channel_prefix=c,
                     extra_values=extra_values,
                 )
@@ -249,12 +260,15 @@ def scmultiplex_feature_measurements(  # noqa: C901
         else:
             # Only measure morphology
             calc_morphology = first_channel and measure_morphology
+            calc_surface_area = first_channel and measure_surface_area
+
             new_df, new_info_df = get_regionprops_measurements(
                 seg,
                 img=None,
                 spacing=spacing,
                 is_2D=is_2d,
                 measure_morphology=calc_morphology,
+                measure_surface_area=calc_surface_area,
                 extra_values=extra_values,
             )
             if "label" in df_roi.columns:
@@ -263,6 +277,29 @@ def scmultiplex_feature_measurements(  # noqa: C901
             else:
                 df_roi = pd.concat([df_roi, new_df], axis=1)
                 df_info_roi = pd.concat([df_info_roi, new_info_df], axis=1)
+
+        # Check duplicates between this ROI and previous ROIs
+        if not df_well.empty and not df_roi.empty:
+            duplicate_across_rois = df_roi["label"].isin(df_well["label"])
+
+            if duplicate_across_rois.any():
+                duplicated_labels = df_roi.loc[duplicate_across_rois, "label"].unique()
+
+                for label in duplicated_labels:
+                    previous_roi = df_info_well.loc[
+                        df_info_well["label"] == label, "ROI_name"
+                    ].iloc[0]
+
+                    logger.warning(
+                        f"Label {label} in ROI {roi_string} "
+                        f"was first measured in ROI {previous_roi}"
+                    )
+
+                if not allow_duplicate_labels:
+                    raise ValueError(
+                        f"Measurement contains non-unique labels at ROI {roi_string}"
+                    )
+
         df_well = pd.concat([df_well, df_roi], axis=0, ignore_index=True)
         df_info_well = pd.concat([df_info_well, df_info_roi], axis=0, ignore_index=True)
 
@@ -273,17 +310,6 @@ def scmultiplex_feature_measurements(  # noqa: C901
             raise ValueError(
                 "Label column in df_well and df_info_well do not match. "
                 f"{df_well['label']} != {df_info_well['label']}"
-            )
-
-        # Check that labels are unique
-        # Typical issue: Ran segmentation per well, but measurement per FOV
-        # => splits labels into multiple measurements
-        total_measurements = len(df_well["label"])
-        unique_labels = len(df_well["label"].unique())
-        if not total_measurements == unique_labels:
-            raise ValueError(
-                "Measurement contains non-unique labels: \n"
-                f"{total_measurements=}, {unique_labels=}, "
             )
 
         df_well.drop(labels=["label"], axis=1, inplace=True)
