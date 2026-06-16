@@ -304,12 +304,14 @@ def find_edges(
     # Convert to 8-bit image
     outer_stack = (outer_stack * 255).astype(np.uint8)
     # Filter out small objects that are smaller than radius of expansion and convert to labelmap
-    outer_stack = label(remove_small_objects(outer_stack, min_size))
+    outer_stack = label(remove_small_objects(outer_stack, max_size=min_size - 1))
 
     if segment_lumen:
         lumen_stack = (lumen_stack * 255).astype(np.uint8)
         # TODO remove hard-coded size factor here; allowing lumen debris to be 20x smaller than small object size
-        lumen_stack = label(remove_small_objects(lumen_stack, min_size / 20))
+        lumen_stack = label(
+            remove_small_objects(lumen_stack, max_size=(min_size - 1 / 20))
+        )
         return outer_stack, lumen_stack, padded_zslice_count
 
     return outer_stack, padded_zslice_count
@@ -383,7 +385,7 @@ def clean_binary_image(
 
         # Remove small objects prior to expansion
         zslice = zslice > 0
-        zslice = remove_small_objects(zslice, small_objects_threshold)
+        zslice = remove_small_objects(zslice, max_size=small_objects_threshold - 1)
         zslice = zslice.astype(int)
 
         if fill_holes:
@@ -397,7 +399,7 @@ def clean_binary_image(
             zslice,
             disk(expandby_pix),
         )  # dilate mask to original size
-        zslice = remove_small_objects(zslice, small_objects_threshold)
+        zslice = remove_small_objects(zslice, max_size=small_objects_threshold - 1)
         zslice = (zslice * 255).astype(np.uint8)  # convert 0-255
         zslice = gaussian(zslice, sigma=sigma2d, preserve_range=False)  # output is 0-1
         cleaned[i, :, :] = zslice
