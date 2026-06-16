@@ -48,6 +48,7 @@ def scmultiplex_feature_measurements(  # noqa: C901
     input_channels: Union[Dict[str, ChannelInputModel], None] = None,
     input_roi_table_name: str = "well_ROI_table",
     measure_morphology: bool = True,
+    measure_surface_area: bool = False,
     table_backend: str = "anndata",  # TODO: Refactor to Enum with new task tools
     allow_duplicate_labels: bool = False,
     overwrite: bool = True,
@@ -74,7 +75,10 @@ def scmultiplex_feature_measurements(  # noqa: C901
             "A01_C01"}. To only measure morphology, provide an empty dict
         input_roi_table_name: Name of the ROI table to loop over. Needs to exist
             as a ROI table in the OME-Zarr file. If it is a masking ROI table, masking of input is performed. Always mask input.
-        measure_morphology: Set to True to measure morphology features
+        measure_morphology: Set to True to measure morphology features. If False, only centroid and area/volume are
+            measured.
+        measure_surface_area: Set to True to measure 3D surface area. Marching cube algorithm can be computationally
+            intensive for large volumes, so surface area measurement is optional.
         table_backend: Feature table backend. Valid values are anndata, csv
             and json.
         allow_duplicate_labels: Set to True to allow saving measurement
@@ -214,6 +218,7 @@ def scmultiplex_feature_measurements(  # noqa: C901
                     img = np.squeeze(img, axis=0)
 
                 calc_morphology = first_channel and measure_morphology
+                calc_surface_area = first_channel and measure_surface_area
 
                 if seg.shape != img.shape:
                     logger.info(
@@ -237,6 +242,7 @@ def scmultiplex_feature_measurements(  # noqa: C901
                     spacing=spacing,
                     is_2D=is_2d,
                     measure_morphology=calc_morphology,
+                    measure_surface_area=calc_surface_area,
                     channel_prefix=c,
                     extra_values=extra_values,
                 )
@@ -254,12 +260,15 @@ def scmultiplex_feature_measurements(  # noqa: C901
         else:
             # Only measure morphology
             calc_morphology = first_channel and measure_morphology
+            calc_surface_area = first_channel and measure_surface_area
+
             new_df, new_info_df = get_regionprops_measurements(
                 seg,
                 img=None,
                 spacing=spacing,
                 is_2D=is_2d,
                 measure_morphology=calc_morphology,
+                measure_surface_area=calc_surface_area,
                 extra_values=extra_values,
             )
             if "label" in df_roi.columns:

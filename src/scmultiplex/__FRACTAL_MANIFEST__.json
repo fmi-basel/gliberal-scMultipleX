@@ -1325,7 +1325,13 @@
             "default": true,
             "title": "Measure Morphology",
             "type": "boolean",
-            "description": "Set to True to measure morphology features"
+            "description": "Set to True to measure morphology features. If False, only centroid and area/volume are measured."
+          },
+          "measure_surface_area": {
+            "default": false,
+            "title": "Measure Surface Area",
+            "type": "boolean",
+            "description": "Set to True to measure 3D surface area. Marching cube algorithm can be computationally intensive for large volumes, so surface area measurement is optional."
           },
           "table_backend": {
             "default": "anndata",

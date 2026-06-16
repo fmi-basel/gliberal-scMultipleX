@@ -62,6 +62,7 @@ def test_2D_fractal_measurements(
                 label_name=label_image,
                 output_table_name=output_table_name,
                 measure_morphology=measure_morphology,
+                measure_surface_area=True,
             )
     else:
         scmultiplex_feature_measurements(
@@ -71,6 +72,7 @@ def test_2D_fractal_measurements(
             label_name=label_image,
             output_table_name=output_table_name,
             measure_morphology=measure_morphology,
+            measure_surface_area=True,
         )
 
         # Check & verify the output_table
@@ -146,6 +148,7 @@ def test_3D_fractal_measurements(
                 label_name=label_image,
                 output_table_name=output_table_name,
                 measure_morphology=measure_morphology,
+                measure_surface_area=True,
             )
     else:
         scmultiplex_feature_measurements(
@@ -155,6 +158,7 @@ def test_3D_fractal_measurements(
             label_name=label_image,
             output_table_name=output_table_name,
             measure_morphology=measure_morphology,
+            measure_surface_area=True,
         )
 
         # Check & verify the output_table
@@ -215,6 +219,7 @@ def test_masked_measurements_with_orgs_and_nuc(
         label_name=label_image,
         output_table_name=output_table_name,
         measure_morphology=measure_morphology,
+        measure_surface_area=True,
     )
 
     # Check that there are measurement for all 20 nuclei (before #122,
@@ -255,6 +260,7 @@ def test_empty_label(
         label_name=label_image,
         output_table_name=output_table_name,
         measure_morphology=measure_morphology,
+        measure_surface_area=True,
     )
 
     # Check & verify the output_table
@@ -291,6 +297,7 @@ def test_overwrite(
         label_name=label_image,
         output_table_name=output_table_name,
         measure_morphology=measure_morphology,
+        measure_surface_area=True,
         overwrite=True,
     )
 
@@ -302,6 +309,7 @@ def test_overwrite(
             label_name=label_image,
             output_table_name=output_table_name,
             measure_morphology=measure_morphology,
+            measure_surface_area=True,
             overwrite=overwrite,
         )
 
@@ -314,5 +322,6 @@ def test_overwrite(
                 label_name=label_image,
                 output_table_name=output_table_name,
                 measure_morphology=measure_morphology,
+                measure_surface_area=True,
                 overwrite=overwrite,
             )
