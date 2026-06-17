@@ -195,9 +195,7 @@ def annotate_mesh_by_child_features(
 
         # numpy (N_cells, 3)
         # physical units (um)
-        feat_xyz = feat_sel_df[
-            ["x_pos_pix", "y_pos_pix", "z_pos_pix_scaled"]
-        ].to_numpy()
+        feat_xyz = feat_sel_df[["x_pos", "y_pos", "z_pos"]].to_numpy()
 
         label_array = feat_sel_df.index.to_numpy()
 
