@@ -136,7 +136,7 @@ TASK_LIST = [
         category="Image Processing",
         modality="HCS",
         tags=["3D", "illumination correction"],
-        docs_info="file:task_info/apply_z_illumination_correction.md",
+        docs_info="file:task_info/calculate_z_illumination_correction.md",
         input_types=dict(z_illum_corrected=False, is_3D=True),
     ),
     CompoundTask(
