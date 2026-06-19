@@ -50,6 +50,16 @@ def load_correction_adata(
             "Z-Illumination Correction task was run on correct segmentation image."
         )
 
+    # Give warning for labels that exist in segmentation but not in correction table
+    # These might suggest poor segmentation
+    missing_labels = seg_labels[~np.isin(seg_labels, correction_labels)]
+
+    if len(missing_labels) > 0:
+        logger.warning(
+            f"{len(missing_labels)} objects are missing from the z-illumination "
+            f"correction table and will not be corrected."
+        )
+
     return correction_adata
 
 
