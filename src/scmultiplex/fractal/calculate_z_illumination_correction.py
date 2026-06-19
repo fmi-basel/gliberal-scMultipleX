@@ -237,15 +237,22 @@ def calculate_z_illumination_correction(
             roi_start_z = label_idlist[i][0]
 
             # calculate z-illumination dropoff
-            row = calculate_correction(
-                masked_image,
-                roi_start_z,
-                full_z_count,
-                label_str,
-                filepath,
-                low_bound_for_correction,
-                percentile=percentile,
-            )
+            try:
+                row = calculate_correction(
+                    masked_image,
+                    roi_start_z,
+                    full_z_count,
+                    label_str,
+                    filepath,
+                    low_bound_for_correction,
+                    percentile=percentile,
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Skipping object {label_str} because z-illumination correction failed: {type(e).__name__}: {e}",
+                    exc_info=True,
+                )
+                continue
 
             if row is None:
                 logger.warning(f"Skipping object {label_str}.")
