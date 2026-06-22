@@ -908,11 +908,11 @@ def copy_folder_from_zarrurl(origin_zarr_url, output_zarr_url, folder_name, over
 
     # if labels present in origin, move them
     if os.path.exists(origin_folder_path):
-        # make labels directory in destination path
         try:
+            # If destination folder does not exist, copy everything
             shutil.copytree(origin_folder_path, output_folder_path)
             logger.info(f"Copied entire folder '{folder_name}' to output Zarr.")
-        # if folder directory already exists in the target zarr, check content before copying
+
         except FileExistsError:
             if not overwrite:
                 logger.warning(
@@ -926,32 +926,32 @@ def copy_folder_from_zarrurl(origin_zarr_url, output_zarr_url, folder_name, over
 
             # Copy each file/subdirectory individually
             for item in os.listdir(origin_folder_path):
-                if item.startswith("."):
-                    continue  # Skip hidden files
-
                 origin_item = os.path.join(origin_folder_path, item)
-
-                if not os.path.isdir(origin_item):
-                    logger.warning(
-                        f"Skipping {folder_name}/{item} as it is not a directory."
-                    )
-                    continue
-
                 target_item = os.path.join(output_folder_path, item)
 
-                if os.path.exists(target_item):
-                    # If already exists, delete it first, then copy from origin
-                    shutil.rmtree(target_item)
+                if os.path.isfile(origin_item):
+                    # Replace file if it exists
+                    shutil.copy2(origin_item, target_item)
+                    logger.info(f"...Copied file {item}")
+
+                elif os.path.isdir(origin_item):
+                    # Replace directory if it exists
+                    if os.path.exists(target_item):
+                        shutil.rmtree(target_item)
+
                     shutil.copytree(origin_item, target_item)
-                    logger.info(f"...Replaced {item} with one from origin.")
+                    logger.info(f"...Copied directory {item}")
+
                 else:
-                    # If does not exist simply copy the folder
-                    shutil.copytree(origin_item, target_item)
-                    logger.info(f"...Copied {item} from origin without replacement.")
+                    logger.warning(
+                        f"Skipping {folder_name}/{item}: not a regular file or directory."
+                    )
+
     else:
         logger.info(
             f"Folder name {folder_name} does not exist in origin zarr, skipping copying"
         )
+
     return
 
 
