@@ -7,10 +7,12 @@
 #                                                                            #
 ##############################################################################
 
+import logging
 from pathlib import Path
 from typing import Optional, Union
 
 import numpy as np
+import pandas as pd
 import vtk
 from scipy.ndimage import find_objects
 from scipy.spatial.distance import cdist
@@ -20,6 +22,8 @@ from vtkmodules.numpy_interface import dataset_adapter as dsa
 from vtkmodules.util import numpy_support
 from vtkmodules.vtkCommonCore import VTK_DOUBLE, vtkIdList
 from vtkmodules.vtkFiltersCore import vtkFeatureEdges, vtkIdFilter
+
+logger = logging.getLogger("annotate_child_mesh")
 
 
 def numpy_img_to_vtk(img, spacing, origin=(0.0, 0.0, 0.0), deep_copy=True):
@@ -618,6 +622,7 @@ def filter_polydata_by_label_ids(
     polydata: vtk.vtkPolyData,
     keep_label_ids: list[int] | np.ndarray,
     label_array_name: str = "label_id",
+    logger: logging.Logger | None = None,
 ) -> vtk.vtkPolyData:
     """
     Remove objects from a vtkPolyData mesh based on their label IDs.
@@ -631,11 +636,21 @@ def filter_polydata_by_label_ids(
         Any object whose label_id is not in this list is removed.
     label_array_name : str
         Name of the point-data array containing label IDs.
+    logger : logging.Logger, optional
+        Logger used to report which label IDs were removed from the mesh.
+        If None, no logging is performed.
 
     Returns
     -------
     vtk.vtkPolyData
-        Filtered mesh containing only objects with label IDs in keep_label_ids.
+        Filtered mesh containing only objects with label IDs in
+        keep_label_ids.
+
+    Notes
+    -----
+    Label removal is determined from labels actually present in the mesh,
+    not from keep_label_ids. This allows reporting which child objects
+    were removed during filtering.
     """
 
     # Get label ID array from the polydata point data
@@ -648,6 +663,9 @@ def filter_polydata_by_label_ids(
 
     # Convert VTK label array to NumPy
     label_ids = numpy_support.vtk_to_numpy(label_array_vtk)
+
+    # Record labels present in the original mesh
+    original_label_ids = set(np.unique(label_ids))
 
     # For each point, True means keep it, False means remove it
     keep_mask = np.isin(label_ids, keep_label_ids)
@@ -687,4 +705,156 @@ def filter_polydata_by_label_ids(
     # Remove temporary bookkeeping array
     filtered_polydata.GetPointData().RemoveArray("_keep")
 
+    # Determine which labels were removed
+    filtered_label_array_vtk = filtered_polydata.GetPointData().GetArray(
+        label_array_name
+    )
+
+    if filtered_label_array_vtk is not None:
+        filtered_label_ids = set(
+            np.unique(numpy_support.vtk_to_numpy(filtered_label_array_vtk))
+        )
+    else:
+        filtered_label_ids = set()
+
+    removed_label_ids = sorted(original_label_ids - filtered_label_ids)
+
+    if logger is not None and removed_label_ids:
+        logger.info(
+            f"...Removed {len(removed_label_ids)} child labels from mesh: "
+            f"{removed_label_ids}"
+        )
+
     return filtered_polydata
+
+
+def get_label_ids_from_polydata(
+    polydata: vtk.vtkPolyData,
+    label_array_name: str = "label_id",
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Extract label IDs from a polydata point-data array.
+
+    Parameters
+    ----------
+    polydata : vtk.vtkPolyData
+        Input mesh containing a point-data array with child object labels.
+    label_array_name : str
+        Name of the point-data array containing label IDs.
+
+    Returns
+    -------
+    label_ids : np.ndarray
+        Array of shape (n_points,) containing the label ID assigned
+        to each mesh point.
+    unique_label_ids : np.ndarray
+        Unique label IDs present in the mesh.
+
+    Raises
+    ------
+    ValueError
+        If the requested label array does not exist in the polydata.
+    """
+
+    # Get label-id array from mesh point data
+    label_id_vtk = polydata.GetPointData().GetArray(label_array_name)
+
+    if label_id_vtk is None:
+        raise ValueError(f"No '{label_array_name}' array found in point data.")
+
+    # Convert VTK array to NumPy
+    label_ids = numpy_support.vtk_to_numpy(label_id_vtk)
+
+    # Get unique child labels present in the mesh
+    unique_label_ids = np.unique(label_ids)
+
+    return label_ids, unique_label_ids
+
+
+def add_features_to_polydata(
+    polydata: vtk.vtkPolyData,
+    label_ids: np.ndarray,
+    unique_label_ids: np.ndarray,
+    feature_df: pd.DataFrame,
+    annotate_by_features: list[str],
+    column_prefix: str = "",
+    logger: logging.Logger | None = None,
+) -> None:
+    """
+    Add feature values from a DataFrame as point-data arrays on a mesh.
+
+    Assumes that the DataFrame index contains child label IDs matching
+    the mesh label_id values.
+
+    Parameters
+    ----------
+    polydata : vtk.vtkPolyData
+        Mesh to annotate.
+    label_ids : np.ndarray
+        Array of shape (n_points,) containing the child label assigned
+        to each mesh point.
+    unique_label_ids : np.ndarray
+        Unique child labels present in the mesh.
+    feature_df : pd.DataFrame
+        DataFrame indexed by child label ID.
+        Columns contain feature values to transfer to the mesh.
+    annotate_by_features : list[str]
+        List of feature columns to add as mesh point-data arrays.
+    column_prefix : str
+        Optional prefix added to the output array names. E.g.
+        "" -> volume
+        "r1." -> r1.volume
+    logger : logging.Logger | None, optional
+        Logger used to report warnings, such as missing feature columns.
+        If None, warnings are suppressed.
+
+    Raises
+    ------
+    ValueError
+        If a mesh label exists but does not have a corresponding row
+        in feature_df.
+    """
+
+    for col in annotate_by_features:
+
+        # Skip missing feature columns
+        if col not in feature_df.columns:
+            if logger is not None:
+                logger.warning(f"Feature column '{col}' not found. Skipping.")
+            continue
+        # Optional round-specific naming
+        save_col_name = f"{column_prefix}{col}"
+
+        # Create output array matching the source feature dtype
+        new_array = np.zeros_like(
+            label_ids,
+            dtype=feature_df[col].dtype,
+        )
+
+        # Map:
+        #     child_label_id -> feature_value
+        #
+        # Example:
+        #     {1: 123.4, 2: 87.1, 3: 95.6}
+        feat_map = feature_df[col].to_dict()
+
+        # Assign feature value to every point belonging
+        # to a given child label
+        for label_id in unique_label_ids:
+
+            if label_id not in feat_map:
+                raise ValueError(
+                    f"Child mesh label {label_id} " f"not found in feature table."
+                )
+
+            new_array[label_ids == label_id] = feat_map[label_id]
+
+        # Convert NumPy array to VTK
+        vtk_array = numpy_support.numpy_to_vtk(
+            new_array,
+            deep=True,
+        )
+        vtk_array.SetName(save_col_name)
+
+        # Add annotation to mesh
+        polydata.GetPointData().AddArray(vtk_array)

@@ -14,19 +14,19 @@ import os
 import warnings
 from typing import Any
 
-import numpy as np
 import pandas as pd
 from anndata._core.aligned_df import ImplicitModificationWarning
 from fractal_tasks_core.tasks.io_models import InitArgsRegistrationConsensus
 from ngio import open_ome_zarr_container
 from ngio.utils import ngio_logger
 from pydantic import validate_call
-from vtkmodules.util import numpy_support
 
 from scmultiplex.fractal.fractal_helper_functions import extract_acq_info
 from scmultiplex.meshing.MeshFunctions import (
+    add_features_to_polydata,
     export_vtk_polydata,
     filter_polydata_by_label_ids,
+    get_label_ids_from_polydata,
     load_mesh_as_polydata,
 )
 from scmultiplex.utils.io import (
@@ -131,8 +131,7 @@ def annotate_child_mesh(
     """
     logger.info(
         f"Running for {zarr_url=}. \n"
-        f"Annotating meshes in {grouped_mesh_name=} with features {annotate_by_features} from feature table "
-        f"{child_feature_table_name=}."
+        f"Annotating meshes in {grouped_mesh_name=} with features {annotate_by_features}"
     )
 
     if annotate_by_consolidated_csv and annotate_by_feature_table:
@@ -146,6 +145,23 @@ def annotate_child_mesh(
             "Either 'Annotate by Consolidated CSV' or 'Annotate by Feature Table' must be set to True!"
         )
 
+    if annotate_by_feature_table:
+        logger.info(
+            f"Annotating child meshes by feature table {child_feature_table_name=}."
+        )
+        logger.info(
+            f"Reading features from round(s): {[extract_acq_info(url) for url in init_args.zarr_url_list]}"
+        )
+
+    if annotate_by_consolidated_csv:
+        logger.info(
+            f"Annotating child meshes by consolidated CSV located in: {path_to_consolidated_csv}."
+        )
+        if filter_by_csv_columns is not None:
+            logger.info(
+                f"Filtering child labels by .csv columns: {filter_by_csv_columns}."
+            )
+
     # Zarr_url is the url of the reference round
     ome_zarr = open_ome_zarr_container(zarr_url)
     ref_round_id = extract_acq_info(zarr_url)
@@ -158,17 +174,15 @@ def annotate_child_mesh(
     # Set input mesh directory
     mesh_dir = f"{zarr_url}/meshes/{grouped_mesh_name}"
 
-    logger.info(
-        f"Reading features from round(s): {[extract_acq_info(url) for url in init_args.zarr_url_list]}"
-    )
-
     # Initializing saving location
     save_mesh_path = f"{zarr_url}/meshes/{new_mesh_name}"
     os.makedirs(save_mesh_path, exist_ok=True)
 
-    logger.info(f"Set output save path to reference directory: {save_mesh_path}")
+    logger.info(
+        f"New annotated meshes will be saved to reference directory: {save_mesh_path}"
+    )
 
-    logger.info("Starting annotation of child mesh by features.")
+    logger.info("Starting annotation of child mesh.")
 
     # Load features across all submitted rounds
     if annotate_by_feature_table:
@@ -255,14 +269,6 @@ def annotate_child_mesh(
         ##############
         # Annotate point data with feature values  ###
         ##############
-        # get mesh points
-        point_data = polydata.GetPointData()
-
-        # Get label_id array (assumed to be per-point)
-        label_id_vtk = point_data.GetArray("label_id")
-
-        if label_id_vtk is None:
-            raise ValueError("No 'label_id' array found in point data.")
 
         if annotate_by_consolidated_csv:
             # Select features that correspond to specific parent object
@@ -287,6 +293,7 @@ def annotate_child_mesh(
                 polydata=polydata,
                 keep_label_ids=sel_df.index.to_numpy(),
                 label_array_name="label_id",
+                logger=logger,
             )
 
             if polydata.GetNumberOfPoints() == 0:
@@ -296,45 +303,28 @@ def annotate_child_mesh(
                 continue
 
             # Recompute label ids after filtering polydata
-            label_ids = numpy_support.vtk_to_numpy(
-                polydata.GetPointData().GetArray("label_id")
-            )
-            unique_label_ids = np.unique(label_ids)
+            label_ids, unique_label_ids = get_label_ids_from_polydata(polydata)
 
             logger.info(
-                f"Annotating {len(unique_label_ids)} unique labels in {mesh_fname}..."
+                f"...Annotating {len(unique_label_ids)} unique child labels in parent object {label_string}"
             )
 
             # Create array for all points
-            # match dtype of original column
-            for col in annotate_by_features:
-                new_array = np.zeros_like(label_ids, dtype=sel_df[col].dtype)
-
-                # Map label_id -> value
-                # key is label id, value is specific feature value for that label
-                feat_map = sel_df[col].to_dict()  # 'label' is the index now
-
-                for id in unique_label_ids:
-                    if id in feat_map:
-                        # check that label_ids and id have same dtype
-                        new_array[label_ids == id] = feat_map[id]
-                    else:
-                        raise ValueError(
-                            f"Child mesh label {id} not found in feature table."
-                        )
-
-                # Convert to VTK array
-                vtk_array = numpy_support.numpy_to_vtk(new_array, deep=True)
-                vtk_array.SetName(col)
-                polydata.GetPointData().AddArray(vtk_array)
+            add_features_to_polydata(
+                polydata=polydata,
+                label_ids=label_ids,
+                unique_label_ids=unique_label_ids,
+                feature_df=sel_df,
+                annotate_by_features=annotate_by_features,
+                logger=logger,
+            )
 
         if annotate_by_feature_table:
 
-            label_ids = numpy_support.vtk_to_numpy(label_id_vtk)  # shape: (n_points,)
-            unique_label_ids = np.unique(label_ids)
+            label_ids, unique_label_ids = get_label_ids_from_polydata(polydata)
 
             logger.info(
-                f"Annotating {len(unique_label_ids)} unique labels in {mesh_fname}..."
+                f"...Annotating {len(unique_label_ids)} unique child labels in parent object {label_string}"
             )
 
             # get feature table data
@@ -357,42 +347,15 @@ def annotate_child_mesh(
                     )
                     continue
 
-                for col in annotate_by_features:
-
-                    if col not in annot_feat_sel_df.columns:
-                        # Skip column names not in data table
-                        continue
-
-                    # Define round-based column name
-                    save_col_name = f"{str(round_id)}.{col}"
-
-                    # Assign the corresponding feature value
-
-                    # Create array for all points
-                    # match dtype of original column
-                    new_array = np.zeros_like(
-                        label_ids, dtype=annot_feat_sel_df[col].dtype
-                    )
-
-                    # Map label_id -> value
-                    # key is label id, value is specific feature value for that label
-                    feat_map = annot_feat_sel_df[
-                        col
-                    ].to_dict()  # 'label' is the index now
-
-                    for id in unique_label_ids:
-                        if id in feat_map:
-                            # check that label_ids and id have same dtype
-                            new_array[label_ids == id] = feat_map[id]
-                        else:
-                            raise ValueError(
-                                f"Child mesh label {id} not found in feature table."
-                            )
-
-                    # Convert to VTK array
-                    vtk_array = numpy_support.numpy_to_vtk(new_array, deep=True)
-                    vtk_array.SetName(save_col_name)
-                    polydata.GetPointData().AddArray(vtk_array)
+                add_features_to_polydata(
+                    polydata=polydata,
+                    label_ids=label_ids,
+                    unique_label_ids=unique_label_ids,
+                    feature_df=annot_feat_sel_df,
+                    annotate_by_features=annotate_by_features,
+                    column_prefix=f"{round_id}.",
+                    logger=logger,
+                )
 
         ##############
         # Save mesh  ###
@@ -402,7 +365,7 @@ def annotate_child_mesh(
         save_name = f"{int(label_string)}.vtp"
         export_vtk_polydata(os.path.join(save_mesh_path, save_name), polydata)
 
-        logger.info(f"Saved annotated mesh as {mesh_fname}.")
+        logger.info(f"...Saved annotated mesh as {mesh_fname}")
 
     logger.info(f"End annotate_child_mesh task for {zarr_url=}")
 
