@@ -2197,17 +2197,72 @@
           "grouped_mesh_name": {
             "title": "Grouped Mesh Name",
             "type": "string",
-            "description": "Mesh folder name on which annotation is performed. Must contain .vtp format meshes whose filename corresponds to label name in ROI table. Usually these are grouped child labels per parent object."
+            "description": "Mesh folder name containing grouped child meshes. Each mesh corresponds to a parent object and contains one or more child objects stored as a single .vtp file. Child object identity must be stored in the point-data array \"label_id\"."
           },
           "parent_roi_table_name": {
             "title": "Parent Roi Table Name",
             "type": "string",
-            "description": "Name of the ROI table that corresponds to labels of meshed objects, only used for indexing objects in for loop."
+            "description": "ROI table whose ROI names correspond to the grouped mesh filenames. Used to iterate over parent objects."
+          },
+          "annotate_by_consolidated_csv": {
+            "default": false,
+            "title": "Annotate By Consolidated Csv",
+            "type": "boolean",
+            "description": "If True, annotate meshes using a consolidated CSV file specified by path_to_consolidated_csv. Exactly one of annotate_by_consolidated_csv or annotate_by_feature_table must be True."
+          },
+          "path_to_consolidated_csv": {
+            "title": "Path To Consolidated Csv",
+            "type": "string",
+            "description": "Path to a consolidated CSV containing child-level features for all wells and timepoints. The CSV is filtered internally to the current well and timepoint."
+          },
+          "filter_by_csv_columns": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Filter By Csv Columns",
+            "type": "array",
+            "description": "Optional list of boolean columns in the consolidated CSV used to filter child objects before annotation. Only child objects with True in all specified columns are kept. Child objects failing the filter are removed from the output mesh."
+          },
+          "colname_cell_label": {
+            "default": "0.cell_label",
+            "title": "Colname Cell Label",
+            "type": "string",
+            "description": "Column name in the consolidated CSV containing child object label IDs. These labels must correspond to the mesh point-data array \"label_id\"."
+          },
+          "colname_parent_label": {
+            "default": "0.parent_label",
+            "title": "Colname Parent Label",
+            "type": "string",
+            "description": "Column name in the consolidated CSV containing parent object label IDs."
+          },
+          "colname_timepoint": {
+            "default": "0.timepoint",
+            "title": "Colname Timepoint",
+            "type": "string",
+            "description": "Column name in the consolidated CSV containing timepoint labels."
+          },
+          "colname_well": {
+            "default": "0.well",
+            "title": "Colname Well",
+            "type": "string",
+            "description": "Column name in the consolidated CSV containing well identifiers."
+          },
+          "annotate_by_feature_table": {
+            "default": false,
+            "title": "Annotate By Feature Table",
+            "type": "boolean",
+            "description": "If True, annotate meshes using feature tables stored in OME-Zarr. Exactly one of annotate_by_consolidated_csv or annotate_by_feature_table must be True."
+          },
+          "parent_of_child_colname": {
+            "default": "ROI_name",
+            "title": "Parent Of Child Colname",
+            "type": "string",
+            "description": "Column in the feature table containing the parent object label associated with each child object. Used to select child objects belonging to the current parent."
           },
           "child_feature_table_name": {
             "title": "Child Feature Table Name",
             "type": "string",
-            "description": "Name of the feature table extracted from child objects."
+            "description": "Name of the OME-Zarr feature table containing child-level measurements."
           },
           "annotate_by_features": {
             "items": {
@@ -2215,18 +2270,12 @@
             },
             "title": "Annotate By Features",
             "type": "array",
-            "description": "List of strings. Each string is a column name of the child feature table and will be added to the .vtp mesh as a point annotation. Input should exactly match naming in child_feature_table columns. instance_key of child feature (e.g. \"label\") is added as column internally, so can be used as annotation feature as well."
-          },
-          "parent_of_child_colname": {
-            "default": "ROI_name",
-            "title": "Parent Of Child Colname",
-            "type": "string",
-            "description": "Name of column for parent label id's of child objects, e.g. the organoid id of the parent organoid. This column is assumed to be within obs of the child_feature_table. Usually this is defined in the feature extraction task."
+            "description": "List of feature names to transfer from the feature table or consolidated CSV to the mesh. Each feature is added as a point-data array on the output mesh."
           },
           "new_mesh_name": {
             "title": "New Mesh Name",
             "type": "string",
-            "description": "Name of the new mesh folder where annotated .vtp meshes are saved."
+            "description": "Name of the output mesh directory where annotated .vtp meshes will be written."
           }
         },
         "required": [
@@ -2234,7 +2283,6 @@
           "init_args",
           "grouped_mesh_name",
           "parent_roi_table_name",
-          "child_feature_table_name",
           "annotate_by_features",
           "new_mesh_name"
         ],
