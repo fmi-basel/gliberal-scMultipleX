@@ -612,3 +612,79 @@ def load_mesh_as_polydata(
                 return read_vtp_polydata(mesh_path)
 
     return None
+
+
+def filter_polydata_by_label_ids(
+    polydata: vtk.vtkPolyData,
+    keep_label_ids: list[int] | np.ndarray,
+    label_array_name: str = "label_id",
+) -> vtk.vtkPolyData:
+    """
+    Remove objects from a vtkPolyData mesh based on their label IDs.
+
+    Parameters
+    ----------
+    polydata : vtk.vtkPolyData
+        Input mesh. Must contain a point-data array with label IDs.
+    keep_label_ids : list[int] | np.ndarray
+        Label IDs to keep in the output mesh.
+        Any object whose label_id is not in this list is removed.
+    label_array_name : str
+        Name of the point-data array containing label IDs.
+
+    Returns
+    -------
+    vtk.vtkPolyData
+        Filtered mesh containing only objects with label IDs in keep_label_ids.
+    """
+
+    # Get label ID array from the polydata point data
+    label_array_vtk = polydata.GetPointData().GetArray(label_array_name)
+
+    if label_array_vtk is None:
+        raise ValueError(
+            f"Point-data array '{label_array_name}' not found in polydata."
+        )
+
+    # Convert VTK label array to NumPy
+    label_ids = numpy_support.vtk_to_numpy(label_array_vtk)
+
+    # For each point, True means keep it, False means remove it
+    keep_mask = np.isin(label_ids, keep_label_ids)
+
+    # Convert boolean mask to 0/1 because VTK thresholding uses numeric arrays
+    keep_array_vtk = numpy_support.numpy_to_vtk(
+        keep_mask.astype(np.uint8),
+        deep=True,
+        array_type=vtk.VTK_UNSIGNED_CHAR,
+    )
+    keep_array_vtk.SetName("_keep")
+
+    # Temporarily attach the keep/remove mask to the mesh
+    polydata.GetPointData().AddArray(keep_array_vtk)
+
+    # Keep only mesh elements whose _keep value is 1
+    threshold = vtk.vtkThreshold()
+    threshold.SetInputData(polydata)
+    threshold.SetInputArrayToProcess(
+        0,
+        0,
+        0,
+        vtk.vtkDataObject.FIELD_ASSOCIATION_POINTS,
+        "_keep",
+    )
+    threshold.SetLowerThreshold(1)
+    threshold.SetUpperThreshold(1)
+    threshold.Update()
+
+    # vtkThreshold outputs vtkUnstructuredGrid, so convert back to vtkPolyData
+    geometry = vtk.vtkGeometryFilter()
+    geometry.SetInputData(threshold.GetOutput())
+    geometry.Update()
+
+    filtered_polydata = geometry.GetOutput()
+
+    # Remove temporary bookkeeping array
+    filtered_polydata.GetPointData().RemoveArray("_keep")
+
+    return filtered_polydata
