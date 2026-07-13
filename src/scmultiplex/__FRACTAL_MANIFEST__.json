@@ -319,12 +319,6 @@
             "type": "string",
             "description": "Name of consensus matching table that specifies consensus matches across rounds, typically stored in reference round zarr."
           },
-          "table_to_relabel": {
-            "default": "org_ROI_table",
-            "title": "Table To Relabel",
-            "type": "string",
-            "description": "Table name to relabel based on consensus linking. The table rows correspond to specified 'Label name', e.g. 'org_ROI_table' or 'nuc_ROI_table'"
-          },
           "discard_labels_not_linked_across_all_rounds": {
             "default": true,
             "title": "Discard Labels Not Linked Across All Rounds",

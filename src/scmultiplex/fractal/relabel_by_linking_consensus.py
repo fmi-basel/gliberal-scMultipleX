@@ -52,7 +52,6 @@ def relabel_by_linking_consensus(
     label_name: str,
     new_label_name: Optional[str] = None,
     consensus_table: str = "org_match_table_consensus",
-    table_to_relabel: str = "org_ROI_table",
     discard_labels_not_linked_across_all_rounds: bool = True,
 ):
     """
@@ -72,8 +71,6 @@ def relabel_by_linking_consensus(
             If left None, default is {label_name}_linked
         consensus_table: Name of consensus matching table that specifies consensus matches across rounds,
             typically stored in reference round zarr.
-        table_to_relabel: Table name to relabel based on consensus linking. The table rows correspond
-            to specified 'Label name', e.g. 'org_ROI_table' or 'nuc_ROI_table'
         discard_labels_not_linked_across_all_rounds: if True (default), labels that are linked in
             some but not all rounds are discarded, i.e. only objects linked across all rounds
             are kept. If False, partially linked labels are kept (e.g. if label is linked between R0 and R1,
@@ -92,6 +89,9 @@ def relabel_by_linking_consensus(
         new_label_name = label_name + "_linked"
 
     new_table_name = new_label_name + "_ROI_table"
+
+    # Get name for table to relabel from input label image name
+    table_to_relabel = f"{label_name}_ROI_table"
 
     logger.info(
         f"Running for {zarr_url=}. \n"
