@@ -1035,14 +1035,12 @@ def test_relabel_by_linking_consensus(linking_zenodo_zarrs, name=name_mip):
         init_args = img["init_args"]
         label_name = "org"
         consensus_table = "org_match_table_consensus"
-        table_to_relabel = "org_ROI_table"
 
         relabel_by_linking_consensus(
             zarr_url=zarr_url,
             init_args=init_args,
             label_name=label_name,
             consensus_table=consensus_table,
-            table_to_relabel=table_to_relabel,
         )
 
         output_table_path = f"{zarr_url}/tables/{label_name}_linked_ROI_table"
