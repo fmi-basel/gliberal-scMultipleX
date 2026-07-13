@@ -8,6 +8,7 @@
 
 import json
 import logging
+import os
 from pathlib import Path
 from typing import List, Tuple, Union
 
@@ -106,6 +107,62 @@ def save_sequence_coordinatetransform(matrix_um, offset_um, folder_path):
         json.dump(transform_json, f, indent=4)
 
     return file_path
+
+
+def load_sequence_coordinatetransform(json_path):
+    """
+    Load a forward transform from a sequence.json file.
+
+    Parameters
+    ----------
+    json_path : str
+        Path to a sequence.json file.
+
+    Returns
+    -------
+    matrix_um : np.ndarray
+        2x2 rotation matrix in micrometer units.
+    offset_um : np.ndarray
+        2-element translation vector in micrometer units [y, x].
+    """
+    if not os.path.isfile(json_path):
+        raise FileNotFoundError(f"Coordinate transform JSON not found: '{json_path}'")
+
+    with open(json_path) as f:
+        transform_json = json.load(f)
+
+    try:
+        transformations = transform_json["coordinateTransformations"][0][
+            "transformations"
+        ]
+
+        rotation = next(
+            t["rotation"] for t in transformations if t["type"] == "rotation"
+        )
+        translation = next(
+            t["translation"] for t in transformations if t["type"] == "translation"
+        )
+
+    except (KeyError, IndexError, StopIteration) as e:
+        raise ValueError(
+            f"File '{json_path}' does not contain a valid sequence coordinate transform."
+        ) from e
+
+    matrix_um = np.asarray(rotation, dtype=float)
+    offset_um = np.asarray(translation, dtype=float)
+
+    # Validate shapes
+    if matrix_um.shape != (2, 2):
+        raise ValueError(
+            f"Expected rotation matrix shape (2, 2), got {matrix_um.shape}."
+        )
+
+    if offset_um.shape != (2,):
+        raise ValueError(
+            f"Expected translation vector shape (2,), got {offset_um.shape}."
+        )
+
+    return matrix_um, offset_um
 
 
 def squeeze_with_record(array: ArrayLike) -> Tuple[ArrayLike, List[int]]:

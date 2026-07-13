@@ -410,6 +410,93 @@ def get_euclidean_metrics(tform: EuclideanTransform) -> Tuple[float, np.ndarray]
     return angle_deg, translation
 
 
+def get_euclidean_metrics_from_scipy_affine(
+    matrix: np.ndarray,
+    offset: np.ndarray,
+) -> Tuple[float, np.ndarray]:
+    """
+    Recover forward Euclidean-transform metrics from parameters used by
+    scipy.ndimage.affine_transform.
+
+    scipy.ndimage.affine_transform uses an output-to-input mapping in
+    array-axis order (y, x):
+
+        input_yx = matrix @ output_yx + offset
+
+    This function converts that mapping back to the forward transform in
+    Cartesian coordinate order (x, y):
+
+        output_xy = rotation_xy @ input_xy + translation_xy
+
+    Parameters
+    ----------
+    matrix : np.ndarray
+        Shape-(2, 2) matrix passed to scipy.ndimage.affine_transform.
+
+    offset : np.ndarray
+        Shape-(2,) offset passed to scipy.ndimage.affine_transform,
+        in [y, x] order.
+
+    Returns
+    -------
+    angle_deg : float
+        Rotation angle in degrees, using the same convention as
+        get_euclidean_metrics(tform).
+
+    translation : np.ndarray
+        Forward translation [tx, ty] in pixels, matching
+        tform.params[:2, 2].
+    """
+    matrix = np.asarray(matrix, dtype=float)
+    offset = np.asarray(offset, dtype=float)
+
+    if matrix.shape != (2, 2):
+        raise ValueError(f"Expected matrix to have shape (2, 2), got {matrix.shape}.")
+
+    if offset.shape != (2,):
+        raise ValueError(f"Expected offset to have shape (2,), got {offset.shape}.")
+
+    if not np.all(np.isfinite(matrix)):
+        raise ValueError("matrix contains non-finite values.")
+
+    if not np.all(np.isfinite(offset)):
+        raise ValueError("offset contains non-finite values.")
+
+    if np.isclose(np.linalg.det(matrix), 0.0):
+        raise ValueError("matrix is singular and cannot be inverted.")
+
+    # SciPy mapping:
+    #
+    # input_yx = matrix @ output_yx + offset
+    #
+    # Invert it to obtain the forward mapping:
+    #
+    # output_yx = matrix_inv @ input_yx - matrix_inv @ offset
+    matrix_forward_yx = np.linalg.inv(matrix)
+    translation_forward_yx = -matrix_forward_yx @ offset
+
+    # Swap between array order (y, x) and Cartesian order (x, y).
+    swap_xy_yx = np.array(
+        [
+            [0.0, 1.0],
+            [1.0, 0.0],
+        ]
+    )
+
+    matrix_forward_xy = swap_xy_yx @ matrix_forward_yx @ swap_xy_yx
+    translation_forward_xy = swap_xy_yx @ translation_forward_yx
+
+    # Preserve the convention used by your original function:
+    # angle = atan2(R[0, 1], R[0, 0])
+    angle_rad = np.arctan2(
+        matrix_forward_xy[0, 1],
+        matrix_forward_xy[0, 0],
+    )
+    angle_deg = float(np.degrees(angle_rad))
+
+    return angle_deg, translation_forward_xy
+
+
 def transform_tform_to_scipy_affine(
     tform: EuclideanTransform,
 ) -> Tuple[np.ndarray, np.ndarray]:
@@ -486,6 +573,65 @@ def convert_transform_to_physical(rotation_matrix, translation_offset, pix_y, pi
         R_um = S @ rotation_matrix @ np.linalg.inv(S)
 
     return R_um, t_um
+
+
+def convert_transform_to_pixels(matrix_um, offset_um, pix_y, pix_x):
+    """
+    Convert a 2x2 affine matrix and 2-element translation vector from
+    physical units (micrometers) back to pixel coordinates.
+
+    Coordinates are assumed to be in (y, x) order.
+
+    Parameters
+    ----------
+    matrix_um : np.ndarray
+        2x2 affine matrix in micrometer coordinates.
+    offset_um : np.ndarray
+        2-element translation vector in micrometers [t_y_um, t_x_um].
+    pix_y : float
+        Pixel size along the y-axis in micrometers per pixel.
+    pix_x : float
+        Pixel size along the x-axis in micrometers per pixel.
+
+    Returns
+    -------
+    matrix : np.ndarray
+        2x2 affine matrix in pixel coordinates, suitable for
+        scipy.ndimage.affine_transform.
+    offset : np.ndarray
+        2-element translation vector in pixels [t_y, t_x], suitable for
+        scipy.ndimage.affine_transform.
+    """
+    matrix_um = np.asarray(matrix_um, dtype=float)
+    offset_um = np.asarray(offset_um, dtype=float)
+
+    if matrix_um.shape != (2, 2):
+        raise ValueError(
+            f"Expected matrix_um to have shape (2, 2), got {matrix_um.shape}."
+        )
+
+    if offset_um.shape != (2,):
+        raise ValueError(
+            f"Expected offset_um to have shape (2,), got {offset_um.shape}."
+        )
+
+    if pix_y <= 0 or pix_x <= 0:
+        raise ValueError(
+            f"Pixel sizes must be positive, got pix_y={pix_y}, pix_x={pix_x}."
+        )
+
+    # Converts pixel coordinates [y_px, x_px] to physical coordinates
+    # [y_um, x_um].
+    S = np.diag([pix_y, pix_x])
+    S_inv = np.diag([1.0 / pix_y, 1.0 / pix_x])
+
+    # Inverse of:
+    # matrix_um = S @ matrix @ inv(S)
+    # offset_um = S @ offset
+    matrix = S_inv @ matrix_um @ S
+    offset = S_inv @ offset_um
+
+    return matrix, offset
 
 
 def apply_affine_to_slice(slice_2d, matrix, offset):
