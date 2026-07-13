@@ -262,7 +262,7 @@ TASK_LIST = [
     ),
     CompoundTask(
         name="scMultiplex Apply Warpfield Registration",
-        executable_init="fractal/init_select_multiplexing_pairs.py",
+        executable_init="fractal/init_select_all_knowing_reference.py",
         executable="fractal/apply_warpfield_registration.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
         meta={"cpus_per_task": 4, "mem": 16000, "needs_gpu": True},

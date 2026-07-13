@@ -251,3 +251,38 @@ def restore_squeezed_axes(
     for axis in sorted(axes):
         array = np.expand_dims(array, axis=axis)
     return array
+
+
+def get_acquisition_id(zarr_url: str) -> int:
+    """
+    Return the acquisition ID for an image in an OME-Zarr plate.
+
+    Parameters
+    ----------
+    zarr_url : str
+        Path or URL to an image inside an OME-Zarr plate.
+
+    Returns
+    -------
+    int
+        Acquisition ID from the well metadata.
+    """
+    image_path = Path(zarr_url.rstrip("/"))
+
+    image_name = image_path.name
+    column = image_path.parent.name
+    row = image_path.parent.parent.name
+    plate_url = image_path.parent.parent.parent
+
+    plate = open_ome_zarr_plate(str(plate_url))
+    well = plate.get_well(row=row, column=column)
+
+    acquisition_id = well.get_image_acquisition_id(image_path=image_name)
+
+    if acquisition_id is None:
+        raise ValueError(
+            f"No acquisition ID found for image {image_name!r} "
+            f"in well {row}/{column}."
+        )
+
+    return acquisition_id
