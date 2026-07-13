@@ -57,7 +57,7 @@ from scmultiplex.meshing.FilterFunctions import filter_small_sizes_per_round
 sys.path.append(os.path.join(scmultiplex.__path__[0], r"platymatch"))
 from platymatch.utils.utils import generate_affine_transformed_image  # noqa
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("calculate_platymatch_registration")
 
 
 @validate_call
@@ -672,11 +672,4 @@ def calculate_platymatch_registration(
 if __name__ == "__main__":
     from fractal_task_tools.task_wrapper import run_fractal_task
 
-    # from multiprocessing import freeze_support
-    #
-    # freeze_support()
-
-    run_fractal_task(
-        task_function=calculate_platymatch_registration,
-        logger_name=logger.name,
-    )
+    run_fractal_task(task_function=calculate_platymatch_registration)

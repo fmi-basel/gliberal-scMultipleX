@@ -32,7 +32,7 @@ from scmultiplex.utils.ngio_utils import update_well_zattrs_with_new_image
 
 # Configure logging
 ngio_logger.setLevel("ERROR")
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("post_registration_cleanup")
 
 
 @validate_call
@@ -407,7 +407,4 @@ def post_registration_cleanup(
 if __name__ == "__main__":
     from fractal_task_tools.task_wrapper import run_fractal_task
 
-    run_fractal_task(
-        task_function=post_registration_cleanup,
-        logger_name=logger.name,
-    )
+    run_fractal_task(task_function=post_registration_cleanup)

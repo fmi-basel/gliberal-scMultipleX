@@ -5,22 +5,21 @@
 # Nicole Repina <nicole.repina@fmi.ch>
 #
 
-"""
-Apply warpfield correction from on-disk warpmap to all channels of moving image.
-"""
 
 import logging
 import os
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 from fractal_tasks_core.tasks.io_models import InitArgsRegistration
-from ngio import open_ome_zarr_container, open_ome_zarr_plate
+from ngio import open_ome_zarr_container
 from ngio.utils import ngio_logger
 from pydantic import validate_call
 
 # Local application imports
 from scmultiplex.fractal.fractal_helper_functions import (
+    copy_folder_from_zarrurl,
     copy_omero_zattrs_from_source_to_target,
     roi_to_pixel_slices,
     save_new_multichannel_image_with_overlap,
@@ -28,11 +27,14 @@ from scmultiplex.fractal.fractal_helper_functions import (
 )
 from scmultiplex.linking.OrganoidLinkingFunctions import resize_array_to_shape
 from scmultiplex.meshing.LabelFusionFunctions import select_label
-from scmultiplex.utils.ngio_utils import update_well_zattrs_with_new_image
+from scmultiplex.utils.ngio_utils import (
+    get_acquisition_id,
+    update_well_zattrs_with_new_image,
+)
 
 # Configure logging
 ngio_logger.setLevel("ERROR")
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("apply_warpfield_registration")
 
 
 @validate_call
@@ -46,8 +48,10 @@ def apply_warpfield_registration(
     registration_name: str = "warpfield",
     output_image_suffix: str = "registered",
     mask_output_by_parent: bool = False,
-    copy_labels_and_tables: bool = False,
-    overwrite: bool = False,
+    folders_to_copy_from_unregistered_zarr: Optional[list[str]] = None,
+    tables_to_propagate_from_ref_to_mov: Optional[list[str]] = None,
+    overwrite_reference: bool = False,
+    overwrite_moving: bool = False,
 ):
     """
     Apply warpfield correction that has been generated with calculate_warpfield_registration task
@@ -73,9 +77,15 @@ def apply_warpfield_registration(
             ROIs to disk but may clip object at edges. If False, the new region is merged with the on-disk region by
             taking the element-wise maximum value. In cases of poor registration quality, this may cause
             shadowing (duplicated objects) and edge artifacts between regions.
-        copy_labels_and_tables: If True, all labels and tables are copied to the new moving OME-Zarr image from
-            the reference zarr.
-        overwrite: If True, overwrite existing OME-Zarr image (including all labels and tables).
+        folders_to_copy_from_unregistered_zarr: List of folder names to copy over from unregistered zarr
+            (e.g. "1_fused") to the corresponding registered zarr (e.g. "1_fused_registered"), like "meshes", "plots",
+            and "registration". The entire contents of these folders, if exist, are copied over for all
+            moving and reference rounds.
+        tables_to_propagate_from_ref_to_mov: List of ROI table names present in unregistered reference round to copy
+            over to the rest of the moving rounds. The corresponding label images for masking ROI tables are also
+            copied over. This allows user to copy e.g. "well_ROI_table", "org_ROI_table", etc. to moving rounds.
+        overwrite_reference: If True, overwrite registered reference image (including all labels and tables) if exists.
+        overwrite_moving: If True, overwrite all registered moving images if exist.
 
     """
     try:
@@ -89,41 +99,35 @@ def apply_warpfield_registration(
 
     # Set OME-Zarr paths
     reference_zarr_url = init_args.reference_zarr_url
-    moving_image_name = os.path.basename(zarr_url)
-    p = Path(zarr_url)
-    plate_url = p.parents[2]  # this is path to .zarr
-    row = p.parents[1].name  # e.g 'A'
-    column = p.parents[0].name  # e.g '01'
-    new_image_name = f"{moving_image_name}_{output_image_suffix}"
-    new_moving_zarr_url = os.path.join(plate_url, row, column, new_image_name)
 
-    # Open plate
-    plate_ome_zarr = open_ome_zarr_plate(plate_url)
+    # Get id of current moving acquisition from plate/well metadata as int, e.g. 1
+    reference_acquisition_id = get_acquisition_id(reference_zarr_url)
+    current_acquisition_id = get_acquisition_id(zarr_url)
+
+    # Make saving path for new registered zarr
+    current_image_name = os.path.basename(zarr_url)
+
     # Open the ome-zarr image container
     reference_ome_zarr = open_ome_zarr_container(reference_zarr_url)
-    moving_ome_zarr = open_ome_zarr_container(zarr_url)
-    # Get id of current moving acquisition from plate/well metadata, e.g. "1"
-    moving_acquisition_id = plate_ome_zarr.get_well(
-        row=row, column=column
-    ).get_image_acquisition_id(image_path=moving_image_name)
+    current_ome_zarr = open_ome_zarr_container(zarr_url)
 
+    # Make save names
+    save_image_name = f"{current_image_name}_{output_image_suffix}"
+    save_zarr_url = os.path.join(os.path.dirname(zarr_url), save_image_name)
+
+    # Load REFERENCE ONLY data because anyway will need it:
     # Load ROI tables
     reference_roi_table = reference_ome_zarr.get_table(
         roi_table_name, check_type="generic_roi_table"
     )
-    moving_roi_table = moving_ome_zarr.get_table(
-        roi_table_name, check_type="generic_roi_table"
-    )
+
     reference_label_name = Path(reference_roi_table._meta.region.path).name
-    moving_label_name = Path(moving_roi_table._meta.region.path).name
 
     # Load images from container
     reference_image = reference_ome_zarr.get_masked_image(
         masking_label_name=reference_label_name
     )
-    moving_image = moving_ome_zarr.get_masked_image(
-        masking_label_name=moving_label_name
-    )
+
     label_image = reference_ome_zarr.get_masked_label(
         label_name=reference_label_name, masking_label_name=reference_label_name
     )
@@ -135,114 +139,276 @@ def apply_warpfield_registration(
     # Update well metadata (.zattrs) to add new image, only if does not already exist
     update_well_zattrs_with_new_image(
         zarr_url=zarr_url,
-        new_image_name=new_image_name,
-        acquisition_id=moving_acquisition_id,
+        new_image_name=save_image_name,
+        acquisition_id=current_acquisition_id,
     )
 
-    # Derive the new moving image (e.g. 1_registered) from the reference image (e.g. 0)
-    # Image has same shape as reference image EXCEPT number of channels which are taken from the moving image
-    new_moving_ome_zarr_shape = (moving_image.shape[0],) + reference_image.shape[-3:]
-    new_moving_ome_zarr = reference_ome_zarr.derive_image(
-        store=new_moving_zarr_url,
-        shape=new_moving_ome_zarr_shape,
-        copy_labels=copy_labels_and_tables,
-        copy_tables=copy_labels_and_tables,
-        overwrite=overwrite,
-    )
-
-    # Copy over omero channel metadata from moving image (e.g. 1) to new moving image (e.g. 1_registered)
-    copy_omero_zattrs_from_source_to_target(
-        source_zarr_url=zarr_url, target_zarr_url=new_moving_zarr_url
-    )
-
-    # Apply warpfield correction; load moving ROIs based on reference indices
-    for roi in reference_roi_table.rois():
-        label_string = roi.name
-        label_int = int(label_string)
-        logger.info(f"Processing ROI label {label_string} for all channels")
-        try:
-            moving_np = moving_image.get_roi(
-                label=label_int
-            )  # load all channels: c,z,y,x
-        except KeyError as e:
-            logger.warning(
-                f"Moving image does not contain matching ROI. Skipping reference ROI {roi}. Error: {e}"
-            )
-            continue
-
-        # Load the computed warp map from numpy .npz file
-        registration_save_path = os.path.join(
-            zarr_url, "registration", registration_name
-        )
-        filename = f"{label_string}.npz"
-        warp_map_save_path = os.path.join(registration_save_path, filename)
-
-        npz_data = np.load(warp_map_save_path)
-
-        # Reconstruct the WarpMap
-        warp_map = warpfield.register.WarpMap(
-            mov_shape=tuple(npz_data["mov_shape"]),
-            ref_shape=tuple(npz_data["ref_shape"]),
-            block_size=npz_data["block_size"],
-            block_stride=npz_data["block_stride"],
-            warp_field=npz_data["warp_field"],
+    if current_acquisition_id == reference_acquisition_id:
+        # The current round is the reference round
+        # It should simply be copied over
+        # to make a _registered copy that includes only ROI fields present in input table
+        logger.info(
+            f"Reference acquisition {current_acquisition_id} detected. Copying reference round data "
+            f"to make {save_image_name} image."
         )
 
-        if mask_output_by_parent:
-            # Load reference label image
-            masking_label = label_image.get_roi(label=label_int)
-            masking_label = select_label(masking_label, label_string)  # binarize mask
-
-        # Apply warpfield transformation per channel image
-        zyx_moving_shape_from_warpmap = tuple(npz_data["mov_shape"])
-        czyx_moving_shape_from_warpmap = (
-            moving_np.shape[0],
-        ) + zyx_moving_shape_from_warpmap
-        result = np.empty(czyx_moving_shape_from_warpmap, dtype=moving_np.dtype)
-        for c, moving_channel_np in enumerate(moving_np):
-
-            if zyx_moving_shape_from_warpmap != moving_channel_np.shape:
-                moving_channel_np = resize_array_to_shape(
-                    moving_channel_np, zyx_moving_shape_from_warpmap
+        # Derive the new reference image (e.g. 0_registered) from the reference image (e.g. 0)
+        new_ome_zarr = current_ome_zarr.derive_image(
+            store=save_zarr_url,
+            copy_labels=True,
+            copy_tables=True,
+            overwrite=overwrite_reference,
+        )
+        # Copy over only registered ROIs
+        for roi in reference_roi_table.rois():
+            label_string = roi.name
+            label_int = int(label_string)
+            logger.info(f"Processing ROI label {label_string} for all channels")
+            try:
+                img_np = reference_image.get_roi(
+                    label=label_int
+                )  # load all channels: c,z,y,x
+            except KeyError as e:
+                logger.warning(
+                    f"Reference image does not contain matching ROI. Skipping reference ROI {roi}. Error: {e}"
                 )
+                continue
 
-            # Run warpfield transformation
-            logger.info(f"Applying warpfield registration for channel {c}.")
-            moving_channel_np_registered = warp_map.apply(
-                moving_channel_np
-            )  # shape z,y,x
+            if mask_output_by_parent:
+                # Load reference label image
+                masking_label = label_image.get_roi(label=label_int)
+                masking_label = select_label(
+                    masking_label, label_string
+                )  # binarize mask
 
             # Optionally mask output by parent after transformation
-            if mask_output_by_parent:
-                # Have not tested whether this padding of masking label gives good results
-                if zyx_moving_shape_from_warpmap != masking_label.shape:
-                    masking_label = resize_array_to_shape(
-                        masking_label, zyx_moving_shape_from_warpmap
-                    )
+            result = np.empty_like(img_np)
+            for c, channel_img_np in enumerate(img_np):
+                if mask_output_by_parent:
+                    if channel_img_np.shape != masking_label.shape:
+                        raise ValueError(
+                            f"Registration output image shape {channel_img_np.shape} does "
+                            f"not match masking label shape {masking_label.shape}"
+                        )
+                    channel_img_np = channel_img_np * masking_label  # mask
 
-                moving_channel_np_registered = (
-                    moving_channel_np_registered * masking_label
+                result[c] = channel_img_np  # store in the same channel position
+
+            # save ROI to disk using dask _to_zarr, not ngio
+            region = roi_to_pixel_slices(roi, spacing)
+            save_new_multichannel_image_with_overlap(result, save_zarr_url, region)
+
+            logger.info(f"Wrote region {label_string} to level-0 zarr image.")
+
+        # Build pyramids
+        new_moving_image = new_ome_zarr.get_image()
+        new_moving_image.consolidate()
+
+        # Copy misc folders from reference zarr, e.g. meshes, etc
+        if folders_to_copy_from_unregistered_zarr is not None:
+            for folder in folders_to_copy_from_unregistered_zarr:
+                logger.info(
+                    f"Copying folder {folder} from image {current_image_name} to "
+                    f"{save_image_name}."
                 )
 
-            result[
-                c
-            ] = moving_channel_np_registered  # store in the same channel position
+                copy_folder_from_zarrurl(
+                    zarr_url,
+                    save_zarr_url,
+                    folder_name=folder,
+                    overwrite=overwrite_reference,
+                )
 
-        # save ROI to disk using dask _to_zarr, not ngio
-        region = roi_to_pixel_slices(roi, spacing)
-        region = update_region_to_new_length(region, zyx_moving_shape_from_warpmap)
-        save_new_multichannel_image_with_overlap(result, new_moving_zarr_url, region)
+        # Update Fractal image list
+        image_list_updates = dict(
+            image_list_updates=[dict(zarr_url=save_zarr_url, origin=zarr_url)]
+        )
 
-        logger.info(f"Wrote region {label_string} to level-0 zarr image.")
+    else:
+        # The current round is a moving round, and warpfield registration is applied
+        logger.info(
+            f"Moving acquisition {current_acquisition_id} detected. Applying warpfield registration "
+            f"to make {save_image_name} image."
+        )
 
-    # Build pyramids
-    new_moving_image = new_moving_ome_zarr.get_image()
-    new_moving_image.consolidate()
+        # Load ROI tables
+        moving_roi_table = current_ome_zarr.get_table(
+            roi_table_name, check_type="generic_roi_table"
+        )
+        moving_label_name = Path(moving_roi_table._meta.region.path).name
 
-    # Update Fractal image list
-    image_list_updates = dict(
-        image_list_updates=[dict(zarr_url=new_moving_zarr_url, origin=zarr_url)]
-    )
+        # Load images from container
+        moving_image = current_ome_zarr.get_masked_image(
+            masking_label_name=moving_label_name
+        )
+
+        # Derive the new moving image (e.g. 1_registered) from the reference image (e.g. 0)
+        # Image has same shape as reference image EXCEPT number of channels which are taken from the moving image
+        new_moving_ome_zarr_shape = (moving_image.shape[0],) + reference_image.shape[
+            -3:
+        ]
+        new_moving_ome_zarr = reference_ome_zarr.derive_image(
+            store=save_zarr_url,
+            shape=new_moving_ome_zarr_shape,
+            copy_labels=False,
+            copy_tables=False,
+            overwrite=overwrite_moving,
+        )
+
+        # Copy over omero channel metadata from moving image (e.g. 1) to new moving image (e.g. 1_registered)
+        copy_omero_zattrs_from_source_to_target(
+            source_zarr_url=zarr_url, target_zarr_url=save_zarr_url
+        )
+
+        # Apply warpfield correction; load moving ROIs based on reference indices
+        for roi in reference_roi_table.rois():
+            label_string = roi.name
+            label_int = int(label_string)
+            logger.info(f"Processing ROI label {label_string} for all channels")
+            try:
+                moving_np = moving_image.get_roi(
+                    label=label_int
+                )  # load all channels: c,z,y,x
+            except KeyError as e:
+                logger.warning(
+                    f"Moving image does not contain matching ROI. Skipping reference ROI {roi}. Error: {e}"
+                )
+                continue
+
+            # Load the computed warp map from numpy .npz file
+            registration_save_path = os.path.join(
+                zarr_url, "registration", registration_name
+            )
+            filename = f"{label_string}.npz"
+            warp_map_save_path = os.path.join(registration_save_path, filename)
+
+            if not os.path.isfile(warp_map_save_path):
+                logger.warning(
+                    f"No warp map found for ROI {label_string} at {warp_map_save_path=}. Skipping this ROI."
+                )
+                continue
+
+            with np.load(warp_map_save_path) as npz_data:
+                warp_map = warpfield.register.WarpMap(
+                    mov_shape=tuple(npz_data["mov_shape"]),
+                    ref_shape=tuple(npz_data["ref_shape"]),
+                    block_size=npz_data["block_size"].copy(),
+                    block_stride=npz_data["block_stride"].copy(),
+                    warp_field=npz_data["warp_field"].copy(),
+                )
+
+                zyx_moving_shape_from_warpmap = tuple(npz_data["mov_shape"])
+
+            if mask_output_by_parent:
+                # Load reference label image
+                masking_label = label_image.get_roi(label=label_int)
+                masking_label = select_label(
+                    masking_label, label_string
+                )  # binarize mask
+
+            # Apply warpfield transformation per channel image
+            czyx_moving_shape_from_warpmap = (
+                moving_np.shape[0],
+            ) + zyx_moving_shape_from_warpmap
+            result = np.empty(czyx_moving_shape_from_warpmap, dtype=moving_np.dtype)
+            for c, moving_channel_np in enumerate(moving_np):
+
+                if zyx_moving_shape_from_warpmap != moving_channel_np.shape:
+                    moving_channel_np = resize_array_to_shape(
+                        moving_channel_np, zyx_moving_shape_from_warpmap
+                    )
+
+                # Run warpfield transformation
+                logger.info(f"Applying warpfield registration for channel {c}.")
+                moving_channel_np_registered = warp_map.apply(
+                    moving_channel_np
+                )  # shape z,y,x
+
+                # Optionally mask output by parent after transformation
+                if mask_output_by_parent:
+                    # Have not tested whether this padding of masking label gives good results
+                    if zyx_moving_shape_from_warpmap != masking_label.shape:
+                        masking_label = resize_array_to_shape(
+                            masking_label, zyx_moving_shape_from_warpmap
+                        )
+
+                    moving_channel_np_registered = (
+                        moving_channel_np_registered * masking_label
+                    )
+
+                result[
+                    c
+                ] = moving_channel_np_registered  # store in the same channel position
+
+            # save ROI to disk using dask _to_zarr, not ngio
+            region = roi_to_pixel_slices(roi, spacing)
+            region = update_region_to_new_length(region, zyx_moving_shape_from_warpmap)
+            save_new_multichannel_image_with_overlap(result, save_zarr_url, region)
+
+            logger.info(f"Wrote region {label_string} to level-0 zarr image.")
+
+        # Build pyramids
+        new_moving_image = new_moving_ome_zarr.get_image()
+        new_moving_image.consolidate()
+
+        # Copy misc folders from unregistered moving zarr, e.g. plots, etc
+        if folders_to_copy_from_unregistered_zarr is not None:
+            for folder in folders_to_copy_from_unregistered_zarr:
+                logger.info(
+                    f"Copying folder {folder} from image {current_image_name} to "
+                    f"{save_image_name}."
+                )
+
+                copy_folder_from_zarrurl(
+                    zarr_url,
+                    save_zarr_url,
+                    folder_name=folder,
+                    overwrite=overwrite_moving,
+                )
+        # Copy tables and any corresponding labels from reference to moving zarr, e.g. well_ROI_table, masking tables...
+        if tables_to_propagate_from_ref_to_mov is not None:
+            # target is moving, # source is ref
+            label_names_to_copy = []
+
+            # Copy tables
+            for table_name in tables_to_propagate_from_ref_to_mov:
+                table = reference_ome_zarr.get_table(table_name)
+
+                logger.info(
+                    f"Copying table {table_name} from reference round to "
+                    f"{save_image_name}."
+                )
+
+                new_moving_ome_zarr.add_table(
+                    table_name, table, overwrite=overwrite_moving
+                )
+                # Make list of labels to copy
+                if table.type() == "masking_roi_table":
+                    # get name of corresponding label as stored in table metadata
+                    label_names_to_copy.append(Path(table._meta.region.path).name)
+
+            # Copy labels
+            for i, label_name in enumerate(label_names_to_copy):
+                logger.info(
+                    f"Copying label {label_name} from registered reference round to "
+                    f"{save_image_name} as {label_name}."
+                )
+
+                label_image_to_copy = reference_ome_zarr.get_label(name=label_name)
+                label_image_dask = label_image_to_copy.get_array(mode="dask")
+                new_label = new_moving_ome_zarr.derive_label(
+                    label_name,
+                    dtype=label_image_dask.dtype,
+                    overwrite=overwrite_moving,
+                )
+                logger.info(f"Datatype of label image: {label_image_dask.dtype}")
+                new_label.set_array(label_image_dask)
+                new_label.consolidate()
+
+        # Update Fractal image list
+        image_list_updates = dict(
+            image_list_updates=[dict(zarr_url=save_zarr_url, origin=zarr_url)]
+        )
 
     logger.info(f"End apply_warpfield_registration task for {zarr_url=}")
 
@@ -252,7 +418,4 @@ def apply_warpfield_registration(
 if __name__ == "__main__":
     from fractal_task_tools.task_wrapper import run_fractal_task
 
-    run_fractal_task(
-        task_function=apply_warpfield_registration,
-        logger_name=logger.name,
-    )
+    run_fractal_task(task_function=apply_warpfield_registration)

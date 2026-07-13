@@ -49,7 +49,7 @@ from scmultiplex.meshing.LabelFusionFunctions import (
 )
 from scmultiplex.meshing.MeshFunctions import get_mass_properties
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("surface_mesh_multiscale")
 
 
 @validate_call
@@ -293,7 +293,10 @@ def surface_mesh_multiscale(
         mesh_folder_name = output_label_name
     elif save_mesh and group_by is not None and multiscale is False:
         # Mesh calculation for existing child objects that are part of the group_by object
-        mesh_folder_name = f"{label_root}_grouped"
+        if new_mesh_name is None:
+            mesh_folder_name = f"{label_root}_grouped"
+        else:
+            mesh_folder_name = label_root
     elif save_mesh and group_by is None and multiscale is False:
         mesh_folder_name = f"{label_root}"
 
@@ -653,7 +656,4 @@ def surface_mesh_multiscale(
 if __name__ == "__main__":
     from fractal_task_tools.task_wrapper import run_fractal_task
 
-    run_fractal_task(
-        task_function=surface_mesh_multiscale,
-        logger_name=logger.name,
-    )
+    run_fractal_task(task_function=surface_mesh_multiscale)

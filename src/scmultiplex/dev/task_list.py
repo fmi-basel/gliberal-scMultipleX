@@ -136,7 +136,7 @@ TASK_LIST = [
         category="Image Processing",
         modality="HCS",
         tags=["3D", "illumination correction"],
-        docs_info="file:task_info/apply_z_illumination_correction.md",
+        docs_info="file:task_info/calculate_z_illumination_correction.md",
         input_types=dict(z_illum_corrected=False, is_3D=True),
     ),
     CompoundTask(
@@ -235,6 +235,20 @@ TASK_LIST = [
         docs_info="file:task_info/shift_by_rigid_shift.md",
     ),
     CompoundTask(
+        name="scMultiplex Calculate 2D Rigid Shift",
+        executable_init="fractal/init_select_multiplexing_pairs.py",
+        executable="fractal/calculate_2d_rigid_shift.py",
+        meta_init={"cpus_per_task": 1, "mem": 1000},
+        meta={"cpus_per_task": 4, "mem": 16000},
+        category="Registration",
+        modality="HCS",
+        tags=[
+            "multiplexing",
+            "2D",
+        ],
+        docs_info="file:task_info/calculate_2d_rigid_shift.md",
+    ),
+    CompoundTask(
         name="scMultiplex Calculate Warpfield Registration",
         executable_init="fractal/init_select_multiplexing_pairs.py",
         executable="fractal/calculate_warpfield_registration.py",
@@ -248,7 +262,7 @@ TASK_LIST = [
     ),
     CompoundTask(
         name="scMultiplex Apply Warpfield Registration",
-        executable_init="fractal/init_select_multiplexing_pairs.py",
+        executable_init="fractal/init_select_all_knowing_reference.py",
         executable="fractal/apply_warpfield_registration.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
         meta={"cpus_per_task": 4, "mem": 16000, "needs_gpu": True},

@@ -44,13 +44,37 @@ def fixed_percentiles(region_mask, intensity):
 
 
 def skewness(region_mask, intensity):
-    """Return skewness of pixel intensity distribution of raw image masked by segmentation"""
-    return scipy.stats.skew(intensity[region_mask])
+    """
+    Return the skewness of the pixel intensity distribution within a segmented region.
+
+    For regions with constant intensity (zero variance), returns 0.0 instead of
+    NaN, since skewness is mathematically undefined in this case.
+    """
+    values = intensity[region_mask]
+
+    # Constant-intensity regions have zero variance, making skewness undefined.
+    # Return 0.0 to avoid propagating NaN values into downstream analyses.
+    if np.var(values) == 0:
+        return 0.0
+
+    return scipy.stats.skew(values)
 
 
 def kurtos(region_mask, intensity):
-    """Return kurtosis of pixel intensity distribution of raw image masked by segmentation"""
-    return scipy.stats.kurtosis(intensity[region_mask])
+    """
+    Return the kurtosis of the pixel intensity distribution within a segmented region.
+
+    For regions with constant intensity (zero variance), returns 0.0 instead of
+    NaN, since kurtosis is mathematically undefined in this case.
+    """
+    values = intensity[region_mask]
+
+    # Constant-intensity regions have zero variance, making kurtosis undefined.
+    # Return 0.0 to avoid propagating NaN values into downstream analyses.
+    if np.var(values) == 0:
+        return 0.0
+
+    return scipy.stats.kurtosis(values)
 
 
 def stdv(region_mask, intensity):

@@ -24,7 +24,7 @@ from scmultiplex.meshing.LabelFusionFunctions import (
 )
 
 ngio_logger.setLevel("ERROR")
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("expand_labels")
 
 
 @validate_call
@@ -242,7 +242,4 @@ def expand_labels(
 if __name__ == "__main__":
     from fractal_task_tools.task_wrapper import run_fractal_task
 
-    run_fractal_task(
-        task_function=expand_labels,
-        logger_name=logger.name,
-    )
+    run_fractal_task(task_function=expand_labels)

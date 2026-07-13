@@ -27,7 +27,7 @@ from scmultiplex.fractal.fractal_helper_functions import extract_acq_info
 from scmultiplex.meshing.MeshFunctions import export_vtk_polydata, load_mesh_as_polydata
 from scmultiplex.meshing.MeshProjection import assign_vertices_to_nuclei
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("annotate_mesh_by_child_features")
 ngio_logger.setLevel("ERROR")
 
 
@@ -195,9 +195,7 @@ def annotate_mesh_by_child_features(
 
         # numpy (N_cells, 3)
         # physical units (um)
-        feat_xyz = feat_sel_df[
-            ["x_pos_pix", "y_pos_pix", "z_pos_pix_scaled"]
-        ].to_numpy()
+        feat_xyz = feat_sel_df[["x_pos", "y_pos", "z_pos"]].to_numpy()
 
         label_array = feat_sel_df.index.to_numpy()
 
@@ -345,7 +343,4 @@ def annotate_mesh_by_child_features(
 if __name__ == "__main__":
     from fractal_task_tools.task_wrapper import run_fractal_task
 
-    run_fractal_task(
-        task_function=annotate_mesh_by_child_features,
-        logger_name=logger.name,
-    )
+    run_fractal_task(task_function=annotate_mesh_by_child_features)

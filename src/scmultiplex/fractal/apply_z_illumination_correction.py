@@ -36,7 +36,7 @@ from scmultiplex.utils.fractal_utils import (
     ZIlluminationChannelInputModel,
 )
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("apply_z_illumination_correction")
 
 
 @validate_call
@@ -313,7 +313,4 @@ def apply_z_illumination_correction(
 if __name__ == "__main__":
     from fractal_task_tools.task_wrapper import run_fractal_task
 
-    run_fractal_task(
-        task_function=apply_z_illumination_correction,
-        logger_name=logger.name,
-    )
+    run_fractal_task(task_function=apply_z_illumination_correction)

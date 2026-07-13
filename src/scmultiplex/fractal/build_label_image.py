@@ -19,7 +19,7 @@ from scmultiplex.fractal.fractal_helper_functions import load_image_array
 
 ngio_logger.setLevel("ERROR")
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("build_label_image")
 
 
 @validate_call
@@ -95,7 +95,4 @@ def build_label_image(
 if __name__ == "__main__":
     from fractal_task_tools.task_wrapper import run_fractal_task
 
-    run_fractal_task(
-        task_function=build_label_image,
-        logger_name=logger.name,
-    )
+    run_fractal_task(task_function=build_label_image)

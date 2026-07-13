@@ -30,7 +30,7 @@ from scmultiplex.meshing.LabelFusionFunctions import filter_by_volume
 
 ngio_logger.setLevel("ERROR")
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("cleanup_3d_child_labels")
 
 
 @validate_call
@@ -292,7 +292,4 @@ def cleanup_3d_child_labels(
 if __name__ == "__main__":
     from fractal_task_tools.task_wrapper import run_fractal_task
 
-    run_fractal_task(
-        task_function=cleanup_3d_child_labels,
-        logger_name=logger.name,
-    )
+    run_fractal_task(task_function=cleanup_3d_child_labels)

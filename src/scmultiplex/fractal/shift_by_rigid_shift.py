@@ -5,9 +5,6 @@
 # Nicole Repina <nicole.repina@fmi.ch>
 #
 
-"""
-Copy label image from reference round to moving round and apply rigid transformation (translation and rotation).
-"""
 
 import logging
 import os
@@ -22,31 +19,24 @@ from ngio import open_ome_zarr_container
 from ngio.utils import NgioFileNotFoundError, ngio_logger
 from pydantic import validate_call
 from scipy.ndimage import affine_transform
-from skimage.transform import estimate_transform
 
 from scmultiplex.fractal.fractal_helper_functions import (
-    clear_registration_folder,
     iterate_z_chunks,
     save_zchunk_to_label,
 )
 
 # Local application imports
 from scmultiplex.linking.OrganoidLinkingFunctions import (
-    convert_transform_to_physical,
-    get_euclidean_metrics,
-    get_rotation_only_transform,
-    get_sorted_label_centroids,
-    is_identity_transform,
+    convert_transform_to_pixels,
+    get_euclidean_metrics_from_scipy_affine,
     pad_to_match_maximum_xy_extent,
     resize_array_to_shape,
-    select_rotating_euclidean_transform,
-    transform_tform_to_scipy_affine,
 )
-from scmultiplex.utils.ngio_utils import save_sequence_coordinatetransform
+from scmultiplex.utils.ngio_utils import load_sequence_coordinatetransform
 
 # Configure logging
 ngio_logger.setLevel("ERROR")
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("shift_by_rigid_shift")
 
 
 @validate_call
@@ -56,22 +46,21 @@ def shift_by_rigid_shift(
     zarr_url: str,
     init_args: InitArgsRegistration,
     # Task-specific arguments
-    label_name_to_shift: str,
-    new_shifted_label_name: Optional[str] = None,
-    label_name_for_2D_rigid_transform: str = None,
+    label_name_to_shift: list[str],
+    registration_name: str = "rigid_2D",
+    load_registration_from_other_container: bool = True,
     zarr_suffix_to_add: Optional[str] = None,
     image_suffix_to_remove: Optional[str] = None,
     image_suffix_to_add: Optional[str] = None,
-    only_apply_rotation: bool = False,
-    only_apply_if_rotation_present: bool = False,
-    registration_name: str = "rigid_2D",
-    overwrite_folder: bool = False,
+    new_shifted_label_name: Optional[list[str]] = None,
+    overwrite_label: bool = False,
 ):
     """
-    Copy label image from reference round to moving round and shift by on the fly rigid transformation.
-    Label map from references is thus applied to subsequent moving rounds. 3D label maps can
-    be shifted rigid transformation of 2D MIP images, which are loaded from the corresponding 2D zarr
-    image. This 2D zarr is found by modifying the zarr and image names, starting from the reference
+    Apply 2D rigid transformation calculated by 'Calculate_2D_rigid_shift' task to labels. Task copies label image from the reference
+    round to the moving round and shifts it by the rigid transformation.
+    Task works for both 2D and 3D label images. 3D labels are shifted by rigid transformation of each z-slice. For this
+    3D case, the transform is loaded from the corresponding 2D zarr image. This 2D zarr is found by modifying the
+    zarr and image names, starting from the reference 3D
     zarr url, given the user-defined zarr_suffix_to_add, image_suffix_to_remove, image_suffix_to_add.
 
     Args:
@@ -81,33 +70,28 @@ def shift_by_rigid_shift(
             `_image_based_registration_hcs_init`. They contain the
             reference_zarr_url that is used for registration.
             (standard argument for Fractal tasks, managed by Fractal server).
-        label_name_to_shift: Label name of 3D reference round to be copied and shifted.
-        new_shifted_label_name: Optionally new name for shifted label.
-            If left None, default is {label_name}_shifted
-        label_name_for_2D_rigid_transform: Label name for the linked segmentation in the 2D MIP zarr
-            to be used for rigid transformation using skimage.transform.EuclideanTransform.
-        zarr_suffix_to_add: Optional suffix that needs to be added to input OME-Zarr name to
-            generate the path to the registered OME-Zarr. If the registered OME-Zarr is
-            "/path/to/my_plate_mip.zarr/B/03/0" and the input OME-Zarr is located
-            in "/path/to/my_plate.zarr/B/03/0", the correct suffix is "_mip".
-        image_suffix_to_remove: If the image name between reference & registered zarrs don't
-            match, this is the optional suffix that should be removed from the reference image.
-            If the reference image is in "/path/to/my_plate.zarr/B/03/
-            0_registered" and the registered image is in "/path/to/my_plate_mip.zarr/
-            B/03/0", the value should be "_registered"
-        image_suffix_to_add: If the image name between reference & registered zarrs don't
-            match, this is the optional suffix that should be added to the reference image.
-            If the reference image is in "/path/to/my_plate.zarr/B/03/0" and the
+        label_name_to_shift: List of label names in reference round to be copied and shifted with rigid transform.
+        load_registration_from_other_container: If True, load transform .JSON from a different Zarr container. For
+            example, set to True if task is run on a 3D Zarr but registration calculation was run on its
+            corresponding 2D MIP Zarr (i.e. the 'registered zarr').
+        zarr_suffix_to_add: Optional suffix that needs to be added to input OME-Zarr container name to
+            generate the path to the registered OME-Zarr container. If the registered URL is
+            "/path/to/my_plate_mip.zarr/B/03/0" and the input URL is
+            "/path/to/my_plate.zarr/B/03/0", the correct suffix is "_mip".
+        image_suffix_to_remove: If the image name between input & registered URLs don't
+            match, this is the optional suffix that should be removed from the input image name.
+            If the input URL is "/path/to/my_plate.zarr/B/03/0_registered" and the registered image is
+            in "/path/to/my_plate_mip.zarr/B/03/0", the value should be "_registered"
+        image_suffix_to_add: If the image name between input & registered zarrs don't
+            match, this is the optional suffix that should be added to the input image.
+            If the input image is in "/path/to/my_plate.zarr/B/03/0" and the
             registered image is in "/path/to/my_plate_mip.zarr/B/03/0_illum_corr", the
             value should be "_illum_corr".
-        only_apply_rotation: If true, translation output of EuclideanTransform is ignored and only
-            rotation is applied, if present.
-        only_apply_if_rotation_present: If true, EuclideanTransform is applied (both translation and rotation) to
-            if non-zero rotation is detected in the image.
-        registration_name: Name of folder that contains warp map .npz files per moving object. Created as
-            subfolder of 'registration' folder.
-        overwrite_folder: If True, clear existing subfolder {registration_name} in 'registration' folder to allow
-            re-run of registration with same name.
+        registration_name: Name of folder that contains the output rigid shift JSON file named 'sequence.json'.
+            Created as subfolder of 'registration' folder in moving round by 'Calculate 2D Rigid Shift' task.
+        new_shifted_label_name: Optional new name for the shifted label. Follows same order as label_name_to_shift.
+            If left None, default is to keep the original {label_name}.
+        overwrite_label: If True, overwrites label image in moving OME-Zarr with shifted version, if exists.
     """
 
     logger.info(f"Running 'shift_by_rigid_shift' task for {zarr_url=}.")
@@ -119,173 +103,139 @@ def shift_by_rigid_shift(
     reference_ome_zarr = open_ome_zarr_container(reference_zarr_url)
     moving_ome_zarr = open_ome_zarr_container(zarr_url)
 
-    # Load label image to copy
-    reference_img = reference_ome_zarr.get_label(label_name_to_shift)
-
     # Load moving image (target)
     moving_img = moving_ome_zarr.get_image()
 
-    # Load 2D label images to calculate rigid shift
-    # Get zarr url to label pair (e.g. from _mip zarr), src = reference, dst = current moving round
-    src_2d_zarr_url = reference_zarr_url.rstrip("/")
-    dst_2d_zarr_url = zarr_url.rstrip("/")
-    if zarr_suffix_to_add:
-        src_2d_zarr_url = src_2d_zarr_url.replace(
-            ".zarr",
-            f"{zarr_suffix_to_add}.zarr",
-        )  # this is now the path to the registered zarr
-        dst_2d_zarr_url = dst_2d_zarr_url.replace(
-            ".zarr",
-            f"{zarr_suffix_to_add}.zarr",
-        )  # this is now the path to the registered zarr
-    # Handle changes to image name
-    if image_suffix_to_remove:
-        src_2d_zarr_url = src_2d_zarr_url.rstrip(image_suffix_to_remove)
-        dst_2d_zarr_url = dst_2d_zarr_url.rstrip(image_suffix_to_remove)
-    if image_suffix_to_add:
-        src_2d_zarr_url += image_suffix_to_add
-        dst_2d_zarr_url += image_suffix_to_add
+    # Check image dimensions
+    if moving_ome_zarr.is_2d:
+        logger.info("Detected 2D label image.")
+    elif moving_ome_zarr.is_3d:
+        logger.info("Detected 3D label image.")
+    else:
+        raise ValueError("Unknown zarr format.")
 
-    try:
-        ome_zarr_2d_src = ngio.open_ome_zarr_container(src_2d_zarr_url)
-    except NgioFileNotFoundError as e:
+    # Check label naming
+    if new_shifted_label_name is not None and len(new_shifted_label_name) != len(
+        label_name_to_shift
+    ):
         raise ValueError(
-            f"Registered OME-Zarr {src_2d_zarr_url} not found. Please check the "
-            f"suffix (set to {zarr_suffix_to_add=}, {image_suffix_to_remove=}, {image_suffix_to_add=})."
-        ) from e
-
-    try:
-        ome_zarr_2d_dst = ngio.open_ome_zarr_container(dst_2d_zarr_url)
-    except NgioFileNotFoundError as e:
-        raise ValueError(
-            f"Registered OME-Zarr {dst_2d_zarr_url} not found. Please check the "
-            f"suffix (set to {zarr_suffix_to_add=}, {image_suffix_to_remove=}, {image_suffix_to_add=})."
-        ) from e
-
-    # Load Labels
-    src_label = ome_zarr_2d_src.get_label(name=label_name_for_2D_rigid_transform)
-    dst_label = ome_zarr_2d_dst.get_label(name=label_name_for_2D_rigid_transform)
-    src_image_np = src_label.get_array(mode="numpy")
-    dst_image_np = dst_label.get_array(mode="numpy")
-    src_image_np = np.squeeze(src_image_np, axis=0)
-    dst_image_np = np.squeeze(dst_image_np, axis=0)
-    pixel_size = src_label.pixel_size
-
-    src_objects = np.unique(src_image_np)
-    dst_objects = np.unique(dst_image_np)
-
-    if not np.array_equal(src_objects, dst_objects):
-        raise ValueError(
-            f"Labels between src and dst 2D arrays are not linked. Detected {len(src_objects)} in "
-            f"{src_2d_zarr_url=} and {len(dst_objects)} in {dst_2d_zarr_url=}. "
-            f"Rigid transformation with unlinked labels not possible."
+            "Lists new_shifted_label_name must have the same length as label_name_to_shift. Check task "
+            "inputs for these arguments!"
         )
 
-    # Get point cloud of organoid centroids
-    src = get_sorted_label_centroids(src_image_np)
-    dst = get_sorted_label_centroids(dst_image_np)
+    # Get zarr url for moving round that contains rigid transform .json
+    if load_registration_from_other_container:
+        registration_zarr_url = zarr_url.rstrip("/")
+        if zarr_suffix_to_add:
+            n = registration_zarr_url.count(".zarr")
 
-    deltas = dst - src
-    logger.info(
-        f"Quality control: Average shift between point cloud centroids = {np.mean(deltas, axis=0)} [x,y]"
+            if n != 1:
+                raise ValueError(
+                    f"Expected exactly one '.zarr' in path, found {n}: "
+                    f"{registration_zarr_url}"
+                )
+
+            registration_zarr_url = registration_zarr_url.replace(
+                ".zarr",
+                f"{zarr_suffix_to_add}.zarr",
+            )  # this is now the path to the registered zarr
+        # Handle changes to image name
+        if image_suffix_to_remove:
+            if not registration_zarr_url.endswith(image_suffix_to_remove):
+                raise ValueError(
+                    f"{registration_zarr_url!r} does not end with "
+                    f"{image_suffix_to_remove!r}."
+                )
+            registration_zarr_url = registration_zarr_url.removesuffix(
+                image_suffix_to_remove
+            )
+        if image_suffix_to_add:
+            registration_zarr_url += image_suffix_to_add
+    else:
+        # Load from current zarr
+        registration_zarr_url = zarr_url
+
+    # Try loading container to check if exists
+    try:
+        registration_ome_zarr = ngio.open_ome_zarr_container(registration_zarr_url)
+    except NgioFileNotFoundError as e:
+        raise ValueError(
+            f"Registered OME-Zarr {registration_zarr_url} not found. Please check the "
+            f"suffix (set to {zarr_suffix_to_add=}, {image_suffix_to_remove=}, {image_suffix_to_add=})."
+        ) from e
+
+    # Get pixel sizes
+    current_pixel_size = moving_img.pixel_size
+    registration_pixel_size = registration_ome_zarr.get_image().pixel_size
+
+    if not np.isclose(
+        current_pixel_size.x, registration_pixel_size.x
+    ) or not np.isclose(current_pixel_size.y, registration_pixel_size.y):
+        raise ValueError(
+            "Pixel sizes do not match between the current image and the image registration was calculated on: "
+            f"current=(y={current_pixel_size.y}, x={current_pixel_size.x}), "
+            f"registration=(y={registration_pixel_size.y}, x={registration_pixel_size.x})."
+        )
+
+    # Load rigid transform .json calculated in 'Calculate 2D Rigid Shift' Task
+    json_path = os.path.join(
+        registration_zarr_url, "registration", registration_name, "sequence.json"
+    )
+    matrix_um, offset_um = load_sequence_coordinatetransform(json_path)
+    matrix, offset = convert_transform_to_pixels(
+        matrix_um, offset_um, current_pixel_size.y, current_pixel_size.x
     )
 
-    # Calculate rigid Euclidean mapping from reference (src) to moving (dst) point cloud
-    logger.info("Computing 2D EuclideanTransform (rigid transformation)...")
-    tform = estimate_transform("euclidean", src, dst)
-    angle_deg, translation = get_euclidean_metrics(tform)
+    angle_deg, translation = get_euclidean_metrics_from_scipy_affine(matrix, offset)
 
     logger.info(
-        f"Calculated rigid transformation with translation {translation} and "
+        f"Loaded rigid transformation with translation {translation} and "
         f"angle rotation {angle_deg}."
     )
 
-    # matrix is forward rotation matrix mov to ref
-    # offset is forward translation mov to ref (yx order)
-    # rotation first, then translation
-    # [y_src, x_src] = matrix @ [y_dst, x_dst] + offset
-    matrix, offset = transform_tform_to_scipy_affine(tform)
-
-    # save transformation to disk, in "registration" folder of 2D dst image
-    # convert transform from pixels to physical units using zarr metadata
-    matrix_um, offset_um = convert_transform_to_physical(
-        matrix, offset, pixel_size.y, pixel_size.x
+    shifted_names = (
+        [None] * len(label_name_to_shift)
+        if new_shifted_label_name is None
+        else new_shifted_label_name
     )
 
-    # Set save location and clear if necessary
-    registration_save_path = os.path.join(zarr_url, "registration", registration_name)
-    if os.path.isdir(registration_save_path):
-        if overwrite_folder:
-            clear_registration_folder(registration_name, zarr_url)
-            logger.info(f"Cleared existing registration folder: {registration_name=}")
-        else:
+    # Loop over each label that was submitted to task and apply transform
+    for label_name, shifted_name in zip(
+        label_name_to_shift,
+        shifted_names,
+        strict=True,
+    ):
+
+        logger.info(f"Applying rigid transform to label image {label_name}.")
+
+        # Load label image to copy
+        reference_img = reference_ome_zarr.get_label(label_name)
+        label_volume_dask = reference_img.get_array(mode="dask")
+
+        if label_volume_dask.ndim != 3:
             raise ValueError(
-                f"Folder {registration_name=} already exists. To overwrite, set "
-                f"overwrite_folder=True."
+                f"Expected a 3D label array of shape (Z,Y,X) or (1,Y,X), got shape "
+                f"{label_volume_dask.shape}."
             )
-    else:
-        # Make directory
-        os.makedirs(registration_save_path)
 
-    json_path = save_sequence_coordinatetransform(
-        matrix_um, offset_um, registration_save_path
-    )
-    logger.info(f"Saving sequence coordinateTransform to: {json_path=}")
-
-    # Load reference label array as dask
-    label_volume_dask = reference_img.get_array(mode="dask")
-
-    # Save shifted label image in moving round zarr, make new label
-    if new_shifted_label_name is None:
-        new_shifted_label_name = label_name_to_shift + "_shifted"
-
-    new_label = moving_ome_zarr.derive_label(
-        name=new_shifted_label_name, overwrite=True
-    )
-
-    if only_apply_rotation:
-        # Remove translation from tform output
-        logger.info("Only applying rotation component of rigid transform.")
-        tform = get_rotation_only_transform(tform)
-
-    if only_apply_if_rotation_present:
-        logger.info("Determining whether rigid transform has rotation component.")
-        tform = select_rotating_euclidean_transform(tform)
-        if is_identity_transform(tform):
-            logger.info("No rotation component detected.")
+        # Make new label for shifted label image in moving round zarr
+        if shifted_name is None:
+            save_name = label_name
         else:
-            logger.info(
-                "Rotation detected, proceeding with full rigid transformation (translation + rotation)."
-            )
+            save_name = shifted_name
 
-    # If no rigid transformation necessary, skip writing to disk and just copy over untransformed label image
-    if is_identity_transform(tform):
-
-        logger.info(
-            "No rigid transformation necessary, resize and directly save to disk"
+        new_label = moving_ome_zarr.derive_label(
+            name=save_name, overwrite=overwrite_label
         )
 
-        # Get shapes of reference and moving label images
-        reference_shape = reference_img.shape[-3:]
-        moving_shape = moving_img.shape[-3:]
-
-        # Resize array to match shape of moving image
-        logger.info(f"Resizing array from {reference_shape=} to {moving_shape=}.")
-        label_volume_dask = resize_array_to_shape(label_volume_dask, moving_shape)
-
-        new_label.set_array(label_volume_dask)
-    else:
         # Apply 2D rigid transformation by z slice in each z-block, resize, write each chunk to disk
+        # If image is a 2D array, this code still runs, simply over the single z-slice as image would be (1, Y, X).
 
         # Note: cannot parallelize this transform with dask over chunks, because transform can shift or rotate
         # image beyond chunk border.
         # Instead, load all xy chunks for a small z-range (specified by z-chunking
         # distance), apply transform, and save. This is valid since transform is only applied XY, not in Z.
         # TODO: specify custom z extent in task input; currently z extent defaults to z-chunking of array.
-
-        logger.info(
-            f"Applying rigid transformation to reference image {reference_zarr_url}."
-        )
 
         # Get level 0 path of new label to save to
         label_level0_zarr_url = os.path.join(zarr_url, new_label.zarr_array.path)
@@ -295,7 +245,7 @@ def shift_by_rigid_shift(
 
         chunk_size_z = reference_img.chunks[0]
         logger.info(
-            f"Starting iteration over z-blocks of size "
+            f"\t{label_name}: Starting iteration over z-blocks of size "
             f"[z={chunk_size_z}, y={reference_img.shape[-2]}, x={reference_img.shape[-1]}]..."
         )
 
@@ -303,8 +253,12 @@ def shift_by_rigid_shift(
             label_volume_dask, moving_img.shape[-3:]
         )
 
+        z_loop = 0
+
         # Loop over z blocks: this loads full z-block of reference label into memory from disk
         for z_start, z_stop, z_data in iterate_z_chunks(label_volume_dask):
+
+            logger.info(f"\t{label_name}: Starting z-block count {z_loop + 1}... ")
 
             np_chunk_to_save = np.empty_like(
                 z_data
@@ -331,42 +285,55 @@ def shift_by_rigid_shift(
                 image_url_level_0=label_level0_zarr_url,
             )
 
-    logger.info(
-        f"End apply transform. Resized xy dimensions of transformed image {reference_img.shape[-2:]} to match destination shape {moving_img.shape[-2:]}."
-    )
+            z_loop += 1
 
-    # Build pyramids for label image
-    new_label.consolidate()
-    logger.info(f"Built a pyramid for the {new_shifted_label_name} label image")
+        logger.info(
+            f"\t{label_name}: Resized xy dimensions of transformed image {reference_img.shape[-2:]} to match destination shape {moving_img.shape[-2:]}."
+        )
 
-    # Make ROI table from new label image
-    masking_table = moving_ome_zarr.build_masking_roi_table(new_shifted_label_name)
-    new_table_name = f"{new_shifted_label_name}_ROI_table"
-    moving_ome_zarr.add_table(new_table_name, masking_table, overwrite=True)
-    logger.info(f"Saved new masking ROI table as {new_table_name}")
+        # Build pyramids for label image
+        new_label.consolidate()
+        logger.info(f"\t{label_name}: Built pyramid.")
 
-    # Write a ROI table with same name for the reference image
-    # This essentially duplicates the ROI table for the "label_name" image, just renaming it to "_shifted"
-    # This way all multiplex rounds have same registered ROI table name
-    # Label image name in reference round remains unchanged
-    # Redundant because gets written for ref round multiple times, for every ref/mov pair. But no
-    # race conditions possible because this table is not read in this task.
-    ref_masking_table = reference_ome_zarr.build_masking_roi_table(label_name_to_shift)
+        # Make ROI table from new label image in moving round
+        masking_table = moving_ome_zarr.build_masking_roi_table(save_name)
+        new_table_name = f"{save_name}_ROI_table"
+        moving_ome_zarr.add_table(new_table_name, masking_table, overwrite=True)
+        logger.info(
+            f"\t{label_name}: Saved new masking ROI table as {new_table_name} in moving round."
+        )
 
-    max_retries = 10
-    wait_seconds = random.randint(1, 15)
+        if shifted_name is not None:
+            # In case that a new label name is required, make a
+            # new ROI table with same name for the REFERENCE image
+            # This essentially duplicates the ROI table for the "label_name" image, just renaming it to "_shifted"
+            # This way all multiplex rounds have same registered ROI table name
+            # Label image name in reference round remains unchanged
+            # Redundant because gets written for ref round multiple times, for every ref/mov pair. But no
+            # race conditions possible because this table is not read in this task.
+            ref_masking_table = reference_ome_zarr.build_masking_roi_table(label_name)
 
-    for attempt in range(1, max_retries + 1):
-        try:
-            reference_ome_zarr.add_table(
-                new_table_name, ref_masking_table, overwrite=True
+            max_retries = 10
+            wait_seconds = random.randint(1, 15)
+
+            for attempt in range(1, max_retries + 1):
+                try:
+                    reference_ome_zarr.add_table(
+                        new_table_name, ref_masking_table, overwrite=True
+                    )
+                    break  # success, exit loop
+                except (FileNotFoundError, OSError, KeyError) as e:
+                    logger.warning(
+                        f"[Attempt {attempt}] Failed to write table due to: {e}"
+                    )
+                    if attempt == max_retries:
+                        raise  # raise error
+                    time.sleep(wait_seconds)
+            logger.info(
+                f"\t{label_name}: Saved new masking ROI table as {new_table_name} in reference round."
             )
-            break  # success, exit loop
-        except (FileNotFoundError, OSError, KeyError) as e:
-            logging.warning(f"[Attempt {attempt}] Failed to write table due to: {e}")
-            if attempt == max_retries:
-                raise  # raise error
-            time.sleep(wait_seconds)
+
+        logger.info(f"\t{label_name}: Successfully applied rigid transform.")
 
     logger.info(f"End shift_by_rigid_shift task for {zarr_url=}")
 
@@ -376,7 +343,4 @@ def shift_by_rigid_shift(
 if __name__ == "__main__":
     from fractal_task_tools.task_wrapper import run_fractal_task
 
-    run_fractal_task(
-        task_function=shift_by_rigid_shift,
-        logger_name=logger.name,
-    )
+    run_fractal_task(task_function=shift_by_rigid_shift)
