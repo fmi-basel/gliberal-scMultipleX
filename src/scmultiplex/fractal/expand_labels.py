@@ -156,7 +156,7 @@ def expand_labels(
     output_roi_table_name = f"{output_label_name}_ROI_table"
 
     # Initialize zarr with NGIO
-    ome_zarr.derive_label(name=output_label_name, overwrite=True)
+    ome_zarr.derive_label(name=output_label_name, ref_image=label_image, overwrite=True)
 
     ##############
     # Apply expansion ###

@@ -153,7 +153,9 @@ def fuse_touching_labels(
     else:
         output_label_name = new_label_name
 
-    new_label_container = ome_zarr.derive_label(name=output_label_name, overwrite=True)
+    new_label_container = ome_zarr.derive_label(
+        name=output_label_name, ref_image=label_img_to_fuse, overwrite=True
+    )
 
     # Rechunk if necessary
     target_chunks = new_label_container.chunks

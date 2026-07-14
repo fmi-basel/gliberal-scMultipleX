@@ -46,6 +46,7 @@ def cleanup_3d_child_labels(
     child_volume_filter_threshold: float = 0.05,
     repair_uint16_clipped_labels: bool = False,
     remove_nonsurface_labels: bool = False,
+    force_output_type_to_uint32: bool = False,
 ) -> None:
     """
 
@@ -71,6 +72,8 @@ def cleanup_3d_child_labels(
             values get remapped to monotonically increasing values 65536, 65537, etc.
         remove_nonsurface_labels: If true, remove child labels that are not on organoid surface, as
             determined by Annotate_mesh_by_child_features" task. The values to be removed are loaded from disk.
+        force_output_type_to_uint32: If True, force the dtype of the output cleaned label to be uint32. If False, the
+            dtype of input child label image is used.
 
     """
     ome_zarr = open_ome_zarr_container(zarr_url)
@@ -85,6 +88,11 @@ def cleanup_3d_child_labels(
     masked_image = ome_zarr.get_masked_label(
         label_name=child_label_name, masking_label_name=parent_label_name
     )
+
+    # Get input label dtype
+    source_label = ome_zarr.get_label(child_label_name)
+    source_array = source_label.get_array(mode="dask")
+    input_child_label_dtype = source_array.dtype
 
     # Pixel sizes as list: [z,y,x]
     pixel_size = masked_image.pixel_size
@@ -108,7 +116,12 @@ def cleanup_3d_child_labels(
     start_label = 65536
 
     # Initialize zarr with NGIO
-    ome_zarr.derive_label(name=output_label_name, overwrite=True)
+    if force_output_type_to_uint32:
+        output_dtype = np.uint32
+    else:
+        output_dtype = input_child_label_dtype
+
+    ome_zarr.derive_label(name=output_label_name, dtype=output_dtype, overwrite=True)
 
     if remove_nonsurface_labels:
         # Load label info to remove

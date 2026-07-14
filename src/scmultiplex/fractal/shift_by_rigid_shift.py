@@ -225,7 +225,7 @@ def shift_by_rigid_shift(
             save_name = shifted_name
 
         new_label = moving_ome_zarr.derive_label(
-            name=save_name, overwrite=overwrite_label
+            name=save_name, dtype=label_volume_dask.dtype, overwrite=overwrite_label
         )
 
         # Apply 2D rigid transformation by z slice in each z-block, resize, write each chunk to disk
