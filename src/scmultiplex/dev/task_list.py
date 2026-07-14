@@ -307,4 +307,15 @@ TASK_LIST = [
         tags=["2D", "3D", "intensity"],
         docs_info="file:task_info/scmultiplex_pixel_measurements.md",
     ),
+    CompoundTask(
+        name="scMultiplex Copy Data from Reference to Moving Rounds",
+        executable_init="fractal/init_select_all_knowing_reference.py",
+        executable="fractal/copy_data_from_ref_to_moving_rounds.py",
+        meta_init={"cpus_per_task": 1, "mem": 1000},
+        meta={"cpus_per_task": 4, "mem": 16000},
+        category="Registration",
+        modality="HCS",
+        tags=["multiplexing", "3D", "2D"],
+        docs_info="file:task_info/copy_data_from_ref_to_moving_rounds.md",
+    ),
 ]

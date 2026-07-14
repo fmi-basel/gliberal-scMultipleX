@@ -3491,6 +3491,110 @@
         "title": "ScmultiplexPixelMeasurements"
       },
       "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+    },
+    {
+      "name": "scMultiplex Copy Data from Reference to Moving Rounds",
+      "category": "Registration",
+      "modality": "HCS",
+      "tags": [
+        "multiplexing",
+        "3D",
+        "2D"
+      ],
+      "docs_info": "## Purpose\n\n- Copy ROI tables from the reference multiplexing round to all submitted moving rounds.\n- Automatically copy the corresponding label images for any masking ROI tables.\n- Preserve the original label image data type when creating copied labels.\n- Skip the reference round; only moving rounds are modified.\n- Existing labels and tables are overwritten only if `overwrite=True`.\n\n\n## Inputs\n\n- **roi_table_names_to_copy_from_ref**: List of ROI table names to copy from the reference round. For tables of type `masking_roi_table`, the corresponding label images are copied automatically.\n- **overwrite** *(default: `False`)*: If `True`, overwrite existing tables and labels in the moving rounds.\n\n## Outputs\n\n- Copies the requested ROI tables from the reference round to each moving round.\n- Copies any label images referenced by masking ROI tables to the corresponding moving rounds.\n- Builds label pyramids for copied label images.\n\n## Limitations\n\n- Assumes that reference and moving images have compatible spatial metadata (shape, pixel size, axes).\n- Only copies labels and tables; in future consider supporting copying of specific subfolders, e.g. meshes or registration, if needed.\n",
+      "type": "compound",
+      "executable_non_parallel": "fractal/init_select_all_knowing_reference.py",
+      "executable_parallel": "fractal/copy_data_from_ref_to_moving_rounds.py",
+      "meta_non_parallel": {
+        "cpus_per_task": 1,
+        "mem": 1000
+      },
+      "meta_parallel": {
+        "cpus_per_task": 4,
+        "mem": 16000
+      },
+      "args_schema_non_parallel": {
+        "additionalProperties": false,
+        "properties": {
+          "zarr_urls": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Zarr Urls",
+            "type": "array",
+            "description": "List of paths or urls to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "zarr_dir": {
+            "title": "Zarr Dir",
+            "type": "string",
+            "description": "path of the directory where the new OME-Zarrs will be created. Not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "reference_acquisition": {
+            "default": 0,
+            "title": "Reference Acquisition",
+            "type": "integer",
+            "description": "Which acquisition to register against. Needs to match the acquisition metadata in the OME-Zarr image."
+          }
+        },
+        "required": [
+          "zarr_urls",
+          "zarr_dir"
+        ],
+        "type": "object",
+        "title": "InitSelectAllKnowingReference"
+      },
+      "args_schema_parallel": {
+        "$defs": {
+          "InitArgsRegistration": {
+            "description": "Registration init args.",
+            "properties": {
+              "reference_zarr_url": {
+                "title": "Reference Zarr Url",
+                "type": "string"
+              }
+            },
+            "required": [
+              "reference_zarr_url"
+            ],
+            "title": "InitArgsRegistration",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "zarr_url": {
+            "title": "Zarr Url",
+            "type": "string",
+            "description": "Path or url to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "init_args": {
+            "$ref": "#/$defs/InitArgsRegistration",
+            "title": "Init Args",
+            "description": "Intialization arguments provided by `init_select_all_knowing_reference`. They contain the reference_zarr_url information. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "roi_table_names_to_copy_from_ref": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Roi Table Names To Copy From Ref",
+            "type": "array",
+            "description": "List of ROI table names present in reference round to copy over. The corresponding label of masking ROI tables are also copied over."
+          },
+          "overwrite": {
+            "default": false,
+            "title": "Overwrite",
+            "type": "boolean",
+            "description": "If True, overwrite labels and tables with same name in registered zarr image."
+          }
+        },
+        "required": [
+          "zarr_url",
+          "init_args"
+        ],
+        "type": "object",
+        "title": "CopyDataFromRefToMovingRounds"
+      },
+      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
     }
   ],
   "has_args_schemas": true,
