@@ -2347,11 +2347,11 @@
             "type": "boolean",
             "description": "If true, remove child labels that are not on organoid surface, as determined by Annotate_mesh_by_child_features\" task. The values to be removed are loaded from disk."
           },
-          "force_output_dtype_uint32": {
+          "force_output_type_to_uint32": {
             "default": false,
-            "title": "Force Output Dtype Uint32",
+            "title": "Force Output Type To Uint32",
             "type": "boolean",
-            "description": "If True, force the dtype of the output cleaned label to be uin32. If False, the dtype of input child label image is used."
+            "description": "If True, force the dtype of the output cleaned label to be uint32. If False, the dtype of input child label image is used."
           }
         },
         "required": [

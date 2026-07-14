@@ -46,7 +46,7 @@ def cleanup_3d_child_labels(
     child_volume_filter_threshold: float = 0.05,
     repair_uint16_clipped_labels: bool = False,
     remove_nonsurface_labels: bool = False,
-    force_output_dtype_uint32: bool = False,
+    force_output_type_to_uint32: bool = False,
 ) -> None:
     """
 
@@ -72,7 +72,7 @@ def cleanup_3d_child_labels(
             values get remapped to monotonically increasing values 65536, 65537, etc.
         remove_nonsurface_labels: If true, remove child labels that are not on organoid surface, as
             determined by Annotate_mesh_by_child_features" task. The values to be removed are loaded from disk.
-        force_output_dtype_uint32: If True, force the dtype of the output cleaned label to be uin32. If False, the
+        force_output_type_to_uint32: If True, force the dtype of the output cleaned label to be uint32. If False, the
             dtype of input child label image is used.
 
     """
@@ -116,7 +116,7 @@ def cleanup_3d_child_labels(
     start_label = 65536
 
     # Initialize zarr with NGIO
-    if force_output_dtype_uint32:
+    if force_output_type_to_uint32:
         output_dtype = np.uint32
     else:
         output_dtype = input_child_label_dtype
