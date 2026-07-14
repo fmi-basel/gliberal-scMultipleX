@@ -2346,6 +2346,12 @@
             "title": "Remove Nonsurface Labels",
             "type": "boolean",
             "description": "If true, remove child labels that are not on organoid surface, as determined by Annotate_mesh_by_child_features\" task. The values to be removed are loaded from disk."
+          },
+          "force_output_dtype_uint32": {
+            "default": false,
+            "title": "Force Output Dtype Uint32",
+            "type": "boolean",
+            "description": "If True, force the dtype of the output cleaned label to be uin32. If False, the dtype of input child label image is used."
           }
         },
         "required": [

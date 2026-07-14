@@ -190,7 +190,7 @@ def shift_by_shift(
         new_shifted_label_name = label_name_to_shift + "_shifted"
 
     new_label_container = moving_ome_zarr.derive_label(
-        name=new_shifted_label_name, overwrite=True
+        name=new_shifted_label_name, dtype=img_array.dtype, overwrite=True
     )
     new_label_container.set_array(shifted_img_array)
 
