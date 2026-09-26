@@ -3358,49 +3358,11 @@
         "intensity"
       ],
       "docs_info": "### Purpose\n- **Measures pixel features** from existing segmentation images in an OME-Zarr dataset.\n- Measure number of pixels above given intensity value for each label object in image. User sets thresholds per channel in task input.\n- Compound task that can be run over single or multiplexing rounds.\n\n### Outputs\n- Feature table that includes the pixel counts per channel, centroid, and number of total pixels for each measured object in image.\n\n### Limitations\n- Classifies pixels as positive only based on intensity threshold, no classifier or combined features currently supported.\n",
-      "type": "compound",
-      "executable_non_parallel": "fractal/init_select_many_rounds.py",
+      "type": "parallel",
       "executable_parallel": "fractal/scmultiplex_pixel_measurements.py",
-      "meta_non_parallel": {
-        "cpus_per_task": 1,
-        "mem": 1000
-      },
       "meta_parallel": {
         "cpus_per_task": 4,
         "mem": 16000
-      },
-      "args_schema_non_parallel": {
-        "additionalProperties": false,
-        "properties": {
-          "zarr_urls": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Zarr Urls",
-            "type": "array",
-            "description": "List of paths or urls to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
-          },
-          "zarr_dir": {
-            "title": "Zarr Dir",
-            "type": "string",
-            "description": "path of the directory where the new OME-Zarrs will be created. Not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
-          },
-          "select_acquisitions": {
-            "items": {
-              "type": "integer"
-            },
-            "title": "Select Acquisitions",
-            "type": "array",
-            "description": "List of rounds to which correction should be applied, list of integers."
-          }
-        },
-        "required": [
-          "zarr_urls",
-          "zarr_dir",
-          "select_acquisitions"
-        ],
-        "type": "object",
-        "title": "InitSelectManyRounds"
       },
       "args_schema_parallel": {
         "$defs": {
@@ -3431,11 +3393,6 @@
             "title": "Zarr Url",
             "type": "string",
             "description": "Path or url to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
-          },
-          "init_args": {
-            "title": "Init Args",
-            "type": "object",
-            "description": "Missing description"
           },
           "label_name": {
             "title": "Label Name",
@@ -3482,7 +3439,6 @@
         },
         "required": [
           "zarr_url",
-          "init_args",
           "label_name",
           "output_table_name",
           "input_channels"

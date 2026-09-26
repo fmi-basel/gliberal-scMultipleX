@@ -40,7 +40,6 @@ def scmultiplex_pixel_measurements(  # noqa: C901
     *,
     # Default arguments for fractal tasks:
     zarr_url: str,
-    init_args: dict,
     # Task-specific arguments:
     label_name: str,
     output_table_name: str,

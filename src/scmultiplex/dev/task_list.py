@@ -296,11 +296,9 @@ TASK_LIST = [
         modality="HCS",
         tags=["multiplexing", "3D"],
     ),
-    CompoundTask(
+    ParallelTask(
         name="scMultiplex Pixel Measurements",
-        executable_init="fractal/init_select_many_rounds.py",
         executable="fractal/scmultiplex_pixel_measurements.py",
-        meta_init={"cpus_per_task": 1, "mem": 1000},
         meta={"cpus_per_task": 4, "mem": 16000},
         category="Measurement",
         modality="HCS",
