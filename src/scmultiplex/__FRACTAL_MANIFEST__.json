@@ -3357,7 +3357,7 @@
         "3D",
         "intensity"
       ],
-      "docs_info": "### Purpose\n- **Measures pixel features** from existing segmentation images in an OME-Zarr dataset.\n- Measure number of pixels above given intensity value for each label object in image. User sets thresholds per channel in task input.\n- Compound task that can be run over single or multiplexing rounds.\n\n### Outputs\n- Feature table that includes the pixel counts per channel, centroid, and number of total pixels for each measured object in image.\n\n### Limitations\n- Classifies pixels as positive only based on intensity threshold, no classifier or combined features currently supported.\n",
+      "docs_info": "### Purpose\n- **Measures pixel features** from existing segmentation images in an OME-Zarr dataset.\n- Measure number of pixels above given intensity value for each label object in image. User sets thresholds per channel in task input.\n- Compound task that is run on single image.\n\n### Outputs\n- A feature table containing, for each labeled object:\n  - Number of pixels above the intensity threshold.\n  - Sum of the intensities of pixels above the intensity threshold.\n  - Object centroid coordinates.\n  - Total number of pixels in the object.\n\n### Limitations\n- Classifies pixels as positive only based on intensity threshold, no classifier or combined features currently supported.\n",
       "type": "parallel",
       "executable_parallel": "fractal/scmultiplex_pixel_measurements.py",
       "meta_parallel": {
