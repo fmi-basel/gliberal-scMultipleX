@@ -298,11 +298,18 @@ def get_pixel_measurements(
     # Load pixels belonging to this label only
     region_intensities = labeled_obj.intensity_image[labeled_obj.image]
 
-    # Count number of pixels above this threshold
-    n_pixels_above_threshold = np.sum(region_intensities > intensity_threshold)
+    # Identify pixels above threshold
+    positive_mask = region_intensities > intensity_threshold
+
+    # Count number of pixels above threshold
+    n_pixels_above_threshold = np.sum(positive_mask)
+
+    # Sum intensities of pixels above threshold
+    intensity_sum_above_threshold = np.sum(region_intensities[positive_mask])
 
     intensity_measurements = {
         "n_pixels_above_threshold": int(n_pixels_above_threshold),
+        "intensity_sum_above_threshold": float(intensity_sum_above_threshold),
         "intensity_threshold": intensity_threshold,
     }
 
