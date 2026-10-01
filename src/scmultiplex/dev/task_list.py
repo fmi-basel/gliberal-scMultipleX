@@ -89,17 +89,6 @@ TASK_LIST = [
         tags=["3D"],
         docs_info="file:task_info/spherical_harmonics_from_label_image.md",
     ),
-    CompoundTask(
-        name="scMultiplex Mesh Measurements",
-        executable_init="fractal/init_select_reference_knowing_all.py",
-        executable="fractal/scmultiplex_mesh_measurements.py",
-        meta_init={"cpus_per_task": 1, "mem": 1000},
-        meta={"cpus_per_task": 4, "mem": 16000},
-        category="Measurement",
-        modality="HCS",
-        tags=["3D", "mesh", "morphology"],
-        docs_info="file:task_info/mesh_measurements.md",
-    ),
     ParallelTask(
         name="scMultiplex Feature Measurements",
         executable="fractal/scmultiplex_feature_measurements.py",
@@ -124,6 +113,15 @@ TASK_LIST = [
         modality="HCS",
         tags=["3D", "mesh"],
         docs_info="file:task_info/surface_mesh_multiscale.md",
+    ),
+    ParallelTask(
+        name="scMultiplex Mesh Measurements",
+        executable="fractal/scmultiplex_mesh_measurements.py",
+        meta={"cpus_per_task": 4, "mem": 16000},
+        category="Measurement",
+        modality="HCS",
+        tags=["3D", "mesh", "morphology"],
+        docs_info="file:task_info/mesh_measurements.md",
     ),
     CompoundTask(
         name="scMultiplex Calculate Z-Illumination Correction",

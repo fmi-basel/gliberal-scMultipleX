@@ -17,7 +17,6 @@ import anndata as ad
 import pandas as pd
 import zarr
 from fractal_tasks_core.tables import write_table
-from fractal_tasks_core.tasks.io_models import InitArgsRegistrationConsensus
 from pydantic import validate_call
 from vtkmodules.util import numpy_support
 
@@ -40,7 +39,6 @@ def scmultiplex_mesh_measurements(
     *,
     # Fractal arguments
     zarr_url: str,
-    init_args: InitArgsRegistrationConsensus,
     # Task-specific arguments
     mesh_name: str,
     roi_table: str,
