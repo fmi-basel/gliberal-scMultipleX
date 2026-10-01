@@ -508,234 +508,6 @@
       "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
     },
     {
-      "name": "scMultiplex Surface Mesh Multiscale",
-      "category": "Image Processing",
-      "modality": "HCS",
-      "tags": [
-        "3D",
-        "mesh"
-      ],
-      "docs_info": "### Purpose\n- Calculates **3D surface meshes** for parent objects (e.g., tissues, organoids) based on 3D child-level segmentation (e.g., nuclei).\n- Optionally applies **multiscale label fusion** to estimate a smooth parent shape by merging child objects.\n- Generates smoothened surface meshes using **VTK algorithms**, with optional mesh decimation for reduced complexity.\n- Outputs 3D meshes in `.stl` or `.vtp` format and a new well label map in the dataset.\n\n### Outputs\n- **Surface meshes** of parent objects, saved as `.stl` (single object) or `.vtp` (multi-object) files in the dataset\u2019s `meshes` folder.\n- A **new label map** containing fused child-level objects, saved in the OME-Zarr dataset (only if multiscale processing is enabled).\n- A **bounding-box ROI table** corresponding to the new label map.\n\n### Limitations\n- Requires pre-segmented child objects and a parent object ROI table.\n- Multiscale processing requires a **parent label** for accurate object grouping and fusion.\n- Label map outputs may have **overlaps clipped**, where higher-label IDs take precedence in dense regions.\n- Mesh quality can vary with complex geometries; manual tuning of smoothing parameters may be needed for optimal results.\n",
-      "type": "compound",
-      "executable_non_parallel": "fractal/init_select_reference_knowing_all.py",
-      "executable_parallel": "fractal/surface_mesh_multiscale.py",
-      "meta_non_parallel": {
-        "cpus_per_task": 1,
-        "mem": 1000
-      },
-      "meta_parallel": {
-        "cpus_per_task": 4,
-        "mem": 16000
-      },
-      "args_schema_non_parallel": {
-        "additionalProperties": false,
-        "properties": {
-          "zarr_urls": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Zarr Urls",
-            "type": "array",
-            "description": "List of paths or urls to the individual OME-Zarr image to be processed. (standard argument for Fractal tasks, managed by Fractal server)."
-          },
-          "zarr_dir": {
-            "title": "Zarr Dir",
-            "type": "string",
-            "description": "path of the directory where the new OME-Zarrs will be created. Not used by this task. (standard argument for Fractal tasks, managed by Fractal server)."
-          },
-          "reference_acquisition": {
-            "default": 0,
-            "title": "Reference Acquisition",
-            "type": "integer",
-            "description": "Which acquisition to register against. Uses the OME-NGFF HCS well metadata acquisition keys to find the reference acquisition."
-          }
-        },
-        "required": [
-          "zarr_urls",
-          "zarr_dir"
-        ],
-        "type": "object",
-        "title": "InitSelectReferenceKnowingAll"
-      },
-      "args_schema_parallel": {
-        "$defs": {
-          "InitArgsRegistrationConsensus": {
-            "description": "Registration consensus init args.",
-            "properties": {
-              "zarr_url_list": {
-                "items": {
-                  "type": "string"
-                },
-                "title": "Zarr Url List",
-                "type": "array"
-              }
-            },
-            "required": [
-              "zarr_url_list"
-            ],
-            "title": "InitArgsRegistrationConsensus",
-            "type": "object"
-          }
-        },
-        "additionalProperties": false,
-        "properties": {
-          "zarr_url": {
-            "title": "Zarr Url",
-            "type": "string",
-            "description": "Path or url to the individual OME-Zarr image to be processed. Refers to the zarr_url of the reference acquisition. (standard argument for Fractal tasks, managed by Fractal server)."
-          },
-          "init_args": {
-            "$ref": "#/$defs/InitArgsRegistrationConsensus",
-            "title": "Init Args",
-            "description": "Intialization arguments provided by `init_group_by_well_for_multiplexing`. It contains the zarr_url_list listing all the zarr_urls in the same well as the zarr_url of the reference acquisition that are being processed. (standard argument for Fractal tasks, managed by Fractal server)."
-          },
-          "label_name": {
-            "default": "nuc",
-            "title": "Label Name",
-            "type": "string",
-            "description": "Label name of segmentation for which mesh is calculated. When Multiscale = True, this is the label name of child objects (e.g. nuclei) that will be used for multiscale surface estimation."
-          },
-          "group_by": {
-            "title": "Group By",
-            "type": "string",
-            "description": "Label name of segmentated objects that are parents of label_name. If None (default), no grouping is applied and meshes are calculated for the input object (label_name). Instead, if a group_by label is specified, the label_name objects will be masked and grouped by this object. For example, when group_by = 'org', the nuclear segmentation is masked by the organoid parent and all nuclei belonging to the parent are loaded as a label image. Thus, when Multiscale = False, the calculated mesh contains multiple child objects. When Multiscale = True, a new labelmap is generated as a result of child fusion to generate the 3D parent (organoid-level) shape."
-          },
-          "roi_table": {
-            "default": "org_ROI_table_linked",
-            "title": "Roi Table",
-            "type": "string",
-            "description": "Name of the ROI table used to iterate over objects and load object regions. If group_by = None, this is the ROI table that corresponds to the label_name objects. If group_by is passed, this is the ROI table for the group_by objects, e.g. org_ROI_table."
-          },
-          "multiscale": {
-            "default": true,
-            "title": "Multiscale",
-            "type": "boolean",
-            "description": "if True, a new labelmap is generated as a result of child fusion to generate the 3D parent (organoid-level) shape. This label output is called {group_by}_from_{label_name}, with corresponding ROI table name {group_by}_ROI_table_from_{label_name}. This label image is optionally saved as a mesh if save_mesh = True. If Multiscale = False, no multiscale label map computation is performed and a smoothened mesh of the input label_name is generated."
-          },
-          "save_mesh": {
-            "default": true,
-            "title": "Save Mesh",
-            "type": "boolean",
-            "description": "if True, calculates and saves mesh on disk in the 'meshes' folder within zarr structure. Meshes saved as '.stl', except for the case of multi-object meshed (e.g. multiple nuclei within a parent organoid) that are saved as '.vtp' to preserve label ID information. Filename corresponds to parent object label id, or to label id in the case when group_by = None."
-          },
-          "new_mesh_name": {
-            "title": "New Mesh Name",
-            "type": "string",
-            "description": "Optionally new name for new label map (if multiscale) and mesh subfolder (if save_mesh) that is generated. If left None, default is {label_name}."
-          },
-          "expandby_factor": {
-            "default": 0.6,
-            "title": "Expandby Factor",
-            "type": "number",
-            "description": "only used if Multiscale = True. Multiplier that specifies pixels by which to expand each nuclear mask for merging, float in range [0, 1 or higher], e.g. 0.2 means that 20% of mean of nuclear equivalent diameter is used."
-          },
-          "sigma_factor": {
-            "default": 5,
-            "title": "Sigma Factor",
-            "type": "number",
-            "description": "only used if Multiscale = True. Float that specifies sigma (standard deviation, in pixels) for Gaussian kernel used for blurring to smoothen label image prior to edge detection. Higher values correspond to more blurring. Recommended range 5-15."
-          },
-          "canny_threshold": {
-            "default": 0.3,
-            "title": "Canny Threshold",
-            "type": "number",
-            "description": "only used if Multiscale = True. Image values below this threshold are set to 0 after Gaussian blur. float in range [0,1]. Higher values result in tighter fit of mesh to nuclear surface."
-          },
-          "mask_contour_by_parent": {
-            "default": false,
-            "title": "Mask Contour By Parent",
-            "type": "boolean",
-            "description": "if True, the final multiscale edges are masking by 2D parent object mask. Can be used to define cleaner edge borders between touching organoids, but may crop surface mask if higher blurring is desired."
-          },
-          "fill_holes": {
-            "default": false,
-            "title": "Fill Holes",
-            "type": "boolean",
-            "description": "if True, the label image just prior to meshing has holes filled by iterating over slices. Useful for filling lumens in segmentation."
-          },
-          "filter_by_object_volume": {
-            "default": false,
-            "title": "Filter By Object Volume",
-            "type": "boolean",
-            "description": "if True, the label image is filtered by volume. This skips objects with lower volume (number of pixels, calculated after all processing and hole filling, if applied) than the object_volume_filter_threshold."
-          },
-          "object_volume_filter_threshold": {
-            "default": 60000,
-            "title": "Object Volume Filter Threshold",
-            "type": "integer",
-            "description": "Integer threshold for object volume filtering. Number of pixels. E.g. if set to 600, objects with a pixel count less than 600 are skipped. Only used if filter_by_object_volume is True."
-          },
-          "filter_children_by_volume": {
-            "default": false,
-            "title": "Filter Children By Volume",
-            "type": "boolean",
-            "description": "if True, performing volume filtering of nuclei to remove objects smaller than specified volume_filter_threshold."
-          },
-          "child_volume_filter_threshold": {
-            "default": 0.05,
-            "title": "Child Volume Filter Threshold",
-            "type": "number",
-            "description": "Multiplier that specifies cutoff for volumes below which nuclei are filtered out, float in range [0,1], e.g. 0.05 means that 5% of median of nuclear volume distribution is used as cutoff. Specify this value if volume filtering is desired. Default 0.05."
-          },
-          "polynomial_degree": {
-            "default": 30,
-            "title": "Polynomial Degree",
-            "type": "integer",
-            "description": "Mesh smoothing parameter. The number of polynomial degrees during surface mesh smoothing with vtkWindowedSincPolyDataFilter determines the maximum number of smoothing passes. This number corresponds to the degree of the polynomial that is used to approximate the windowed sinc function. Usually 10-20 iteration are sufficient. Higher values have little effect on smoothing. For further details see VTK vtkWindowedSincPolyDataFilter documentation."
-          },
-          "passband": {
-            "default": 0.01,
-            "title": "Passband",
-            "type": "number",
-            "description": "Mesh smoothing parameter. Float in range [0,2] that specifies the PassBand for the windowed sinc filter in vtkWindowedSincPolyDataFilter during mesh smoothing. Lower passband values produce more smoothing, due to filtering of higher frequencies. For further details see VTK vtkWindowedSincPolyDataFilter documentation."
-          },
-          "feature_angle": {
-            "default": 160,
-            "title": "Feature Angle",
-            "type": "integer",
-            "description": "Mesh smoothing parameter. Integer in range [0,180] that specifies the feature angle for sharp edge identification used for vtk FeatureEdgeSmoothing. Higher values result in more smoothened edges in mesh. For further details see VTK vtkWindowedSincPolyDataFilter documentation."
-          },
-          "target_reduction": {
-            "default": 0.98,
-            "title": "Target Reduction",
-            "type": "number",
-            "description": "Mesh decimation parameter. Float in range [0,1]. Target reduction is used during mesh decimation via vtkQuadricDecimation to reduce the number of triangles in a triangle mesh, forming a good approximation to the original geometry. Values closer to 1 indicate larger reduction and smaller mesh file size. Note that target_reduction is expressed as the fraction of the original number of triangles in mesh and so is proportional to original mesh size. Note the actual reduction may be less depending on triangulation and topological constraints. For further details see VTK vtkQuadricDecimation documentation."
-          },
-          "smoothing_iterations": {
-            "default": 1,
-            "title": "Smoothing Iterations",
-            "type": "integer",
-            "description": " Mesh smoothing parameter. The number of iterations that mesh smoothing and decimation is run. If smoothing_iterations > 1, the decimated result is used as input for subsequent smoothing rounds. Recommended to start with 1 iteration and increase if resulting smoothing is insufficient. For each iteration after the first, the passband is reduced and feature_angle is increased incrementally to enhance smoothing. Specifically, the passband is reduced by factor 1/(2^n), and the feature_angle is increased by an increment of (5 * n), where n = iteration round (n=0 is the first iteration). The target_reduction is fixed to 0.1 smoothing_iterations > 1. For example if user inputs (0.01, 160, 0.98) for (passband, feature_angle, target_reduction), the second iteration will use parameters (0.005, 165, 0.1), the third (0.0025, 170, 0.1), etc. Maximum feature_angle is capped at 180. Note that additional iterations usually do not significantly add to processing time as the number of mesh verteces is typically significantly reduced after the first decimation iteration."
-          },
-          "resample_mesh_to_target_point_count": {
-            "default": false,
-            "title": "Resample Mesh To Target Point Count",
-            "type": "boolean",
-            "description": "If True, the mesh is resampled to the target_point_count. All smoothing and decimation is performed as specified above. The smoothened mesh is then upsampled (with Loop Subdivision and Quadric Decimation) or downsampled (with Quadric Decimation), depending on whether the number of points in the smoothened mesh is lower or greater than the target_point_count, respectively. If True, all output meshes will have the same total number of points and triangles per object, though different point densities since object volumes are different. All .stl files also have same size. Note that depending on whether input mesh has an even or odd number of points, resampled output might still have slightly varying point/triangle counts between objects. If False, the original smoothened mesh is returned where the number of points differs between objects (but density per surface area is roughly the same)."
-          },
-          "target_point_count": {
-            "default": 5000,
-            "title": "Target Point Count",
-            "type": "integer",
-            "description": "Integer number of points desired in remeshed object. Note that this is approximate and resampled output might still have slightly varying point/triangle counts between objects (e.g. depending on whether input mesh has an even or odd number of points). Only used if resample_mesh_to_target_point_count is True."
-          },
-          "overwrite_folder": {
-            "default": true,
-            "title": "Overwrite Folder",
-            "type": "boolean",
-            "description": "If True, the output mesh folder, if exists, is cleared. Recommended to set True so that any meshes that already exist in folder but in current run are not processed are removed."
-          }
-        },
-        "required": [
-          "zarr_url",
-          "init_args"
-        ],
-        "type": "object",
-        "title": "SurfaceMeshMultiscale"
-      },
-      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
-    },
-    {
       "name": "scMultiplex Segment by Intensity Threshold",
       "category": "Segmentation",
       "modality": "HCS",
@@ -1441,6 +1213,174 @@
         ],
         "type": "object",
         "title": "ExpandLabels"
+      },
+      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+    },
+    {
+      "name": "scMultiplex Surface Mesh Multiscale",
+      "category": "Image Processing",
+      "modality": "HCS",
+      "tags": [
+        "3D",
+        "mesh"
+      ],
+      "docs_info": "### Purpose\n- Calculates **3D surface meshes** for parent objects (e.g., tissues, organoids) based on 3D child-level segmentation (e.g., nuclei).\n- Optionally applies **multiscale label fusion** to estimate a smooth parent shape by merging child objects.\n- Generates smoothened surface meshes using **VTK algorithms**, with optional mesh decimation for reduced complexity.\n- Outputs 3D meshes in `.stl` or `.vtp` format and a new well label map in the dataset.\n\n### Outputs\n- **Surface meshes** of parent objects, saved as `.stl` (single object) or `.vtp` (multi-object) files in the dataset\u2019s `meshes` folder.\n- A **new label map** containing fused child-level objects, saved in the OME-Zarr dataset (only if multiscale processing is enabled).\n- A **bounding-box ROI table** corresponding to the new label map.\n\n### Limitations\n- Requires pre-segmented child objects and a parent object ROI table.\n- Multiscale processing requires a **parent label** for accurate object grouping and fusion.\n- Label map outputs may have **overlaps clipped**, where higher-label IDs take precedence in dense regions.\n- Mesh quality can vary with complex geometries; manual tuning of smoothing parameters may be needed for optimal results.\n",
+      "type": "parallel",
+      "executable_parallel": "fractal/surface_mesh_multiscale.py",
+      "meta_parallel": {
+        "cpus_per_task": 4,
+        "mem": 16000
+      },
+      "args_schema_parallel": {
+        "additionalProperties": false,
+        "properties": {
+          "zarr_url": {
+            "title": "Zarr Url",
+            "type": "string",
+            "description": "Path or url to the individual OME-Zarr image to be processed. Refers to the zarr_url of the reference acquisition. (standard argument for Fractal tasks, managed by Fractal server)."
+          },
+          "label_name": {
+            "default": "nuc",
+            "title": "Label Name",
+            "type": "string",
+            "description": "Label name of segmentation for which mesh is calculated. When Multiscale = True, this is the label name of child objects (e.g. nuclei) that will be used for multiscale surface estimation."
+          },
+          "group_by": {
+            "title": "Group By",
+            "type": "string",
+            "description": "Label name of segmentated objects that are parents of label_name. If None (default), no grouping is applied and meshes are calculated for the input object (label_name). Instead, if a group_by label is specified, the label_name objects will be masked and grouped by this object. For example, when group_by = 'org', the nuclear segmentation is masked by the organoid parent and all nuclei belonging to the parent are loaded as a label image. Thus, when Multiscale = False, the calculated mesh contains multiple child objects. When Multiscale = True, a new labelmap is generated as a result of child fusion to generate the 3D parent (organoid-level) shape."
+          },
+          "roi_table": {
+            "default": "org_ROI_table_linked",
+            "title": "Roi Table",
+            "type": "string",
+            "description": "Name of the ROI table used to iterate over objects and load object regions. If group_by = None, this is the ROI table that corresponds to the label_name objects. If group_by is passed, this is the ROI table for the group_by objects, e.g. org_ROI_table."
+          },
+          "multiscale": {
+            "default": true,
+            "title": "Multiscale",
+            "type": "boolean",
+            "description": "if True, a new labelmap is generated as a result of child fusion to generate the 3D parent (organoid-level) shape. This label output is called {group_by}_from_{label_name}, with corresponding ROI table name {group_by}_ROI_table_from_{label_name}. This label image is optionally saved as a mesh if save_mesh = True. If Multiscale = False, no multiscale label map computation is performed and a smoothened mesh of the input label_name is generated."
+          },
+          "save_mesh": {
+            "default": true,
+            "title": "Save Mesh",
+            "type": "boolean",
+            "description": "if True, calculates and saves mesh on disk in the 'meshes' folder within zarr structure. Meshes saved as '.stl', except for the case of multi-object meshed (e.g. multiple nuclei within a parent organoid) that are saved as '.vtp' to preserve label ID information. Filename corresponds to parent object label id, or to label id in the case when group_by = None."
+          },
+          "new_mesh_name": {
+            "title": "New Mesh Name",
+            "type": "string",
+            "description": "Optionally new name for new label map (if multiscale) and mesh subfolder (if save_mesh) that is generated. If left None, default is {label_name}."
+          },
+          "expandby_factor": {
+            "default": 0.6,
+            "title": "Expandby Factor",
+            "type": "number",
+            "description": "only used if Multiscale = True. Multiplier that specifies pixels by which to expand each nuclear mask for merging, float in range [0, 1 or higher], e.g. 0.2 means that 20% of mean of nuclear equivalent diameter is used."
+          },
+          "sigma_factor": {
+            "default": 5,
+            "title": "Sigma Factor",
+            "type": "number",
+            "description": "only used if Multiscale = True. Float that specifies sigma (standard deviation, in pixels) for Gaussian kernel used for blurring to smoothen label image prior to edge detection. Higher values correspond to more blurring. Recommended range 5-15."
+          },
+          "canny_threshold": {
+            "default": 0.3,
+            "title": "Canny Threshold",
+            "type": "number",
+            "description": "only used if Multiscale = True. Image values below this threshold are set to 0 after Gaussian blur. float in range [0,1]. Higher values result in tighter fit of mesh to nuclear surface."
+          },
+          "mask_contour_by_parent": {
+            "default": false,
+            "title": "Mask Contour By Parent",
+            "type": "boolean",
+            "description": "if True, the final multiscale edges are masking by 2D parent object mask. Can be used to define cleaner edge borders between touching organoids, but may crop surface mask if higher blurring is desired."
+          },
+          "fill_holes": {
+            "default": false,
+            "title": "Fill Holes",
+            "type": "boolean",
+            "description": "if True, the label image just prior to meshing has holes filled by iterating over slices. Useful for filling lumens in segmentation."
+          },
+          "filter_by_object_volume": {
+            "default": false,
+            "title": "Filter By Object Volume",
+            "type": "boolean",
+            "description": "if True, the label image is filtered by volume. This skips objects with lower volume (number of pixels, calculated after all processing and hole filling, if applied) than the object_volume_filter_threshold."
+          },
+          "object_volume_filter_threshold": {
+            "default": 60000,
+            "title": "Object Volume Filter Threshold",
+            "type": "integer",
+            "description": "Integer threshold for object volume filtering. Number of pixels. E.g. if set to 600, objects with a pixel count less than 600 are skipped. Only used if filter_by_object_volume is True."
+          },
+          "filter_children_by_volume": {
+            "default": false,
+            "title": "Filter Children By Volume",
+            "type": "boolean",
+            "description": "if True, performing volume filtering of nuclei to remove objects smaller than specified volume_filter_threshold."
+          },
+          "child_volume_filter_threshold": {
+            "default": 0.05,
+            "title": "Child Volume Filter Threshold",
+            "type": "number",
+            "description": "Multiplier that specifies cutoff for volumes below which nuclei are filtered out, float in range [0,1], e.g. 0.05 means that 5% of median of nuclear volume distribution is used as cutoff. Specify this value if volume filtering is desired. Default 0.05."
+          },
+          "polynomial_degree": {
+            "default": 30,
+            "title": "Polynomial Degree",
+            "type": "integer",
+            "description": "Mesh smoothing parameter. The number of polynomial degrees during surface mesh smoothing with vtkWindowedSincPolyDataFilter determines the maximum number of smoothing passes. This number corresponds to the degree of the polynomial that is used to approximate the windowed sinc function. Usually 10-20 iteration are sufficient. Higher values have little effect on smoothing. For further details see VTK vtkWindowedSincPolyDataFilter documentation."
+          },
+          "passband": {
+            "default": 0.01,
+            "title": "Passband",
+            "type": "number",
+            "description": "Mesh smoothing parameter. Float in range [0,2] that specifies the PassBand for the windowed sinc filter in vtkWindowedSincPolyDataFilter during mesh smoothing. Lower passband values produce more smoothing, due to filtering of higher frequencies. For further details see VTK vtkWindowedSincPolyDataFilter documentation."
+          },
+          "feature_angle": {
+            "default": 160,
+            "title": "Feature Angle",
+            "type": "integer",
+            "description": "Mesh smoothing parameter. Integer in range [0,180] that specifies the feature angle for sharp edge identification used for vtk FeatureEdgeSmoothing. Higher values result in more smoothened edges in mesh. For further details see VTK vtkWindowedSincPolyDataFilter documentation."
+          },
+          "target_reduction": {
+            "default": 0.98,
+            "title": "Target Reduction",
+            "type": "number",
+            "description": "Mesh decimation parameter. Float in range [0,1]. Target reduction is used during mesh decimation via vtkQuadricDecimation to reduce the number of triangles in a triangle mesh, forming a good approximation to the original geometry. Values closer to 1 indicate larger reduction and smaller mesh file size. Note that target_reduction is expressed as the fraction of the original number of triangles in mesh and so is proportional to original mesh size. Note the actual reduction may be less depending on triangulation and topological constraints. For further details see VTK vtkQuadricDecimation documentation."
+          },
+          "smoothing_iterations": {
+            "default": 1,
+            "title": "Smoothing Iterations",
+            "type": "integer",
+            "description": " Mesh smoothing parameter. The number of iterations that mesh smoothing and decimation is run. If smoothing_iterations > 1, the decimated result is used as input for subsequent smoothing rounds. Recommended to start with 1 iteration and increase if resulting smoothing is insufficient. For each iteration after the first, the passband is reduced and feature_angle is increased incrementally to enhance smoothing. Specifically, the passband is reduced by factor 1/(2^n), and the feature_angle is increased by an increment of (5 * n), where n = iteration round (n=0 is the first iteration). The target_reduction is fixed to 0.1 smoothing_iterations > 1. For example if user inputs (0.01, 160, 0.98) for (passband, feature_angle, target_reduction), the second iteration will use parameters (0.005, 165, 0.1), the third (0.0025, 170, 0.1), etc. Maximum feature_angle is capped at 180. Note that additional iterations usually do not significantly add to processing time as the number of mesh verteces is typically significantly reduced after the first decimation iteration."
+          },
+          "resample_mesh_to_target_point_count": {
+            "default": false,
+            "title": "Resample Mesh To Target Point Count",
+            "type": "boolean",
+            "description": "If True, the mesh is resampled to the target_point_count. All smoothing and decimation is performed as specified above. The smoothened mesh is then upsampled (with Loop Subdivision and Quadric Decimation) or downsampled (with Quadric Decimation), depending on whether the number of points in the smoothened mesh is lower or greater than the target_point_count, respectively. If True, all output meshes will have the same total number of points and triangles per object, though different point densities since object volumes are different. All .stl files also have same size. Note that depending on whether input mesh has an even or odd number of points, resampled output might still have slightly varying point/triangle counts between objects. If False, the original smoothened mesh is returned where the number of points differs between objects (but density per surface area is roughly the same)."
+          },
+          "target_point_count": {
+            "default": 5000,
+            "title": "Target Point Count",
+            "type": "integer",
+            "description": "Integer number of points desired in remeshed object. Note that this is approximate and resampled output might still have slightly varying point/triangle counts between objects (e.g. depending on whether input mesh has an even or odd number of points). Only used if resample_mesh_to_target_point_count is True."
+          },
+          "overwrite_folder": {
+            "default": true,
+            "title": "Overwrite Folder",
+            "type": "boolean",
+            "description": "If True, the output mesh folder, if exists, is cleared. Recommended to set True so that any meshes that already exist in folder but in current run are not processed are removed."
+          }
+        },
+        "required": [
+          "zarr_url"
+        ],
+        "type": "object",
+        "title": "SurfaceMeshMultiscale"
       },
       "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
     },

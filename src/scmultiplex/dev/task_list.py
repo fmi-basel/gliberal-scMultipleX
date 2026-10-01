@@ -68,17 +68,6 @@ TASK_LIST = [
         docs_info="file:task_info/calculate_platymatch_registration.md",
     ),
     CompoundTask(
-        name="scMultiplex Surface Mesh Multiscale",
-        executable_init="fractal/init_select_reference_knowing_all.py",
-        executable="fractal/surface_mesh_multiscale.py",
-        meta_init={"cpus_per_task": 1, "mem": 1000},
-        meta={"cpus_per_task": 4, "mem": 16000},
-        category="Image Processing",
-        modality="HCS",
-        tags=["3D", "mesh"],
-        docs_info="file:task_info/surface_mesh_multiscale.md",
-    ),
-    CompoundTask(
         name="scMultiplex Segment by Intensity Threshold",
         executable_init="fractal/init_select_many_rounds.py",
         executable="fractal/segment_by_intensity_threshold.py",
@@ -126,6 +115,15 @@ TASK_LIST = [
         category="Image Processing",
         tags=["2D", "3D"],
         docs_info="file:task_info/expand_labels.md",
+    ),
+    ParallelTask(
+        name="scMultiplex Surface Mesh Multiscale",
+        executable="fractal/surface_mesh_multiscale.py",
+        meta={"cpus_per_task": 4, "mem": 16000},
+        category="Image Processing",
+        modality="HCS",
+        tags=["3D", "mesh"],
+        docs_info="file:task_info/surface_mesh_multiscale.md",
     ),
     CompoundTask(
         name="scMultiplex Calculate Z-Illumination Correction",
