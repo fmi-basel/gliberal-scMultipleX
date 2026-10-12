@@ -46,6 +46,9 @@ def copy_data_from_ref_to_moving_rounds(
         overwrite: If True, overwrite labels and tables with same name in registered zarr image.
 
     """
+
+    logger.info(f"Running 'copy_data_from_ref_to_moving_rounds' task for {zarr_url=}.")
+
     # iterate over each round, not pairwise loading
     reference_zarr_url = init_args.reference_zarr_url
 
@@ -55,6 +58,7 @@ def copy_data_from_ref_to_moving_rounds(
 
     # skip the reference round
     if current_acquisition_id == reference_acquisition_id:
+        logger.info("Detected current round as reference round. Exiting task.")
         return
 
     # Open the ome-zarr image container from which to copy
@@ -70,7 +74,7 @@ def copy_data_from_ref_to_moving_rounds(
             table = source_ome_zarr.get_table(table_name)
 
             logger.info(
-                f"Copying table {table_name} from registered reference round to "
+                f"Copying table {table_name} from reference round to "
                 f"{target_zarr_image_name}."
             )
 
@@ -83,7 +87,7 @@ def copy_data_from_ref_to_moving_rounds(
         # Copy labels
         for i, label_name in enumerate(label_names_to_copy):
             logger.info(
-                f"Copying label {label_name} from registered reference round to "
+                f"Copying label {label_name} from reference round to "
                 f"{target_zarr_image_name} as {label_name}."
             )
 
@@ -96,6 +100,8 @@ def copy_data_from_ref_to_moving_rounds(
             )
             new_label.set_array(label_image_dask)
             new_label.consolidate()
+
+    logger.info(f"End copy_data_from_ref_to_moving_rounds task for {zarr_url=}")
 
     return
 

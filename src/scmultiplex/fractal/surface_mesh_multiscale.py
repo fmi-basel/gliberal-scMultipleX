@@ -28,7 +28,6 @@ from fractal_tasks_core.roi import (
     load_region,
 )
 from fractal_tasks_core.tables import write_table
-from fractal_tasks_core.tasks.io_models import InitArgsRegistrationConsensus
 from pydantic import validate_call
 
 from scmultiplex.features.FeatureFunctions import mesh_sphericity
@@ -57,7 +56,6 @@ def surface_mesh_multiscale(
     *,
     # Fractal arguments
     zarr_url: str,
-    init_args: InitArgsRegistrationConsensus,
     # Task-specific arguments
     label_name: str = "nuc",
     group_by: Union[str, None] = None,

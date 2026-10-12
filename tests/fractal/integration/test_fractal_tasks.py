@@ -1104,118 +1104,99 @@ def test_calculate_platymatch_registration(linking_zenodo_zarrs, name=name_3d):
 
 def test_surface_mesh_multiscale(linking_zenodo_zarrs, name=name_3d):
     zarr_urls = select_zarr_urls(name, linking_zenodo_zarrs)
-    parallelization_list = init_select_reference_knowing_all(
-        zarr_urls=zarr_urls,
-        zarr_dir="",
-        reference_acquisition=0,
+
+    zarr_url = zarr_urls[0]  # test on first round only
+
+    group_by = "org"
+    label_name = "nuc"
+    roi_table = "org_ROI_table"
+
+    surface_mesh_multiscale(
+        zarr_url=zarr_url,
+        label_name=label_name,
+        group_by=group_by,
+        roi_table=roi_table,
+        multiscale=True,
+        save_mesh=True,
+        expandby_factor=0.6,
+        sigma_factor=10,
+        canny_threshold=0.3,
+        mask_contour_by_parent=False,
+        filter_children_by_volume=True,
+        child_volume_filter_threshold=0.05,
+        polynomial_degree=30,
+        passband=0.01,
+        feature_angle=160,
+        target_reduction=0.98,
+        smoothing_iterations=2,
     )
-    for img in parallelization_list["parallelization_list"]:
-        zarr_url = img["zarr_url"]
-        init_args = img["init_args"]
-        group_by = "org"
-        label_name = "nuc"
-        roi_table = "org_ROI_table"
 
-        surface_mesh_multiscale(
-            zarr_url=zarr_url,
-            init_args=init_args,
-            label_name=label_name,
-            group_by=group_by,
-            roi_table=roi_table,
-            multiscale=True,
-            save_mesh=True,
-            expandby_factor=0.6,
-            sigma_factor=10,
-            canny_threshold=0.3,
-            mask_contour_by_parent=False,
-            filter_children_by_volume=True,
-            child_volume_filter_threshold=0.05,
-            polynomial_degree=30,
-            passband=0.01,
-            feature_angle=160,
-            target_reduction=0.98,
-            smoothing_iterations=2,
-        )
-
-        output_mesh_path = f"{zarr_url}/meshes/{group_by}_from_{label_name}"
-        # check that 3 mesh files were written
-        assert len(os.listdir(output_mesh_path)) == 3
+    output_mesh_path = f"{zarr_url}/meshes/{group_by}_from_{label_name}"
+    # check that 3 mesh files were written
+    assert len(os.listdir(output_mesh_path)) == 3
 
 
 def test_surface_mesh_grouped(linking_zenodo_zarrs, name=name_3d):
     zarr_urls = select_zarr_urls(name, linking_zenodo_zarrs)
-    parallelization_list = init_select_reference_knowing_all(
-        zarr_urls=zarr_urls,
-        zarr_dir="",
-        reference_acquisition=0,
+
+    zarr_url = zarr_urls[0]  # test on first round only
+
+    label_name = "nuc"
+    group_by = "org"
+    roi_table = "org_ROI_table"
+
+    surface_mesh_multiscale(
+        zarr_url=zarr_url,
+        label_name=label_name,
+        group_by=group_by,
+        roi_table=roi_table,
+        multiscale=False,
+        save_mesh=True,
+        expandby_factor=1.0,
+        sigma_factor=6,
+        canny_threshold=0.2,
+        polynomial_degree=30,
+        passband=0.01,
+        feature_angle=160,
+        target_reduction=0.97,
+        smoothing_iterations=1,
     )
-    for img in parallelization_list["parallelization_list"]:
-        zarr_url = img["zarr_url"]
-        init_args = img["init_args"]
-        label_name = "nuc"
-        group_by = "org"
-        roi_table = "org_ROI_table"
 
-        surface_mesh_multiscale(
-            zarr_url=zarr_url,
-            init_args=init_args,
-            label_name=label_name,
-            group_by=group_by,
-            roi_table=roi_table,
-            multiscale=False,
-            save_mesh=True,
-            expandby_factor=1.0,
-            sigma_factor=6,
-            canny_threshold=0.2,
-            polynomial_degree=30,
-            passband=0.01,
-            feature_angle=160,
-            target_reduction=0.97,
-            smoothing_iterations=1,
-        )
-
-        output_mesh_path = f"{zarr_url}/meshes/{label_name}_grouped"
-        # check that 3 mesh files were written
-        assert len(os.listdir(output_mesh_path)) == 3
+    output_mesh_path = f"{zarr_url}/meshes/{label_name}_grouped"
+    # check that 3 mesh files were written
+    assert len(os.listdir(output_mesh_path)) == 3
 
 
 def test_surface_mesh_per_object(linking_zenodo_zarrs, name=name_3d):
     zarr_urls = select_zarr_urls(name, linking_zenodo_zarrs)
-    parallelization_list = init_select_reference_knowing_all(
-        zarr_urls=zarr_urls,
-        zarr_dir="",
-        reference_acquisition=0,
+    zarr_url = zarr_urls[0]  # test on first round only
+
+    label_name = "org"
+    roi_table = "org_ROI_table"
+
+    surface_mesh_multiscale(
+        zarr_url=zarr_url,
+        label_name=label_name,
+        group_by=None,
+        roi_table=roi_table,
+        multiscale=False,
+        save_mesh=True,
+        expandby_factor=1.0,
+        sigma_factor=6,
+        canny_threshold=0.2,
+        mask_contour_by_parent=False,
+        filter_children_by_volume=False,
+        child_volume_filter_threshold=0.05,
+        polynomial_degree=30,
+        passband=0.01,
+        feature_angle=160,
+        target_reduction=0.97,
+        smoothing_iterations=1,
     )
-    for img in parallelization_list["parallelization_list"]:
-        zarr_url = img["zarr_url"]
-        init_args = img["init_args"]
-        label_name = "org"
-        roi_table = "org_ROI_table"
 
-        surface_mesh_multiscale(
-            zarr_url=zarr_url,
-            init_args=init_args,
-            label_name=label_name,
-            group_by=None,
-            roi_table=roi_table,
-            multiscale=False,
-            save_mesh=True,
-            expandby_factor=1.0,
-            sigma_factor=6,
-            canny_threshold=0.2,
-            mask_contour_by_parent=False,
-            filter_children_by_volume=False,
-            child_volume_filter_threshold=0.05,
-            polynomial_degree=30,
-            passband=0.01,
-            feature_angle=160,
-            target_reduction=0.97,
-            smoothing_iterations=1,
-        )
-
-        output_mesh_path = f"{zarr_url}/meshes/{label_name}"
-        # check that 3 mesh files were written
-        assert len(os.listdir(output_mesh_path)) == 3
+    output_mesh_path = f"{zarr_url}/meshes/{label_name}"
+    # check that 3 mesh files were written
+    assert len(os.listdir(output_mesh_path)) == 3
 
 
 def test_sphr_harmonics_from_labelimage(linking_zenodo_zarrs, name=name_3d):
@@ -1259,53 +1240,47 @@ def test_sphr_harmonics_from_labelimage(linking_zenodo_zarrs, name=name_3d):
 
 def test_scmultiplex_mesh_measurements(linking_zenodo_zarrs, name=name_3d):
     zarr_urls = select_zarr_urls(name, linking_zenodo_zarrs)
-    parallelization_list = init_select_reference_knowing_all(
-        zarr_urls=zarr_urls,
-        zarr_dir="",
-        reference_acquisition=0,
+
+    zarr_url = zarr_urls[0]  # test on first round only
+
+    mesh_name = "org_from_nuc"
+    roi_table = "org_from_nuc_ROI_table"
+    output_table_name = "mesh_features"
+
+    scmultiplex_mesh_measurements(
+        zarr_url=zarr_url,
+        mesh_name=mesh_name,
+        roi_table=roi_table,
+        output_table_name=output_table_name,
+        save_hulls=True,
+        calculate_curvature=True,
+        calculate_harmonics=True,
+        lmax=2,
+        translate_to_origin=True,
+        save_reconstructed_mesh=True,
     )
-    for img in parallelization_list["parallelization_list"]:
-        zarr_url = img["zarr_url"]
-        init_args = img["init_args"]
-        mesh_name = "org_from_nuc"
-        roi_table = "org_from_nuc_ROI_table"
-        output_table_name = "mesh_features"
 
-        scmultiplex_mesh_measurements(
-            zarr_url=img["zarr_url"],
-            init_args=init_args,
-            mesh_name=mesh_name,
-            roi_table=roi_table,
-            output_table_name=output_table_name,
-            save_hulls=True,
-            calculate_curvature=True,
-            calculate_harmonics=True,
-            lmax=2,
-            translate_to_origin=True,
-            save_reconstructed_mesh=True,
-        )
+    # check that 3 mesh files were written for convex hull
+    output_mesh_path_chull = f"{zarr_url}/meshes/{mesh_name}_convex_hull"
+    assert len(os.listdir(output_mesh_path_chull)) == 3
 
-        # check that 3 mesh files were written for convex hull
-        output_mesh_path_chull = f"{zarr_url}/meshes/{mesh_name}_convex_hull"
-        assert len(os.listdir(output_mesh_path_chull)) == 3
+    # check that all extracted features are correct for first organoid
+    output_table_path = f"{zarr_url}/tables/{output_table_name}"
+    output = ad.read_zarr(output_table_path).to_df().to_numpy()
+    assert_almost_equal(
+        output[0, :], test_scmultiplex_mesh_measurements_expected_output, decimal=4
+    )
 
-        # check that all extracted features are correct for first organoid
-        output_table_path = f"{zarr_url}/tables/{output_table_name}"
-        output = ad.read_zarr(output_table_path).to_df().to_numpy()
-        assert_almost_equal(
-            output[0, :], test_scmultiplex_mesh_measurements_expected_output, decimal=4
-        )
+    # check that 3 mesh files were written for reconstructed harmonics
+    output_mesh_path_reconstructed = f"{zarr_url}/meshes/{mesh_name}_reconstructed"
+    assert len(os.listdir(output_mesh_path_reconstructed)) == 3
 
-        # check that 3 mesh files were written for reconstructed harmonics
-        output_mesh_path_reconstructed = f"{zarr_url}/meshes/{mesh_name}_reconstructed"
-        assert len(os.listdir(output_mesh_path_reconstructed)) == 3
-
-        # check that first calculated spherical harmonic is correct
-        output_table_path = f"{zarr_url}/tables/{output_table_name}_harmonics"
-        output = ad.read_zarr(output_table_path).to_df().to_numpy()
-        assert_almost_equal(
-            output[:, 0], test_sphr_harmonics_from_mesh_expected_output, decimal=4
-        )
+    # check that first calculated spherical harmonic is correct
+    output_table_path = f"{zarr_url}/tables/{output_table_name}_harmonics"
+    output = ad.read_zarr(output_table_path).to_df().to_numpy()
+    assert_almost_equal(
+        output[:, 0], test_sphr_harmonics_from_mesh_expected_output, decimal=4
+    )
 
 
 def test_masking_feature_measurements(linking_zenodo_zarrs, name=name_3d):
