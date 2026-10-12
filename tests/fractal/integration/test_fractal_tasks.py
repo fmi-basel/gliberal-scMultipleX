@@ -11,6 +11,7 @@ from mantis_plex.fractal.calculate_object_linking import calculate_object_linkin
 from mantis_plex.fractal.calculate_platymatch_registration import (
     calculate_platymatch_registration,
 )
+from mantis_plex.fractal.feature_measurements import feature_measurements
 from mantis_plex.fractal.init_select_all_knowing_reference import (
     init_select_all_knowing_reference,
 )
@@ -20,14 +21,9 @@ from mantis_plex.fractal.init_select_multiplexing_pairs import (
 from mantis_plex.fractal.init_select_reference_knowing_all import (
     init_select_reference_knowing_all,
 )
+from mantis_plex.fractal.mesh_measurements import mesh_measurements
 from mantis_plex.fractal.relabel_by_linking_consensus import (
     relabel_by_linking_consensus,
-)
-from mantis_plex.fractal.scmultiplex_feature_measurements import (
-    scmultiplex_feature_measurements,
-)
-from mantis_plex.fractal.scmultiplex_mesh_measurements import (
-    scmultiplex_mesh_measurements,
 )
 from mantis_plex.fractal.spherical_harmonics_from_labelimage import (
     spherical_harmonics_from_labelimage,
@@ -91,7 +87,7 @@ test_sphr_harmonics_from_mesh_expected_output = np.array(
     [10.046525, 8.232602, 12.735255]
 )
 
-test_scmultiplex_mesh_measurements_expected_output = np.array(
+test_mesh_measurements_expected_output = np.array(
     [
         4.2192085e03,
         1.2844763e03,
@@ -1238,7 +1234,7 @@ def test_sphr_harmonics_from_labelimage(linking_zenodo_zarrs, name=name_3d):
         )
 
 
-def test_scmultiplex_mesh_measurements(linking_zenodo_zarrs, name=name_3d):
+def test_mesh_measurements(linking_zenodo_zarrs, name=name_3d):
     zarr_urls = select_zarr_urls(name, linking_zenodo_zarrs)
 
     zarr_url = zarr_urls[0]  # test on first round only
@@ -1247,7 +1243,7 @@ def test_scmultiplex_mesh_measurements(linking_zenodo_zarrs, name=name_3d):
     roi_table = "org_from_nuc_ROI_table"
     output_table_name = "mesh_features"
 
-    scmultiplex_mesh_measurements(
+    mesh_measurements(
         zarr_url=zarr_url,
         mesh_name=mesh_name,
         roi_table=roi_table,
@@ -1267,9 +1263,7 @@ def test_scmultiplex_mesh_measurements(linking_zenodo_zarrs, name=name_3d):
     # check that all extracted features are correct for first organoid
     output_table_path = f"{zarr_url}/tables/{output_table_name}"
     output = ad.read_zarr(output_table_path).to_df().to_numpy()
-    assert_almost_equal(
-        output[0, :], test_scmultiplex_mesh_measurements_expected_output, decimal=4
-    )
+    assert_almost_equal(output[0, :], test_mesh_measurements_expected_output, decimal=4)
 
     # check that 3 mesh files were written for reconstructed harmonics
     output_mesh_path_reconstructed = f"{zarr_url}/meshes/{mesh_name}_reconstructed"
@@ -1291,7 +1285,7 @@ def test_masking_feature_measurements(linking_zenodo_zarrs, name=name_3d):
 
     zarr_url = zarr_urls[0]  # test on first round only
 
-    scmultiplex_feature_measurements(
+    feature_measurements(
         zarr_url=zarr_url,
         label_name="nuc",
         output_table_name=output_table_name,

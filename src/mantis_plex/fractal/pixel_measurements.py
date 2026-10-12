@@ -30,13 +30,13 @@ from mantis_plex.utils.fractal_utils import FeatureChannelInputModel
 
 __OME_NGFF_VERSION__ = fractal_tasks_core.__OME_NGFF_VERSION__
 
-logger = logging.getLogger("scmultiplex_pixel_measurements")
+logger = logging.getLogger("pixel_measurements")
 warnings.filterwarnings("ignore", category=FutureWarning)
 ngio_logger.setLevel("ERROR")
 
 
 @validate_call
-def scmultiplex_pixel_measurements(  # noqa: C901
+def pixel_measurements(  # noqa: C901
     *,
     # Default arguments for fractal tasks:
     zarr_url: str,
@@ -290,4 +290,4 @@ def scmultiplex_pixel_measurements(  # noqa: C901
 if __name__ == "__main__":
     from fractal_task_tools.task_wrapper import run_fractal_task
 
-    run_fractal_task(task_function=scmultiplex_pixel_measurements)
+    run_fractal_task(task_function=pixel_measurements)

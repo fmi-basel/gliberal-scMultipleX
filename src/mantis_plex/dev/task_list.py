@@ -13,18 +13,18 @@ Fractal task list.
 """
 from fractal_task_tools.task_models import CompoundTask, ParallelTask
 
-# executable relative to base folder to src/scmultiplex folder
+# executable relative to base folder to src/mantis_plex folder
 # TODO: check CPU and GPU usage for each task and allocate more accurate values
 
 AUTHORS = "Nicole Repina, Enrico Tagliavini, Tim-Oliver Buchholz, Joel Luethi"
-DOCS_LINK = "https://github.com/fmi-basel/gliberal-scMultipleX"
+DOCS_LINK = "https://github.com/fmi-basel/Mantis-plex"
 INPUT_MODELS = [
     ["fractal_tasks_core", "channels.py", "ChannelInputModel"],
 ]
 
 TASK_LIST = [
     CompoundTask(
-        name="scMultiplex Calculate Object Linking",
+        name="Calculate Object Linking",
         executable_init="fractal/init_select_multiplexing_pairs.py",
         executable="fractal/calculate_object_linking.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
@@ -35,7 +35,7 @@ TASK_LIST = [
         docs_info="file:task_info/calculate_object_linking.md",
     ),
     CompoundTask(
-        name="scMultiplex Calculate Linking Consensus",
+        name="Calculate Linking Consensus",
         executable_init="fractal/init_select_reference_knowing_all.py",
         executable="fractal/calculate_linking_consensus.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
@@ -46,7 +46,7 @@ TASK_LIST = [
         docs_info="file:task_info/calculate_linking_consensus.md",
     ),
     CompoundTask(
-        name="scMultiplex Relabel by Linking Consensus",
+        name="Relabel by Linking Consensus",
         executable_init="fractal/init_select_all_knowing_reference.py",
         executable="fractal/relabel_by_linking_consensus.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
@@ -57,7 +57,7 @@ TASK_LIST = [
         docs_info="file:task_info/relabel_by_linking_consensus.md",
     ),
     CompoundTask(
-        name="scMultiplex Calculate Platymatch Registration",
+        name="Calculate Platymatch Registration",
         executable_init="fractal/init_select_multiplexing_pairs.py",
         executable="fractal/calculate_platymatch_registration.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
@@ -68,7 +68,7 @@ TASK_LIST = [
         docs_info="file:task_info/calculate_platymatch_registration.md",
     ),
     CompoundTask(
-        name="scMultiplex Segment by Intensity Threshold",
+        name="Segment by Intensity Threshold",
         executable_init="fractal/init_select_many_rounds.py",
         executable="fractal/segment_by_intensity_threshold.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
@@ -79,7 +79,7 @@ TASK_LIST = [
         docs_info="file:task_info/segment_by_intensity_threshold.md",
     ),
     CompoundTask(
-        name="scMultiplex Spherical Harmonics from Label Image",
+        name="Spherical Harmonics from Label Image",
         executable_init="fractal/init_select_reference_knowing_all.py",
         executable="fractal/spherical_harmonics_from_labelimage.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
@@ -90,15 +90,15 @@ TASK_LIST = [
         docs_info="file:task_info/spherical_harmonics_from_label_image.md",
     ),
     ParallelTask(
-        name="scMultiplex Feature Measurements",
-        executable="fractal/scmultiplex_feature_measurements.py",
+        name="Feature Measurements",
+        executable="fractal/feature_measurements.py",
         meta={"cpus_per_task": 4, "mem": 16000},
         category="Measurement",
         tags=["regionprops", "morphology", "intensity"],
         docs_info="file:task_info/feature_measurements.md",
     ),
     ParallelTask(
-        name="scMultiplex Expand Labels",
+        name="Expand Labels",
         executable="fractal/expand_labels.py",
         meta={"cpus_per_task": 4, "mem": 16000},
         category="Image Processing",
@@ -106,7 +106,7 @@ TASK_LIST = [
         docs_info="file:task_info/expand_labels.md",
     ),
     ParallelTask(
-        name="scMultiplex Surface Mesh Multiscale",
+        name="Surface Mesh Multiscale",
         executable="fractal/surface_mesh_multiscale.py",
         meta={"cpus_per_task": 4, "mem": 16000},
         category="Image Processing",
@@ -115,8 +115,8 @@ TASK_LIST = [
         docs_info="file:task_info/surface_mesh_multiscale.md",
     ),
     ParallelTask(
-        name="scMultiplex Mesh Measurements",
-        executable="fractal/scmultiplex_mesh_measurements.py",
+        name="Mesh Measurements",
+        executable="fractal/mesh_measurements.py",
         meta={"cpus_per_task": 4, "mem": 16000},
         category="Measurement",
         modality="HCS",
@@ -124,7 +124,7 @@ TASK_LIST = [
         docs_info="file:task_info/mesh_measurements.md",
     ),
     CompoundTask(
-        name="scMultiplex Calculate Z-Illumination Correction",
+        name="Calculate Z-Illumination Correction",
         executable_init="fractal/init_select_single_round.py",
         executable="fractal/calculate_z_illumination_correction.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
@@ -136,7 +136,7 @@ TASK_LIST = [
         input_types=dict(z_illum_corrected=False, is_3D=True),
     ),
     CompoundTask(
-        name="scMultiplex Apply Z-Illumination Correction",
+        name="Apply Z-Illumination Correction",
         executable_init="fractal/init_select_illumination_round.py",
         executable="fractal/apply_z_illumination_correction.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
@@ -149,7 +149,7 @@ TASK_LIST = [
         output_types=dict(z_illum_corrected=True, is_3D=True),
     ),
     ParallelTask(
-        name="scMultiplex Fuse Touching Labels",
+        name="Fuse Touching Labels",
         executable="fractal/fuse_touching_labels.py",
         meta={"cpus_per_task": 4, "mem": 16000},
         category="Image Processing",
@@ -209,7 +209,7 @@ TASK_LIST = [
         docs_info="file:task_info/cleanup_3d_child_labels.md",
     ),
     CompoundTask(
-        name="scMultiplex Shift by Shift",
+        name="Shift by Shift",
         executable_init="fractal/init_select_multiplexing_pairs.py",
         executable="fractal/shift_by_shift.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
@@ -220,7 +220,7 @@ TASK_LIST = [
         docs_info="file:task_info/shift_by_shift.md",
     ),
     CompoundTask(
-        name="scMultiplex Shift by Rigid Shift",
+        name="Shift by Rigid Shift",
         executable_init="fractal/init_select_multiplexing_pairs.py",
         executable="fractal/shift_by_rigid_shift.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
@@ -231,7 +231,7 @@ TASK_LIST = [
         docs_info="file:task_info/shift_by_rigid_shift.md",
     ),
     CompoundTask(
-        name="scMultiplex Calculate 2D Rigid Shift",
+        name="Calculate 2D Rigid Shift",
         executable_init="fractal/init_select_multiplexing_pairs.py",
         executable="fractal/calculate_2d_rigid_shift.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
@@ -245,7 +245,7 @@ TASK_LIST = [
         docs_info="file:task_info/calculate_2d_rigid_shift.md",
     ),
     CompoundTask(
-        name="scMultiplex Calculate Warpfield Registration",
+        name="Calculate Warpfield Registration",
         executable_init="fractal/init_select_multiplexing_pairs.py",
         executable="fractal/calculate_warpfield_registration.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
@@ -257,7 +257,7 @@ TASK_LIST = [
         input_types=dict(is_3D=True),
     ),
     CompoundTask(
-        name="scMultiplex Apply Warpfield Registration",
+        name="Apply Warpfield Registration",
         executable_init="fractal/init_select_all_knowing_reference.py",
         executable="fractal/apply_warpfield_registration.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
@@ -270,7 +270,7 @@ TASK_LIST = [
         output_types=dict(registered=True, is_3D=True),
     ),
     CompoundTask(
-        name="scMultiplex Post Registration Cleanup",
+        name="Post Registration Cleanup",
         executable_init="fractal/init_select_all_knowing_reference.py",
         executable="fractal/post_registration_cleanup.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
@@ -283,7 +283,7 @@ TASK_LIST = [
         output_types=dict(registered=True, is_3D=True),
     ),
     CompoundTask(
-        name="scMultiplex Detect Clipped Rois Across Rounds",
+        name="Detect Clipped Rois Across Rounds",
         executable_init="fractal/init_select_reference_knowing_all.py",
         executable="fractal/detect_clipped_rois_across_rounds.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},
@@ -293,16 +293,16 @@ TASK_LIST = [
         tags=["multiplexing", "3D"],
     ),
     ParallelTask(
-        name="scMultiplex Pixel Measurements",
-        executable="fractal/scmultiplex_pixel_measurements.py",
+        name="Pixel Measurements",
+        executable="fractal/pixel_measurements.py",
         meta={"cpus_per_task": 4, "mem": 16000},
         category="Measurement",
         modality="HCS",
         tags=["2D", "3D", "intensity"],
-        docs_info="file:task_info/scmultiplex_pixel_measurements.md",
+        docs_info="file:task_info/pixel_measurements.md",
     ),
     CompoundTask(
-        name="scMultiplex Copy Data from Reference to Moving Rounds",
+        name="Copy Data from Reference to Moving Rounds",
         executable_init="fractal/init_select_all_knowing_reference.py",
         executable="fractal/copy_data_from_ref_to_moving_rounds.py",
         meta_init={"cpus_per_task": 1, "mem": 1000},

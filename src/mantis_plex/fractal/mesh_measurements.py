@@ -31,11 +31,11 @@ from mantis_plex.meshing.MeshFunctions import (
     read_stl_polydata,
 )
 
-logger = logging.getLogger("scmultiplex_mesh_measurements")
+logger = logging.getLogger("mesh_measurements")
 
 
 @validate_call
-def scmultiplex_mesh_measurements(
+def mesh_measurements(
     *,
     # Fractal arguments
     zarr_url: str,
@@ -60,7 +60,7 @@ def scmultiplex_mesh_measurements(
     2. Extract mesh morphology measurements: volume, surface area, extent, solidity, concavity, asymmetry,
         aspect ratio, and normalized surface area to volume ratio. Units correspond to units of mesh. If mesh was
         generated with surface_mesh_multiscale task, units are physical units (um). For further details of features see
-        scMultiplex FeatureFunctions.py
+        FeatureFunctions.py
     3. Optionally calculate Gaussian curvature at each mesh point (set calculate_curvature = True)
     4. Optionally compute spherical harmonics of mesh using aics_shparam (set calculate_harmonics = True).
         Compute reconstruction error (mse) of computed harmonics and optionally generate reconstructed mesh from the
@@ -308,7 +308,7 @@ def scmultiplex_mesh_measurements(
             f"{output_table_harmonics_name}"
         )
 
-    logger.info(f"End scmultiplex_mesh_measurements task for {zarr_url=}")
+    logger.info(f"End mesh_measurements task for {zarr_url=}")
 
     return {}
 
@@ -316,4 +316,4 @@ def scmultiplex_mesh_measurements(
 if __name__ == "__main__":
     from fractal_task_tools.task_wrapper import run_fractal_task
 
-    run_fractal_task(task_function=scmultiplex_mesh_measurements)
+    run_fractal_task(task_function=mesh_measurements)

@@ -9,7 +9,6 @@ Copyright 2023 (C)
     Tommaso Comparin <tommaso.comparin@exact-lab.it>
     Marco Franzon <marco.franzon@exact-lab.it>
 
-Wrapper of scMultipleX measurements for Fractal
 """
 
 import logging
@@ -32,13 +31,13 @@ from pydantic import validate_call
 
 from mantis_plex.features.feature_wrapper import get_regionprops_measurements
 
-logger = logging.getLogger("scmultiplex_feature_measurements")
+logger = logging.getLogger("feature_measurements")
 warnings.filterwarnings("ignore", category=FutureWarning)
 ngio_logger.setLevel("ERROR")
 
 
 @validate_call
-def scmultiplex_feature_measurements(  # noqa: C901
+def feature_measurements(  # noqa: C901
     *,
     # Default arguments for fractal tasks:
     zarr_url: str,
@@ -55,9 +54,6 @@ def scmultiplex_feature_measurements(  # noqa: C901
 ):
     """
     Measurements of intensities and morphologies
-
-    Wrapper task for scmultiplex measurements for Fractal to generate
-    measurements of intensities and morphologies
 
     Args:
         zarr_url: Path or url to the individual OME-Zarr image to be processed.
@@ -337,4 +333,4 @@ def scmultiplex_feature_measurements(  # noqa: C901
 if __name__ == "__main__":
     from fractal_task_tools.task_wrapper import run_fractal_task
 
-    run_fractal_task(task_function=scmultiplex_feature_measurements)
+    run_fractal_task(task_function=feature_measurements)

@@ -10,7 +10,7 @@ from fractal_tasks_core.dev.lib_signature_constraints import (
 import mantis_plex
 
 FRACTAL_TASKS_CORE_DIR = Path(mantis_plex.__file__).parent
-PACKAGE_NAME = "scmultiplex"
+PACKAGE_NAME = "mantis_plex"
 with (FRACTAL_TASKS_CORE_DIR / "__FRACTAL_MANIFEST__.json").open("r") as f:
     MANIFEST = json.load(f)
 TASK_LIST = MANIFEST["task_list"]

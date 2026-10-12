@@ -2,7 +2,7 @@
   "manifest_version": "2",
   "task_list": [
     {
-      "name": "scMultiplex Calculate Object Linking",
+      "name": "Calculate Object Linking",
       "category": "Registration",
       "modality": "HCS",
       "tags": [
@@ -117,10 +117,10 @@
         "type": "object",
         "title": "CalculateObjectLinking"
       },
-      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+      "docs_link": "https://github.com/fmi-basel/Mantis-plex"
     },
     {
-      "name": "scMultiplex Calculate Linking Consensus",
+      "name": "Calculate Linking Consensus",
       "category": "Registration",
       "modality": "HCS",
       "tags": [
@@ -221,10 +221,10 @@
         "type": "object",
         "title": "CalculateLinkingConsensus"
       },
-      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+      "docs_link": "https://github.com/fmi-basel/Mantis-plex"
     },
     {
-      "name": "scMultiplex Relabel by Linking Consensus",
+      "name": "Relabel by Linking Consensus",
       "category": "Registration",
       "modality": "HCS",
       "tags": [
@@ -334,10 +334,10 @@
         "type": "object",
         "title": "RelabelByLinkingConsensus"
       },
-      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+      "docs_link": "https://github.com/fmi-basel/Mantis-plex"
     },
     {
-      "name": "scMultiplex Calculate Platymatch Registration",
+      "name": "Calculate Platymatch Registration",
       "category": "Registration",
       "modality": "HCS",
       "tags": [
@@ -505,10 +505,10 @@
         "type": "object",
         "title": "CalculatePlatymatchRegistration"
       },
-      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+      "docs_link": "https://github.com/fmi-basel/Mantis-plex"
     },
     {
-      "name": "scMultiplex Segment by Intensity Threshold",
+      "name": "Segment by Intensity Threshold",
       "category": "Segmentation",
       "modality": "HCS",
       "tags": [
@@ -751,10 +751,10 @@
         "type": "object",
         "title": "SegmentByIntensityThreshold"
       },
-      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+      "docs_link": "https://github.com/fmi-basel/Mantis-plex"
     },
     {
-      "name": "scMultiplex Spherical Harmonics from Label Image",
+      "name": "Spherical Harmonics from Label Image",
       "category": "Measurement",
       "modality": "HCS",
       "tags": [
@@ -872,10 +872,10 @@
         "type": "object",
         "title": "SphericalHarmonicsFromLabelimage"
       },
-      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+      "docs_link": "https://github.com/fmi-basel/Mantis-plex"
     },
     {
-      "name": "scMultiplex Feature Measurements",
+      "name": "Feature Measurements",
       "category": "Measurement",
       "tags": [
         "regionprops",
@@ -884,7 +884,7 @@
       ],
       "docs_info": "### Purpose\n- **Measures intensity and morphology features** from existing segmentation images in an OME-Zarr dataset.\n- Runs on both 2D and 3D images.\n- Optionally computes advanced morphological metrics (see below)\n- Supports both intensity-based and morphology-only measurements:\n   - If no input intensity channels are provided, the task calculates morphology features only.\n   - For intensity measurements, user specifies channels in image to be used.\n- Enables **measurements within masked objects** (e.g., measuring nuclei properties within organoids) by specifying an `input_ROI_table` that defines parent regions, such as organoid ROIs.\n\n### Outputs\n\n- Feature table with the following measurements:\n\n  - **Spatial coordinates**\n    - `x_pos`, `y_pos`, `z_pos` \u2014 Object centroid coordinates in physical units.\n    - `z_pos_pix` \u2014 Object centroid position in z expressed in pixel coordinates.\n\n  - **Morphology**\n    - `is_touching_border_xy` \u2014 Whether the object touches the image border in x/y. Image borders are defined by the ROI used for iteration, as specified by `input_roi_table_name`.. For example if well_ROI_table, border is the well edge. If it is a masking ROI table, border is edge of each masking object.\n    - `imgdim_x`, `imgdim_y`, `imgdim_z` \u2014 Dimensions in pixels of the analyzed image or ROI. `imgdim_z` given only in 3D case.\n    - `area_bbox` \u2014 Area/volume of the object's bounding box.\n    - `area_convhull` \u2014 Area/volume of the object's convex hull.\n    - `equivDiam` \u2014 Equivalent diameter of a sphere/circle with the same volume/area.\n    - `extent` \u2014 Fraction of the bounding box occupied by the object.\n    - `solidity` \u2014 Fraction of the convex hull occupied by the object.\n    - `axis_major_length` \u2014 Length of the major axis of the object.\n    - `axis_minor_length` \u2014 Length of the minor axis of the object.\n    - `minmajAxisRatio` \u2014 Ratio of minor to major axis length (min divided by maj).\n    - `aspectRatio_equivalentDiameter` \u2014 Ratio of major axis length to equivalent diameter.\n    - **2D-only features:**\n      - `area` - Object area in physical units (e.g. um^2) (2D only).\n      - `perimeter` \u2014 Object perimeter in physical units (2D only).\n      - `concavity` \u2014 Fraction of the convex hull area not occupied by the object (2D only).\n      - `asymmetry` \u2014 Normalized distance between the centroid of the object and the centroid of its convex hull. This centroid distance is divided by the square root of the object area, making the metric approximately independent of object size. Values close to 0 indicate a more symmetric shape, while larger values indicate increasing asymmetry or irregularity (2D only).\n      - `eccentricity` \u2014 Elongation metric based on an ellipse fitted to the object shape. Values range from 0 to 1, where 0 corresponds to a perfect circle and values approaching 1 correspond to increasingly elongated objects (2D only).\n      - `circularity` \u2014 Shape compactness metric calculated from the object's area and perimeter (`4\u03c0 \u00d7 area / perimeter\u00b2`). A perfect circle has a value of 1, while objects with elongated outlines, protrusions, indentations, or irregular boundaries have progressively lower values (2D only).\n      - `disconnected_components` \u2014 Whether the object mask contains disconnected components (2D only).\n    - **3D-only features:**\n      - `volume` \u2014 Object volume in physical units (e.g. um^3) (3D only).\n      - `surface_area` \u2014 Object surface area estimated using a marching-cubes mesh (3D only).\n      - `is_touching_border_z` \u2014 Whether the object touches the image border in z (3D only).\n\n  - **Per-channel intensity statistics** (for each requested input channel)\n    - `intensity_mean` \u2014 Mean intensity within the segmented object.\n    - `intensity_max` \u2014 Maximum intensity.\n    - `intensity_min` \u2014 Minimum intensity.\n    - `percentile25`, `percentile50`, `percentile75`, `percentile90`, `percentile95`, `percentile99` \u2014 Intensity percentiles.\n    - `stdev` \u2014 Standard deviation of intensity values.\n    - `skew` \u2014 Skewness of the intensity distribution.\n    - `kurtosis` \u2014 Kurtosis of the intensity distribution.\n\n  - **Intensity-weighted centroid measurements** (for each requested input channel)\n    - `x_pos_weighted`, `y_pos_weighted`, `z_pos_weighted` \u2014 Intensity-weighted centroid coordinates.\n    - `x_massDisp`, `y_massDisp`, `z_massDisp` \u2014 Displacement between the geometric centroid and the intensity-weighted centroid, indicating asymmetry in signal distribution.\n\n- Units: all features are in physical units from the OME-Zarr pixel metadata (e.g. um) unless otherwise noted above. Anisotropic voxel spacing is supported.\n- If Measure Morphology is set to True, all morphological features are measured. If False, only `Spatial Coordinates` and `Intensity` metrics are measured.\n- Channel-specific measurements are prefixed with the channel identifier (e.g. `C01.intensity_mean`, `C01.x_pos_weighted`).\n### Limitations\n- Does not support measurements at lower resolutions (e.g., beyond level 0).\n",
       "type": "parallel",
-      "executable_parallel": "fractal/scmultiplex_feature_measurements.py",
+      "executable_parallel": "fractal/feature_measurements.py",
       "meta_parallel": {
         "cpus_per_task": 4,
         "mem": 16000
@@ -977,12 +977,12 @@
           "output_table_name"
         ],
         "type": "object",
-        "title": "ScmultiplexFeatureMeasurements"
+        "title": "FeatureMeasurements"
       },
-      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+      "docs_link": "https://github.com/fmi-basel/Mantis-plex"
     },
     {
-      "name": "scMultiplex Expand Labels",
+      "name": "Expand Labels",
       "category": "Image Processing",
       "tags": [
         "2D",
@@ -1067,10 +1067,10 @@
         "type": "object",
         "title": "ExpandLabels"
       },
-      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+      "docs_link": "https://github.com/fmi-basel/Mantis-plex"
     },
     {
-      "name": "scMultiplex Surface Mesh Multiscale",
+      "name": "Surface Mesh Multiscale",
       "category": "Image Processing",
       "modality": "HCS",
       "tags": [
@@ -1235,10 +1235,10 @@
         "type": "object",
         "title": "SurfaceMeshMultiscale"
       },
-      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+      "docs_link": "https://github.com/fmi-basel/Mantis-plex"
     },
     {
-      "name": "scMultiplex Mesh Measurements",
+      "name": "Mesh Measurements",
       "category": "Measurement",
       "modality": "HCS",
       "tags": [
@@ -1248,7 +1248,7 @@
       ],
       "docs_info": "### Purpose\n- Extracts detailed **shape features** from 3D meshes, including volume, surface area, solidity, concavity, and aspect ratio.\n- Optionally calculates **Gaussian curvature** for mesh surfaces and **spherical harmonics** to decompose mesh geometry.\n- Outputs feature tables, curvature meshes, and optional harmonic-reconstructed meshes.\n\n### Outputs\n1. A **feature table** with extracted mesh measurements, including:\n   - Volume, surface area, aspect ratio, concavity, normalized surface area-to-volume ratio, and more.\n2. Optional **spherical harmonic coefficients** and reconstruction error (MSE), saved as a separate table.\n3. Optional **reconstructed meshes** from spherical harmonics saved as `.stl`.\n4. Optional **Gaussian curvature meshes** saved as `.vtp` files in a new `curvature` folder.\n5. Optional **convex hull** and **bounding box** meshes saved as `.vtp` files.\n\n### Limitations\n- Requires pre-existing **.stl meshes** within the Zarr structure (e.g., generated by the **Surface Mesh Multiscale** task).\n- Mesh files must match the **object labels** specified in the ROI table.\n- Computational cost increases when enabling **Gaussian curvature** or **spherical harmonics** calculations.\n- Mesh quality and accuracy depend on the input segmentation and mesh generation parameters.\n",
       "type": "parallel",
-      "executable_parallel": "fractal/scmultiplex_mesh_measurements.py",
+      "executable_parallel": "fractal/mesh_measurements.py",
       "meta_parallel": {
         "cpus_per_task": 4,
         "mem": 16000
@@ -1320,12 +1320,12 @@
           "output_table_name"
         ],
         "type": "object",
-        "title": "ScmultiplexMeshMeasurements"
+        "title": "MeshMeasurements"
       },
-      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+      "docs_link": "https://github.com/fmi-basel/Mantis-plex"
     },
     {
-      "name": "scMultiplex Calculate Z-Illumination Correction",
+      "name": "Calculate Z-Illumination Correction",
       "input_types": {
         "z_illum_corrected": false,
         "is_3D": true
@@ -1468,10 +1468,10 @@
         "type": "object",
         "title": "CalculateZIlluminationCorrection"
       },
-      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+      "docs_link": "https://github.com/fmi-basel/Mantis-plex"
     },
     {
-      "name": "scMultiplex Apply Z-Illumination Correction",
+      "name": "Apply Z-Illumination Correction",
       "input_types": {
         "z_illum_corrected": false,
         "is_3D": true
@@ -1637,10 +1637,10 @@
         "type": "object",
         "title": "ApplyZIlluminationCorrection"
       },
-      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+      "docs_link": "https://github.com/fmi-basel/Mantis-plex"
     },
     {
-      "name": "scMultiplex Fuse Touching Labels",
+      "name": "Fuse Touching Labels",
       "category": "Image Processing",
       "tags": [
         "2D"
@@ -1695,7 +1695,7 @@
         "type": "object",
         "title": "FuseTouchingLabels"
       },
-      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+      "docs_link": "https://github.com/fmi-basel/Mantis-plex"
     },
     {
       "name": "Convert 3D Segmentation to MIP",
@@ -1770,7 +1770,7 @@
         "type": "object",
         "title": "Convert3dToMip"
       },
-      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+      "docs_link": "https://github.com/fmi-basel/Mantis-plex"
     },
     {
       "name": "Build Label Image",
@@ -1823,7 +1823,7 @@
         "type": "object",
         "title": "BuildLabelImage"
       },
-      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+      "docs_link": "https://github.com/fmi-basel/Mantis-plex"
     },
     {
       "name": "Annotate Mesh by Child Features",
@@ -1981,7 +1981,7 @@
         "type": "object",
         "title": "AnnotateMeshByChildFeatures"
       },
-      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+      "docs_link": "https://github.com/fmi-basel/Mantis-plex"
     },
     {
       "name": "Annotate Child Mesh",
@@ -2163,7 +2163,7 @@
         "type": "object",
         "title": "AnnotateChildMesh"
       },
-      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+      "docs_link": "https://github.com/fmi-basel/Mantis-plex"
     },
     {
       "name": "Cleanup 3D Child Labels",
@@ -2240,10 +2240,10 @@
         "type": "object",
         "title": "Cleanup3dChildLabels"
       },
-      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+      "docs_link": "https://github.com/fmi-basel/Mantis-plex"
     },
     {
-      "name": "scMultiplex Shift by Shift",
+      "name": "Shift by Shift",
       "category": "Registration",
       "modality": "HCS",
       "tags": [
@@ -2336,7 +2336,7 @@
             "default": "well_ROI_table",
             "title": "Translation Table Name",
             "type": "string",
-            "description": "ROI table name that contains the x,y,z translation information as columns \"translation_z\", \"translation_y\", \"translation_x\" in physical units. These are the shifts that should be applied to the moving image to match it to the reference round. If shifts are generated with the scMultiplex calculate object linking task, shifts are stored in the 'well_ROI_table'."
+            "description": "ROI table name that contains the x,y,z translation information as columns \"translation_z\", \"translation_y\", \"translation_x\" in physical units. These are the shifts that should be applied to the moving image to match it to the reference round. If shifts are generated with the Calculate Object Linking task, shifts are stored in the 'well_ROI_table'."
           },
           "zarr_suffix_to_add": {
             "title": "Zarr Suffix To Add",
@@ -2362,10 +2362,10 @@
         "type": "object",
         "title": "ShiftByShift"
       },
-      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+      "docs_link": "https://github.com/fmi-basel/Mantis-plex"
     },
     {
-      "name": "scMultiplex Shift by Rigid Shift",
+      "name": "Shift by Rigid Shift",
       "category": "Registration",
       "modality": "HCS",
       "tags": [
@@ -2502,10 +2502,10 @@
         "type": "object",
         "title": "ShiftByRigidShift"
       },
-      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+      "docs_link": "https://github.com/fmi-basel/Mantis-plex"
     },
     {
-      "name": "scMultiplex Calculate 2D Rigid Shift",
+      "name": "Calculate 2D Rigid Shift",
       "category": "Registration",
       "modality": "HCS",
       "tags": [
@@ -2609,10 +2609,10 @@
         "type": "object",
         "title": "Calculate2dRigidShift"
       },
-      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+      "docs_link": "https://github.com/fmi-basel/Mantis-plex"
     },
     {
-      "name": "scMultiplex Calculate Warpfield Registration",
+      "name": "Calculate Warpfield Registration",
       "input_types": {
         "is_3D": true
       },
@@ -2753,10 +2753,10 @@
         "type": "object",
         "title": "CalculateWarpfieldRegistration"
       },
-      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+      "docs_link": "https://github.com/fmi-basel/Mantis-plex"
     },
     {
-      "name": "scMultiplex Apply Warpfield Registration",
+      "name": "Apply Warpfield Registration",
       "input_types": {
         "registered": false,
         "is_3D": true
@@ -2903,10 +2903,10 @@
         "type": "object",
         "title": "ApplyWarpfieldRegistration"
       },
-      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+      "docs_link": "https://github.com/fmi-basel/Mantis-plex"
     },
     {
-      "name": "scMultiplex Post Registration Cleanup",
+      "name": "Post Registration Cleanup",
       "input_types": {
         "is_3D": true
       },
@@ -3118,10 +3118,10 @@
         "type": "object",
         "title": "PostRegistrationCleanup"
       },
-      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+      "docs_link": "https://github.com/fmi-basel/Mantis-plex"
     },
     {
-      "name": "scMultiplex Detect Clipped Rois Across Rounds",
+      "name": "Detect Clipped Rois Across Rounds",
       "category": "Registration",
       "modality": "HCS",
       "tags": [
@@ -3226,10 +3226,10 @@
         "title": "DetectClippedRoisAcrossRounds"
       },
       "docs_info": "## init_select_reference_knowing_all\nTask runs once, only for reference round (single zarr_url is returned)\nAll rounds are given as init_args, which can be used in task logic to read from them\n## detect_clipped_rois_across_rounds\nFind labels to delete from multiplexing rounds.\n",
-      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+      "docs_link": "https://github.com/fmi-basel/Mantis-plex"
     },
     {
-      "name": "scMultiplex Pixel Measurements",
+      "name": "Pixel Measurements",
       "category": "Measurement",
       "modality": "HCS",
       "tags": [
@@ -3239,7 +3239,7 @@
       ],
       "docs_info": "### Purpose\n- **Measures pixel features** from existing segmentation images in an OME-Zarr dataset.\n- Measure number of pixels above given intensity value for each label object in image. User sets thresholds per channel in task input.\n- Compound task that is run on single image.\n\n### Outputs\n- A feature table containing, for each labeled object:\n  - Number of pixels above the intensity threshold.\n  - Sum of the intensities of pixels above the intensity threshold.\n  - Object centroid coordinates.\n  - Total number of pixels in the object.\n\n### Limitations\n- Classifies pixels as positive only based on intensity threshold, no classifier or combined features currently supported.\n",
       "type": "parallel",
-      "executable_parallel": "fractal/scmultiplex_pixel_measurements.py",
+      "executable_parallel": "fractal/pixel_measurements.py",
       "meta_parallel": {
         "cpus_per_task": 4,
         "mem": 16000
@@ -3324,12 +3324,12 @@
           "input_channels"
         ],
         "type": "object",
-        "title": "ScmultiplexPixelMeasurements"
+        "title": "PixelMeasurements"
       },
-      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+      "docs_link": "https://github.com/fmi-basel/Mantis-plex"
     },
     {
-      "name": "scMultiplex Copy Data from Reference to Moving Rounds",
+      "name": "Copy Data from Reference to Moving Rounds",
       "category": "Registration",
       "modality": "HCS",
       "tags": [
@@ -3430,7 +3430,7 @@
         "type": "object",
         "title": "CopyDataFromRefToMovingRounds"
       },
-      "docs_link": "https://github.com/fmi-basel/gliberal-scMultipleX"
+      "docs_link": "https://github.com/fmi-basel/Mantis-plex"
     }
   ],
   "has_args_schemas": true,

@@ -9,21 +9,21 @@ format_without_date = logging.Formatter(
 )  # default formatter should be good for syslog / console output
 format_with_date = logging.Formatter("%(asctime)s - %(levelname)s: %(message)s")
 
-scmp_logger_name = "scmultiplex"
+mantis_plex_logger_name = "mantis_plex"
 faim_hcs_logger_suffix = "faim_hcs"
 _setup = False
 
 
-def setup_scmp_logger():
-    scmp_logger = logging.getLogger(scmp_logger_name)
-    scmp_logger.setLevel(defaultlvl)
-    scmp_handler = logging.StreamHandler(sys.stdout)
-    scmp_handler.setFormatter(format_without_date)
-    scmp_logger.addHandler(scmp_handler)
+def setup_mplex_logger():
+    mplex_logger = logging.getLogger(mantis_plex_logger_name)
+    mplex_logger.setLevel(defaultlvl)
+    mplex_handler = logging.StreamHandler(sys.stdout)
+    mplex_handler.setFormatter(format_without_date)
+    mplex_logger.addHandler(mplex_handler)
 
-    faim_hcs_logger = scmp_logger.getChild(faim_hcs_logger_suffix)
+    faim_hcs_logger = mplex_logger.getChild(faim_hcs_logger_suffix)
     faim_hcs_logger.setLevel(faim_hcs_defaultlvl)
-    faim_hcs_logger.addHandler(scmp_handler)
+    faim_hcs_logger.addHandler(mplex_handler)
     return
 
 
@@ -43,13 +43,13 @@ def setup_prefect_handlers(logger, logfile_name, clear=True):
     return
 
 
-def get_scmultiplex_logger():
+def get_mantis_plex_logger():
     global _setup
     if not _setup:
-        setup_scmp_logger()
+        setup_mplex_logger()
         _setup = True
-    return logging.getLogger(scmp_logger_name)
+    return logging.getLogger(mantis_plex_logger_name)
 
 
 def get_faim_hcs_logger():
-    return get_scmultiplex_logger().getChild(faim_hcs_logger_suffix)
+    return get_mantis_plex_logger().getChild(faim_hcs_logger_suffix)

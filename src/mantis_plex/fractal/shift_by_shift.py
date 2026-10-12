@@ -69,7 +69,7 @@ def shift_by_shift(
         translation_table_name: ROI table name that contains the x,y,z translation information
             as columns "translation_z", "translation_y", "translation_x" in physical units. These
             are the shifts that should be applied to the moving image to match it to the reference
-            round. If shifts are generated with the scMultiplex calculate object linking task, shifts
+            round. If shifts are generated with the Calculate Object Linking task, shifts
             are stored in the 'well_ROI_table'.
         zarr_suffix_to_add: Optional suffix that needs to be added to input OME-Zarr name to
             generate the path to the registered OME-Zarr. If the registered OME-Zarr is
