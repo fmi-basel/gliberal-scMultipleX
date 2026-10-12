@@ -3,7 +3,7 @@ from unittest import TestCase
 import numpy as np
 from numpy.testing import assert_array_equal
 
-from scmultiplex.features.FeatureFunctions import fixed_percentiles
+from mantis_plex.features.FeatureFunctions import fixed_percentiles
 
 
 class FeatureFunctionTest(TestCase):

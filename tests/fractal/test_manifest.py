@@ -7,9 +7,9 @@ from fractal_tasks_core.dev.lib_signature_constraints import (
     _validate_function_signature,
 )
 
-import scmultiplex
+import mantis_plex
 
-FRACTAL_TASKS_CORE_DIR = Path(scmultiplex.__file__).parent
+FRACTAL_TASKS_CORE_DIR = Path(mantis_plex.__file__).parent
 PACKAGE_NAME = "scmultiplex"
 with (FRACTAL_TASKS_CORE_DIR / "__FRACTAL_MANIFEST__.json").open("r") as f:
     MANIFEST = json.load(f)

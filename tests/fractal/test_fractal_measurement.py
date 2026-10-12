@@ -4,7 +4,7 @@ from fractal_tasks_core.channels import ChannelInputModel
 from ngio.utils import NgioValueError
 from pandas.testing import assert_frame_equal
 
-from scmultiplex.fractal.scmultiplex_feature_measurements import (
+from mantis_plex.fractal.scmultiplex_feature_measurements import (
     scmultiplex_feature_measurements,
 )
 

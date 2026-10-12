@@ -1,0 +1,340 @@
+"""
+Copyright 2023 (C)
+    Friedrich Miescher Institute for Biomedical Research
+
+    Original authors:
+    Joel Lüthi <joel.luethi@fmi.ch>
+
+    Based on the napari workflow wrapper task, by:
+    Tommaso Comparin <tommaso.comparin@exact-lab.it>
+    Marco Franzon <marco.franzon@exact-lab.it>
+
+Wrapper of scMultipleX measurements for Fractal
+"""
+
+import logging
+import warnings
+from pathlib import Path
+from typing import Dict, Union
+
+import numpy as np
+import pandas as pd
+from fractal_tasks_core.channels import (
+    ChannelInputModel,
+    ChannelNotFoundError,
+    get_channel_from_image_zarr,
+)
+from fractal_tasks_core.upscale_array import upscale_array
+from ngio import open_ome_zarr_container
+from ngio.tables import FeatureTable
+from ngio.utils import ngio_logger
+from pydantic import validate_call
+
+from mantis_plex.features.feature_wrapper import get_regionprops_measurements
+
+logger = logging.getLogger("scmultiplex_feature_measurements")
+warnings.filterwarnings("ignore", category=FutureWarning)
+ngio_logger.setLevel("ERROR")
+
+
+@validate_call
+def scmultiplex_feature_measurements(  # noqa: C901
+    *,
+    # Default arguments for fractal tasks:
+    zarr_url: str,
+    # Task-specific arguments:
+    label_name: str,
+    output_table_name: str,
+    input_channels: Union[Dict[str, ChannelInputModel], None] = None,
+    input_roi_table_name: str = "well_ROI_table",
+    measure_morphology: bool = True,
+    measure_surface_area: bool = False,
+    table_backend: str = "anndata",  # TODO: Refactor to Enum with new task tools
+    allow_duplicate_labels: bool = False,
+    overwrite: bool = True,
+):
+    """
+    Measurements of intensities and morphologies
+
+    Wrapper task for scmultiplex measurements for Fractal to generate
+    measurements of intensities and morphologies
+
+    Args:
+        zarr_url: Path or url to the individual OME-Zarr image to be processed.
+            (standard argument for Fractal tasks, managed by Fractal server).
+        label_name: Name of the label image to use for measurements.
+            Needs to exist in OME-Zarr file
+        output_table_name: Name of the output AnnData table to save the
+            measurements in. A table of this name can't exist yet in the
+            OME-Zarr file
+        input_channels: Dictionary of channels to measure. Keys are the
+            names that will be added as prefixes to the measurements,
+            values are another dictionary containing either wavelength_id
+            or channel_label information to allow Fractal to find the correct
+            channel (but not both). Example: {"C01": {"wavelength_id":
+            "A01_C01"}. To only measure morphology, provide an empty dict
+        input_roi_table_name: Name of the ROI table to loop over. Needs to exist
+            as a ROI table in the OME-Zarr file. If it is a masking ROI table, masking of input is performed. Always mask input.
+        measure_morphology: Set to True to measure morphology features. If False, only centroid and area/volume are
+            measured.
+        measure_surface_area: Set to True to measure 3D surface area. Marching cube algorithm can be computationally
+            intensive for large volumes, so surface area measurement is optional.
+        table_backend: Feature table backend. Valid values are anndata, csv
+            and json.
+        allow_duplicate_labels: Set to True to allow saving measurement
+            tables with non-unique label values. Can happen when segmentation
+            is run on a different ROI than the measurements (e.g. segment
+            per well, but measure per FOV)
+        overwrite: If `True`, overwrite the task output.
+    """
+    logger.info(f"Running feature extraction on OME-Zarr image {zarr_url=}")
+
+    if input_channels is None and not measure_morphology:
+        raise ValueError(
+            "You need to either add input_channels to make measurements on "
+            "or set measure_morphology to True"
+        )
+
+    # TODO: consider not always masking input by ROI table and instead make optional (ie. load region but without masking)
+
+    # Load OME Zarr container
+    ome_zarr = open_ome_zarr_container(zarr_url)
+
+    # Load ROI tables
+    roi_table = ome_zarr.get_table(input_roi_table_name, check_type="generic_roi_table")
+
+    table_type = Path(roi_table._meta.type).name
+
+    # Set masking to True if input is a masking_roi_table
+    masking = table_type == "masking_roi_table"
+
+    if masking:
+        masking_label_name = Path(roi_table._meta.region.path).name
+
+        channel_image = ome_zarr.get_masked_image(
+            masking_label_name=masking_label_name,
+            masking_table_name=input_roi_table_name,
+        )
+        label_image = ome_zarr.get_masked_label(
+            label_name=label_name,
+            masking_label_name=masking_label_name,
+            masking_table_name=input_roi_table_name,
+        )
+
+    else:
+        channel_image = ome_zarr.get_image()
+        label_image = ome_zarr.get_label(name=label_name)
+
+    if input_channels:
+        channel_dict = (
+            {}
+        )  # key is user-defined channel name (str), value is channel index (0,1,2..)
+        logger.info(f"Feature extraction for channels: {input_channels}")
+
+        for name in input_channels.keys():
+            try:
+                channel = get_channel_from_image_zarr(
+                    image_zarr_path=f"{zarr_url}",
+                    wavelength_id=input_channels[name].wavelength_id,
+                    label=input_channels[name].label,
+                )
+            except ChannelNotFoundError as e:
+                raise ValueError(
+                    f"Channel {name} defined with {input_channels[name]} not found. \n"
+                    f"Original error: {str(e)}"
+                )
+
+            channel_index = channel.index
+            channel_dict[name] = channel_index
+
+    else:
+        logger.info("Feature extraction only on label map.")
+
+    # Check whether input image is 2D or 3D
+    if input_channels:
+        # Read spacing meta from channel images
+        # Pixel sizes as list: [z,y,x]
+        pixel_size = channel_image.pixel_size
+    else:
+        # Read pixel spacing from label image
+        pixel_size = label_image.pixel_size
+
+    if label_image.shape[0] == 1:  # if z-dimension is 1, it is actually a 2D image
+        is_2d = True
+        spacing = (pixel_size.y, pixel_size.x)
+    else:
+        is_2d = False
+        spacing = (pixel_size.z, pixel_size.y, pixel_size.x)
+
+    # Initialize well features
+    df_well = pd.DataFrame()
+    df_info_well = pd.DataFrame()
+
+    # Loop over regions, e.g. masked roi's, fields of view, or full well overview, as specified by roi table input
+    for roi in roi_table.rois():
+
+        # Set inputs
+        df_roi = pd.DataFrame()
+        df_info_roi = pd.DataFrame()
+        first_channel = True
+
+        roi_string = roi.name
+
+        logger.info(f"Processing ROI label {roi_string}...")
+
+        extra_values = {
+            "ROI_table_name": input_roi_table_name,
+            "ROI_name": roi_string,
+        }
+
+        # Load numpy of segmentation images
+        if masking:
+            label_int = int(roi_string)
+            seg = label_image.get_roi_masked(label=label_int)  # z,y,x
+        else:
+            seg = label_image.get_roi(roi=roi)
+
+        if is_2d:
+            seg = np.squeeze(seg, axis=0)  # y,x
+
+        # Feature extraction using seg + channel images
+        if input_channels:
+            for c in channel_dict.keys():
+                i = channel_dict[c]
+
+                # Load numpy of channel image
+                if masking:
+                    img = channel_image.get_roi_masked(
+                        label=label_int, c=i
+                    )  # c=1,z,y,x
+                else:
+                    img = channel_image.get_roi(roi=roi, c=i)
+
+                # Remove empty channel dimension
+                img = np.squeeze(img, axis=0)  # z,y,x
+
+                # Remove z axis if 2d image
+                if is_2d:
+                    img = np.squeeze(img, axis=0)
+
+                calc_morphology = first_channel and measure_morphology
+                calc_surface_area = first_channel and measure_surface_area
+
+                if seg.shape != img.shape:
+                    logger.info(
+                        f"Upscaling label image from {seg.shape} to match channel image shape of {img.shape}"
+                    )
+                    seg = upscale_array(
+                        array=seg,
+                        target_shape=img.shape,
+                        axis=None,
+                        pad_with_zeros=True,
+                    )
+
+                if seg.shape != img.shape:
+                    raise ValueError(
+                        f"Image shape {img.shape} does not match segmentation shape {seg.shape}"
+                    )
+
+                new_df, new_info_df = get_regionprops_measurements(
+                    seg,
+                    img,
+                    spacing=spacing,
+                    is_2D=is_2d,
+                    measure_morphology=calc_morphology,
+                    measure_surface_area=calc_surface_area,
+                    channel_prefix=c,
+                    extra_values=extra_values,
+                )
+
+                # Only measure morphology for the first intensity channel provided
+                # => just once per label image
+                first_channel = False
+
+                if "label" in df_roi.columns:
+                    df_roi = df_roi.merge(right=new_df, how="inner")
+                    df_info_roi = df_info_roi.merge(right=new_info_df, how="inner")
+                else:
+                    df_roi = pd.concat([df_roi, new_df], axis=1)
+                    df_info_roi = pd.concat([df_info_roi, new_info_df], axis=1)
+        else:
+            # Only measure morphology
+            calc_morphology = first_channel and measure_morphology
+            calc_surface_area = first_channel and measure_surface_area
+
+            new_df, new_info_df = get_regionprops_measurements(
+                seg,
+                img=None,
+                spacing=spacing,
+                is_2D=is_2d,
+                measure_morphology=calc_morphology,
+                measure_surface_area=calc_surface_area,
+                extra_values=extra_values,
+            )
+            if "label" in df_roi.columns:
+                df_roi = df_roi.merge(right=new_df, how="inner")
+                df_info_roi = df_info_roi.merge(right=new_info_df, how="inner")
+            else:
+                df_roi = pd.concat([df_roi, new_df], axis=1)
+                df_info_roi = pd.concat([df_info_roi, new_info_df], axis=1)
+
+        # Check duplicates between this ROI and previous ROIs
+        if not df_well.empty and not df_roi.empty:
+            duplicate_across_rois = df_roi["label"].isin(df_well["label"])
+
+            if duplicate_across_rois.any():
+                duplicated_labels = df_roi.loc[duplicate_across_rois, "label"].unique()
+
+                for label in duplicated_labels:
+                    previous_roi = df_info_well.loc[
+                        df_info_well["label"] == label, "ROI_name"
+                    ].iloc[0]
+
+                    logger.warning(
+                        f"Label {label} in ROI {roi_string} "
+                        f"was first measured in ROI {previous_roi}"
+                    )
+
+                if not allow_duplicate_labels:
+                    raise ValueError(
+                        f"Measurement contains non-unique labels at ROI {roi_string}"
+                    )
+
+        df_well = pd.concat([df_well, df_roi], axis=0, ignore_index=True)
+        df_info_well = pd.concat([df_info_well, df_info_roi], axis=0, ignore_index=True)
+
+    # TODO: refactor feature table saving to NGIO
+    if not df_well.empty and not df_info_well.empty:
+        # Ensure that the label column in df_well & df_info_well match
+        if not (df_well["label"] == df_info_well["label"]).all():
+            raise ValueError(
+                "Label column in df_well and df_info_well do not match. "
+                f"{df_well['label']} != {df_info_well['label']}"
+            )
+
+        df_well.drop(labels=["label"], axis=1, inplace=True)
+        measurements_dtype = np.float32
+        df_well = df_well.astype(measurements_dtype)
+        df_combined = pd.concat([df_well, df_info_well], axis=1)
+    else:
+        # Create empty anndata table
+        df_combined = pd.DataFrame()
+
+    ngio_table = FeatureTable(dataframe=df_combined, reference_label=label_name)
+
+    ome_zarr.add_table(
+        name=output_table_name,
+        table=ngio_table,
+        backend=table_backend,
+        overwrite=overwrite,
+    )
+
+    logger.info(f"End feature_measurement task for {zarr_url}/labels/{label_name}")
+
+    return {}
+
+
+if __name__ == "__main__":
+    from fractal_task_tools.task_wrapper import run_fractal_task
+
+    run_fractal_task(task_function=scmultiplex_feature_measurements)

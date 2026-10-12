@@ -6,33 +6,33 @@ import numpy as np
 from fractal_tasks_core.channels import ChannelInputModel
 from numpy.testing import assert_almost_equal
 
-from scmultiplex.fractal.calculate_linking_consensus import calculate_linking_consensus
-from scmultiplex.fractal.calculate_object_linking import calculate_object_linking
-from scmultiplex.fractal.calculate_platymatch_registration import (
+from mantis_plex.fractal.calculate_linking_consensus import calculate_linking_consensus
+from mantis_plex.fractal.calculate_object_linking import calculate_object_linking
+from mantis_plex.fractal.calculate_platymatch_registration import (
     calculate_platymatch_registration,
 )
-from scmultiplex.fractal.init_select_all_knowing_reference import (
+from mantis_plex.fractal.init_select_all_knowing_reference import (
     init_select_all_knowing_reference,
 )
-from scmultiplex.fractal.init_select_multiplexing_pairs import (
+from mantis_plex.fractal.init_select_multiplexing_pairs import (
     init_select_multiplexing_pairs,
 )
-from scmultiplex.fractal.init_select_reference_knowing_all import (
+from mantis_plex.fractal.init_select_reference_knowing_all import (
     init_select_reference_knowing_all,
 )
-from scmultiplex.fractal.relabel_by_linking_consensus import (
+from mantis_plex.fractal.relabel_by_linking_consensus import (
     relabel_by_linking_consensus,
 )
-from scmultiplex.fractal.scmultiplex_feature_measurements import (
+from mantis_plex.fractal.scmultiplex_feature_measurements import (
     scmultiplex_feature_measurements,
 )
-from scmultiplex.fractal.scmultiplex_mesh_measurements import (
+from mantis_plex.fractal.scmultiplex_mesh_measurements import (
     scmultiplex_mesh_measurements,
 )
-from scmultiplex.fractal.spherical_harmonics_from_labelimage import (
+from mantis_plex.fractal.spherical_harmonics_from_labelimage import (
     spherical_harmonics_from_labelimage,
 )
-from scmultiplex.fractal.surface_mesh_multiscale import surface_mesh_multiscale
+from mantis_plex.fractal.surface_mesh_multiscale import surface_mesh_multiscale
 
 name_3d = "220605_151046.zarr"
 name_mip = "220605_151046_mip.zarr"

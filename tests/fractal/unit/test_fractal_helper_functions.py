@@ -1,4 +1,4 @@
-from scmultiplex.fractal.fractal_helper_functions import extract_acq_info
+from mantis_plex.fractal.fractal_helper_functions import extract_acq_info
 
 
 def test_extract_acq_info(linking_zenodo_zarrs):
