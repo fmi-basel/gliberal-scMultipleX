@@ -1,7 +1,7 @@
 <img width="4616" height="2094" alt="Asset 16@600x" src="https://github.com/user-attachments/assets/d5f04772-56e3-4b94-9758-04306e425144" />
 
 
-`Mantis` is an ecosystem of modular tools for image processing and quantitative analysis of high-content, multiplexed, and volumetric microscopy data. The name is inspired by the mantis shrimp and its complex visual system, which detects light across spectral channels and polarization states 🦐🌈
+`Mantis` is an ecosystem of modular tools for image processing and quantitative analysis of high-content, multiplexed, and volumetric microscopy data. The name is inspired by the mantis shrimp and its complex visual system, which detects light across spectral channels 🦐🌈
 
 `Mantis-plex` provides tools for processing multiplexed imaging datasets, including image registration, object linking, and z-illumination correction across rounds. Its functions are wrapped as [Fractal](https://fractal-analytics-platform.github.io/) tasks operating on the [OME-Zarr](https://ngff.openmicroscopy.org/) image format, enabling reproducible image-processing workflows that can be executed on compute clusters.
 
