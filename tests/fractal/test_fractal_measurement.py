@@ -4,9 +4,7 @@ from fractal_tasks_core.channels import ChannelInputModel
 from ngio.utils import NgioValueError
 from pandas.testing import assert_frame_equal
 
-from scmultiplex.fractal.scmultiplex_feature_measurements import (
-    scmultiplex_feature_measurements,
-)
+from mantis_plex.fractal.feature_measurements import feature_measurements
 
 multi_input_channels = {
     "C01": ChannelInputModel(wavelength_id="A01_C01"),
@@ -55,7 +53,7 @@ def test_2D_fractal_measurements(
     label_image = "nuclei"
     if not expected_to_run:
         with pytest.raises(ValueError):
-            scmultiplex_feature_measurements(
+            feature_measurements(
                 zarr_url=zarr_url,
                 input_roi_table_name=input_ROI_table,
                 input_channels=input_channels,
@@ -65,7 +63,7 @@ def test_2D_fractal_measurements(
                 measure_surface_area=True,
             )
     else:
-        scmultiplex_feature_measurements(
+        feature_measurements(
             zarr_url=zarr_url,
             input_roi_table_name=input_ROI_table,
             input_channels=input_channels,
@@ -141,7 +139,7 @@ def test_3D_fractal_measurements(
     label_image = "nuclei"
     if not expected_to_run:
         with pytest.raises(ValueError):
-            scmultiplex_feature_measurements(
+            feature_measurements(
                 zarr_url=zarr_url,
                 input_roi_table_name=input_ROI_table,
                 input_channels=input_channels,
@@ -151,7 +149,7 @@ def test_3D_fractal_measurements(
                 measure_surface_area=True,
             )
     else:
-        scmultiplex_feature_measurements(
+        feature_measurements(
             zarr_url=zarr_url,
             input_roi_table_name=input_ROI_table,
             input_channels=input_channels,
@@ -212,7 +210,7 @@ def test_masked_measurements_with_orgs_and_nuc(
     # Prepare fractal task
     label_image = "nuc"
 
-    scmultiplex_feature_measurements(
+    feature_measurements(
         zarr_url=zarr_url,
         input_roi_table_name=input_ROI_table,
         input_channels=input_channels,
@@ -253,7 +251,7 @@ def test_empty_label(
     # Prepare fractal task
     label_image = "empty"
 
-    scmultiplex_feature_measurements(
+    feature_measurements(
         zarr_url=zarr_url,
         input_roi_table_name=input_ROI_table,
         input_channels=input_channels,
@@ -290,7 +288,7 @@ def test_overwrite(
 
     # Prepare fractal task
     label_image = "nuclei"
-    scmultiplex_feature_measurements(
+    feature_measurements(
         zarr_url=zarr_url,
         input_roi_table_name=input_ROI_table,
         input_channels=input_channels,
@@ -302,7 +300,7 @@ def test_overwrite(
     )
 
     if overwrite:
-        scmultiplex_feature_measurements(
+        feature_measurements(
             zarr_url=zarr_url,
             input_roi_table_name=input_ROI_table,
             input_channels=input_channels,
@@ -315,7 +313,7 @@ def test_overwrite(
 
     else:
         with pytest.raises(NgioValueError):
-            scmultiplex_feature_measurements(
+            feature_measurements(
                 zarr_url=zarr_url,
                 input_roi_table_name=input_ROI_table,
                 input_channels=input_channels,

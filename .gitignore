@@ -152,7 +152,7 @@ venv/
 .DS_Store
 
 # written by setuptools_scm
-src/scmultiplex/_version.py
+src/mantis_plex/_version.py
 resources/scMultipleX_testdata/hcs-experiments
 
 # Testing data

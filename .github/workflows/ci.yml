@@ -45,7 +45,7 @@ jobs:
           python -m pip install -e .[test,fractal-tasks,spherical-harmonics]
 
       - name: Check if manifest has changed
-        run: fractal-manifest check --package scmultiplex
+        run: fractal-manifest check --package mantis_plex
 
       - name: 🧪 Run Tests
         run: pytest --color=yes --cov --cov-report=xml --cov-report=term-missing
