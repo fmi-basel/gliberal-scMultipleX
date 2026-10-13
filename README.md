@@ -1,117 +1,58 @@
-![Asset 14scMultiplex](https://user-images.githubusercontent.com/25291742/227540510-b00e0b8e-241e-492f-9b67-0d01bb4250e2.png)
-
-# scMultipleX
-
-`scMultipleX` provides functions for image processing workflows for high-content, multiplexed, and volumetric microscopy datasets.
-
-The package supports workflows for segmentation post-processing, object linking across multiplexing rounds, registration, intensity correction, feature extraction, mesh generation, and 3D shape analysis.
-
-scMultipleX functions are wrapped as [Fractal](https://fractal-analytics-platform.github.io/) tasks based on the OME-Zarr image format.
-scMultipleX tasks enable users to build reproducible image-processing workflows from modular tasks and execute them locally or on compute clusters.
-
-The tasks provided by scMultipleX are located under:
-
-```text
-src/scmultiplex/fractal/
-```
-
-and can be collected and executed within a Fractal deployment alongside tasks from the Fractal ecosystem.
+<img width="4616" height="2094" alt="Asset 16@600x" src="https://github.com/user-attachments/assets/d5f04772-56e3-4b94-9758-04306e425144" />
 
 
-## Main Functionality
+`Mantis` is an ecosystem of modular tools for image processing and quantitative analysis of high-content, multiplexed, and volumetric microscopy data. The name is inspired by the mantis shrimp and its complex visual system, which detects light across spectral channels and polarization states 🦐🌈
 
-### Segmentation and Label Processing
+`Mantis-plex` provides tools for processing multiplexed imaging datasets, including image registration, object linking, and z-illumination correction across rounds. Its functions are wrapped as [Fractal](https://fractal-analytics-platform.github.io/) tasks operating on the [OME-Zarr](https://ngff.openmicroscopy.org/) image format, enabling reproducible image-processing workflows that can be executed on compute clusters.
 
-Tasks for preparing and cleaning label images:
 
-- Build label images
-- Expand labels
-- Fuse touching labels
-- Clean up 3D cell segmentations
-- Segment images by intensity threshold
-- Convert 3D images to maximum-intensity projections
+#### 🚧 Mantis is currently evolving!
 
-### Object Linking and Relabeling
+Mantis-plex is being reorganized into four complementary packages: Mantis-plex, Mantis-quant, Mantis-surf, and Mantis-seg, each providing modular analysis tools organized by functionality. 
 
-Tasks for linking related objects across segmentations or imaging rounds:
+<img width="4893" height="2245" alt="Asset 2@600x" src="https://github.com/user-attachments/assets/0fa294b0-90d4-4990-b046-5bbe91dbb54e" />
 
-- Calculate object linking
-- Calculate linking consensus
-- Relabel objects using linking consensus
-- Link parent and child objects, such as nuclei within cells or organoids
-
-### Registration and Multiplexing
-
-Tasks for aligning multiplexed imaging rounds:
-
-- Calculate Warpfield registration for 3D pixel-based registration
-- Apply Warpfield registration
-- Calculate and shift images by rigid transformation (translation and rotation)
-- Post-registration cleanup
-- Detect clipped ROIs across rounds
-
-### Illumination Correction
-
-Tasks for correcting Z-dependent illumination effects:
-
-- Calculate z-illumination correction
-- Apply z-illumination correction
-
-### Feature Measurements
-
-Tasks for extracting quantitative measurements from segmented objects:
-
-- Morphology measurements
-- Intensity measurements
-- Pixel-threshold measurements
-- Measurements within masked parent ROIs
-- Regionprops-based 2D and 3D feature tables
-
-### Mesh and 3D Shape Analysis
-
-Tasks for generating and analyzing 3D surface meshes:
-
-- Generate multiscale surface meshes
-- Measure mesh-based features
-- Calculate spherical harmonics from label images
-- Annotate child meshes
-- Annotate meshes using child-object features
-
-### Fractal Workflow Initialization
-
-Helper tasks for selecting images and defining parallelization lists:
-
-- Select single imaging rounds
-- Select multiple imaging rounds
-- Select multiplexing pairs
-- Select reference rounds
-- Select illumination-correction rounds
+More information about Mantis-quant, Mantis-surf, and Mantis-seg is coming soon!
 
 ## Installation
 
 ### From source
 
-```bash
-git clone https://github.com/fmi-basel/gliberal-scMultipleX.git
-cd gliberal-scMultipleX
-pip install -e .
-```
-
-### With dependencies
+Clone the repository and install Mantis-plex:
 
 ```bash
-pip install -e ".[spherical-harmonics, warpfield]"
+git clone https://github.com/fmi-basel/Mantis-plex.git
+cd Mantis-plex
+pip install .
 ```
+
+To include optional dependencies for spherical harmonics and warpfield registration:
+
+```bash
+pip install ".[spherical-harmonics,warpfield]"
+```
+
+## Fractal workflow steps
+
+`Mantis-plex` functions are implemented as Fractal tasks located under:
+
+```text
+src/mantis_plex/fractal/
+```
+
+These tasks can be collected and executed within a Fractal deployment alongside tasks from the Fractal ecosystem.
+
+
+<img width="4094" height="1890" alt="Asset 4@600x" src="https://github.com/user-attachments/assets/1eb2ba77-886f-422b-840c-b388d3040998" />
+
 
 ## License
 
-BSD 3-Clause License.
+Unless otherwise stated in each individual module, all Mantis-plex components are released under the BSD 3-Clause License, and copyright is held by the Friedrich Miescher Institute for Biomedical Research.
 
 ## Contributors
 
 Developed in the Liberali Lab at the Friedrich Miescher Institute for Biomedical Research (FMI), Basel, Switzerland by [@nrepina](https://github.com/nrepina), with development support from [@jluethi](https://github.com/jluethi), [@lorenzocerrone](https://github.com/lorenzocerrone), [@enricotagliavini](https://github.com/enricotagliavini), and [@tibuch](https://github.com/tibuch).
-
-Unless otherwise stated in each individual module, all scMultipleX components are released according to a BSD 3-Clause License, and Copyright is with Friedrich Miescher Institute for Biomedical Research.
 
 Point-cloud based multiplexed linking is built on [PlatyMatch](https://github.com/juglab/PlatyMatch) ([DOI](https://doi.org/10.1007/978-3-030-66415-2_30)) by Manan Lalit.
 
